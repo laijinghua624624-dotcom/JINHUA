@@ -1894,6 +1894,10 @@ function renderCards(){
           <span class="card-session">${t.session||"未关联专场"}</span>
           <span class="status-tag status-${t.status}">${t.status}</span>
         </div>
+        <div class="card-actions" style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border);display:flex;gap:6px;flex-wrap:wrap">
+          <button class="btn" style="padding:4px 10px;font-size:11px;flex:1" onclick="event.stopPropagation();generateReport('${t.id}')">📄 生成汇报</button>
+          <button class="btn" style="padding:4px 10px;font-size:11px;flex:1" onclick="event.stopPropagation();openStoryboardEditor('${t.id}')">🎬 分镜</button>
+        </div>
       </div>`;
     }).join("");
     grid.querySelectorAll(".topic-card").forEach(card=>{
@@ -2233,6 +2237,235 @@ function updateTopicStatus(id, newStatus){
 function restartTopic(id){
   updateTopicStatus(id, "待拍");
   toast("选题已重新启动，状态更新为「待拍」","success");
+}
+
+// AI生成分镜脚本（根据选题脚本自动生成25个镜头）
+async function aiGenerateStoryboard(){
+  if(!state.apiSettings.apiKey){
+    toast("请先在设置中配置API Key","error");
+    $("#settingsModal").classList.remove("hidden");
+    return;
+  }
+  const t=state.topics.find(x=>x.id===currentStoryboardTopicId);
+  if(!t) return;
+  migrateTopicData(t);
+  const curData=getCurrentVersionData(t);
+  const scriptContent = curData.script || curData.hook || t.title || "";
+
+  if(!confirm("AI将根据脚本内容自动生成25个镜头的分镜脚本，会覆盖当前分镜，确定继续？")) return;
+
+  // 显示加载状态
+  const btn = event.target;
+  const originalText = btn.textContent;
+  btn.textContent = "生成中...";
+  btn.disabled = true;
+
+  try{
+    const agent=getAgents()[state.currentAgent];
+    const systemPrompt = `你是资深影视分镜师，专门为造势型预热视频设计分镜脚本。请根据用户提供的脚本内容，生成25个镜头的完整分镜脚本。
+
+输出要求：
+1. 必须严格输出JSON格式，不要输出任何其他文字
+2. JSON格式：{"shots":[{"shot":1,"shotSize":"特写","cameraMove":"推镜","duration":3,"visual":"画面描述","dialogue":"台词/旁白","note":"备注"}]}
+3. 每个镜头必须包含：镜号、景别（特写/近景/中景/全景/远景）、运镜（固定/推镜/拉镜/摇镜/移镜/跟镜/升降/旋转）、时长（秒）、画面描述（具体到构图、光影、动作）、台词/旁白、备注
+4. 25个镜头要形成完整的叙事弧线：开场悬念→氛围铺垫→情绪递进→高潮爆发→结尾号召
+5. 画面描述要具体、有电影感，符合造势型预热视频的调性
+6. 总时长控制在60-90秒之间`;
+
+    const messages=[
+      {role:"system",content:systemPrompt},
+      {role:"user",content:`选题名称：${t.title}\n造势类型：${t.type}\n核心钩子：${curData.hook||"暂无"}\n\n完整脚本：\n${scriptContent}`}
+    ];
+
+    const baseUrl=state.apiSettings.proxy||state.apiSettings.baseUrl;
+    const url=baseUrl.replace(/\/+$/,"")+"/chat/completions";
+    const resp=await fetch(url,{
+      method:"POST",
+      headers:{
+        "Content-Type":"application/json",
+        "Authorization":"Bearer "+state.apiSettings.apiKey
+      },
+      body:JSON.stringify({
+        model:state.apiSettings.model||"doubao-1-5-pro-32k",
+        messages:messages,
+        temperature:0.7,
+        max_tokens:4096
+      })
+    });
+
+    if(!resp.ok){
+      const errText=await resp.text();
+      throw new Error(`API请求失败 (${resp.status}): ${errText.slice(0,200)}`);
+    }
+
+    const data=await resp.json();
+    const reply=data.choices?.[0]?.message?.content||"";
+
+    // 解析JSON
+    let shotData = null;
+    try{
+      // 尝试直接解析
+      shotData = JSON.parse(reply);
+    }catch(e){
+      // 尝试从代码块中提取JSON
+      const jsonMatch = reply.match(/```json\s*([\s\S]*?)\s*```/) || reply.match(/\{[\s\S]*\}/);
+      if(jsonMatch){
+        try{
+          shotData = JSON.parse(jsonMatch[1]||jsonMatch[0]);
+        }catch(e2){
+          throw new Error("无法解析AI返回的分镜数据，请重试");
+        }
+      }else{
+        throw new Error("AI返回的内容不是有效的JSON格式，请重试");
+      }
+    }
+
+    if(!shotData || !shotData.shots || !Array.isArray(shotData.shots)){
+      throw new Error("AI返回的分镜数据格式不正确，请重试");
+    }
+
+    // 填充到分镜编辑器
+    storyboardData = shotData.shots.map((s,i)=>({
+      shot: i+1,
+      shotSize: s.shotSize || "中景",
+      cameraMove: s.cameraMove || "固定",
+      duration: parseInt(s.duration) || 3,
+      visual: s.visual || "",
+      dialogue: s.dialogue || "",
+      refImage: null,
+      note: s.note || ""
+    }));
+
+    renderStoryboardList();
+    toast(`AI已成功生成${storyboardData.length}个镜头的分镜脚本！`,"success");
+
+  }catch(e){
+    console.error(e);
+    toast("AI生成分镜失败："+e.message,"error");
+  }finally{
+    btn.textContent = originalText;
+    btn.disabled = false;
+  }
+}
+
+// 生成选题汇报文档
+function generateReport(id){
+  const t=state.topics.find(x=>x.id===id);
+  if(!t) return;
+  migrateTopicData(t);
+  const curData=getCurrentVersionData(t);
+  const ti=getTypeInfo(t.type);
+
+  const storyboardHtml = curData.storyboard&&curData.storyboard.length?`
+    <div class="section">
+      <h2>🎬 分镜表（${curData.storyboard.length}镜）</h2>
+      <table>
+        <thead><tr><th>镜号</th><th>景别</th><th>运镜</th><th>时长</th><th>画面描述</th><th>台词/旁白</th></tr></thead>
+        <tbody>
+          ${curData.storyboard.map(s=>`<tr>
+            <td>${s.shot||""}</td>
+            <td>${s.shotType||""}</td>
+            <td>${s.cameraMove||""}</td>
+            <td>${s.duration||""}s</td>
+            <td>${s.visual||""}</td>
+            <td>${s.subtitle||""}</td>
+          </tr>`).join("")}
+        </tbody>
+      </table>
+    </div>`:"";
+
+  const referencesHtml = curData.references&&curData.references.length?`
+    <div class="section">
+      <h2>📚 参考案例</h2>
+      ${curData.references.map(r=>`<div class="ref-item">
+        <div class="ref-title">${r.title||""}</div>
+        <div class="ref-desc">${r.desc||""}</div>
+        ${r.url?`<a href="${r.url}" target="_blank">查看参考</a>`:""}
+      </div>`).join("")}
+    </div>`:"";
+
+  const reportHtml = `<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>${t.title} - 创意汇报文档</title>
+  <style>
+    *{margin:0;padding:0;box-sizing:border-box}
+    body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:#0a0a0f;color:#e5e5e5;line-height:1.6;padding:40px 20px}
+    .container{max-width:900px;margin:0 auto;background:#12121a;border-radius:16px;padding:40px;box-shadow:0 10px 40px rgba(0,0,0,0.5)}
+    .header{text-align:center;margin-bottom:40px;padding-bottom:30px;border-bottom:1px solid #2a2a3a}
+    .header h1{font-size:36px;font-weight:700;margin-bottom:10px;background:linear-gradient(135deg,#C4A96B,#D4AF6E);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+    .header .meta{display:flex;gap:20px;justify-content:center;flex-wrap:wrap}
+    .header .meta span{font-size:14px;color:#888;padding:4px 12px;background:#1a1a24;border-radius:20px}
+    .section{margin-bottom:30px}
+    .section h2{font-size:20px;font-weight:600;margin-bottom:15px;color:#C4A96B;padding-bottom:8px;border-bottom:1px solid #2a2a3a}
+    .section .content{font-size:15px;color:#ccc;white-space:pre-wrap}
+    table{width:100%;border-collapse:collapse;margin-top:10px}
+    th,td{padding:10px;text-align:left;border-bottom:1px solid #2a2a3a;font-size:13px}
+    th{background:#1a1a24;color:#C4A96B;font-weight:600}
+    tr:hover{background:#1a1a24}
+    .ref-item{padding:12px;background:#1a1a24;border-radius:8px;margin-bottom:10px}
+    .ref-title{font-weight:600;color:#e5e5e5;margin-bottom:4px}
+    .ref-desc{font-size:13px;color:#888;margin-bottom:6px}
+    .ref-item a{color:#C4A96B;text-decoration:none;font-size:13px}
+    .footer{text-align:center;margin-top:40px;padding-top:20px;border-top:1px solid #2a2a3a;font-size:12px;color:#666}
+    .print-btn{position:fixed;top:20px;right:20px;padding:10px 20px;background:#C4A96B;color:#000;border:none;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;box-shadow:0 4px 12px rgba(196,169,107,0.3)}
+    .print-btn:hover{background:#D4AF6E}
+    @media print{.print-btn{display:none}body{background:#fff;color:#000}.container{box-shadow:none;background:#fff}}
+  </style>
+</head>
+<body>
+  <button class="print-btn" onclick="window.print()">🖨️ 打印 / 导出PDF</button>
+  <div class="container">
+    <div class="header">
+      <h1>${t.title}</h1>
+      <div class="meta">
+        <span>📋 ${t.id}</span>
+        <span>🎯 ${t.type}</span>
+        <span>📌 ${t.status}</span>
+        <span>📅 创建于 ${t.createdAt}</span>
+        ${t.session?`<span>🎪 ${t.session}</span>`:""}
+      </div>
+    </div>
+
+    <div class="section">
+      <h2>🎣 核心钩子</h2>
+      <div class="content">${curData.hook||"暂无"}</div>
+    </div>
+
+    <div class="section">
+      <h2>📝 完整脚本</h2>
+      <div class="content">${curData.script||"暂无脚本内容"}</div>
+    </div>
+
+    ${storyboardHtml}
+
+    <div class="section">
+      <h2>🎵 BGM建议</h2>
+      <div class="content">${curData.bgm||"暂无"}</div>
+    </div>
+
+    ${referencesHtml}
+
+    ${curData.notes?`
+    <div class="section">
+      <h2>📝 备注</h2>
+      <div class="content">${curData.notes}</div>
+    </div>`:""}
+
+    <div class="footer">
+      <p>Lance 智能裤 · 创意汇报文档 · 生成于 ${new Date().toLocaleString('zh-CN')}</p>
+    </div>
+  </div>
+</body>
+</html>`;
+
+  // 在新窗口中打开汇报文档
+  const win=window.open("", "_blank");
+  win.document.write(reportHtml);
+  win.document.close();
+  toast("汇报文档已生成，在新窗口中打开","success");
 }
 
 // ========== 版本管理系统 ==========
@@ -5743,9 +5976,10 @@ init();
         <div style="font-size:13px;color:var(--text-secondary)">
           <span id="storyboardTopicTitle"></span> · 共 <span id="storyboardCount" style="color:var(--accent);font-weight:700">0</span> 镜 · 总时长 <span id="storyboardDuration" style="color:var(--accent);font-weight:700">0</span> 秒
         </div>
-        <div style="display:flex;gap:8px">
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
           <button class="btn" onclick="addStoryboardShot()">+ 添加镜头</button>
           <button class="btn" onclick="apply25ShotTemplate()">套用25镜模板</button>
+          <button class="btn" style="background:linear-gradient(135deg,#8b5cf6,#6366f1);border-color:#8b5cf6;color:#fff" onclick="aiGenerateStoryboard()">✨ AI生成分镜</button>
           <button class="btn" onclick="clearStoryboard()">清空</button>
         </div>
       </div>
