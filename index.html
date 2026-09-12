@@ -2101,7 +2101,12 @@ function openDetail(id){
 // ========== 新建/编辑选题弹窗 ==========
 function openEdit(id){
   const isNew=!id;
-  const t=isNew?{id:uid(),title:"",type:TYPES[0].name,status:"待拍",hook:"",script:"",storyboard:[],bgm:"",references:[],session:"",sessionDate:"",createdAt:today(),notes:""}:state.topics.find(x=>x.id===id);
+  const t=isNew?{
+    id:uid(),title:"",type:TYPES[0].name,status:"待拍",hook:"",script:"",storyboard:[],bgm:"",references:[],session:"",sessionDate:"",createdAt:today(),notes:"",
+    // PPT汇报模板专业字段
+    creativeOutline:"",creativeDescription:"",creativeMeaning:"",narrationDescription:"",
+    scene:"",location:"",artDirection:"",props:"",visualAtmosphere:"",cinematographyStyle:""
+  }:state.topics.find(x=>x.id===id);
   $("#detailTitle").textContent=isNew?"新建选题":"编辑选题";
   $("#detailBody").innerHTML=`
     <div class="form-row">
@@ -2136,12 +2141,70 @@ function openEdit(id){
       <label class="form-label">核心钩子（开头3秒）</label>
       <textarea class="form-textarea" id="f_hook" placeholder="开头怎么抓人？具体到画面和文案">${t.hook||""}</textarea>
     </div>
+
+    <!-- ========== PPT汇报模板专业字段 ========== -->
+    <div style="margin:20px 0 12px;padding:10px 14px;background:rgba(196,169,107,0.1);border-left:3px solid var(--accent);border-radius:4px">
+      <div style="font-size:13px;font-weight:700;color:var(--accent)">📋 汇报模板字段（用于生成专业汇报文档）</div>
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">创意大纲</label>
+      <textarea class="form-textarea" id="f_creativeOutline" style="min-height:60px" placeholder="一句话概括创意核心，例如：冠军归来，决战双十一">${t.creativeOutline||""}</textarea>
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">创意描述</label>
+      <textarea class="form-textarea" id="f_creativeDescription" style="min-height:80px" placeholder="详细描述创意内容、叙事结构、情绪弧线">${t.creativeDescription||""}</textarea>
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">创意的寓意</label>
+      <textarea class="form-textarea" id="f_creativeMeaning" style="min-height:60px" placeholder="这个创意想传达什么深层含义？品牌价值、情感共鸣">${t.creativeMeaning||""}</textarea>
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">旁白台词描述</label>
+      <textarea class="form-textarea" id="f_narrationDescription" style="min-height:80px" placeholder="旁白的语气、节奏、情绪变化，关键台词">${t.narrationDescription||""}</textarea>
+    </div>
+
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">场景</label>
+        <textarea class="form-textarea" id="f_scene" style="min-height:60px" placeholder="故事发生的场景环境，例如：漆黑隧道、华丽舞台">${t.scene||""}</textarea>
+      </div>
+      <div class="form-group">
+        <label class="form-label">场地</label>
+        <textarea class="form-textarea" id="f_location" style="min-height:60px" placeholder="实际拍摄场地，例如：体育馆、摄影棚、户外">${t.location||""}</textarea>
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">美术制景参考</label>
+      <textarea class="form-textarea" id="f_artDirection" style="min-height:60px" placeholder="舞台设计、布景风格、颜色搭配、材质参考">${t.artDirection||""}</textarea>
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">道具参考</label>
+      <textarea class="form-textarea" id="f_props" style="min-height:60px" placeholder="需要的道具清单，例如：冠军奖杯、战鼓、冷烟火">${t.props||""}</textarea>
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">影像氛围参考</label>
+      <textarea class="form-textarea" id="f_visualAtmosphere" style="min-height:60px" placeholder="整体影像氛围、光影效果、色调、颗粒感">${t.visualAtmosphere||""}</textarea>
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">摄影调性参考</label>
+      <textarea class="form-textarea" id="f_cinematographyStyle" style="min-height:60px" placeholder="镜头语言、运镜风格、焦距选择、帧率">${t.cinematographyStyle||""}</textarea>
+    </div>
+    <!-- ========== PPT汇报模板专业字段结束 ========== -->
+
     <div class="form-group">
       <label class="form-label">完整脚本</label>
       <textarea class="form-textarea" id="f_script" style="min-height:120px" placeholder="口播文案+字幕文案，具体可执行">${t.script||""}</textarea>
     </div>
     <div class="form-group">
-      <label class="form-label">BGM建议</label>
+      <label class="form-label">配乐参考</label>
       <input class="form-input" id="f_bgm" value="${t.bgm||""}" placeholder="风格、情绪、BPM、参考类型">
     </div>
     <div class="form-group">
@@ -2168,6 +2231,17 @@ function saveTopic(id,isNew){
     script:$("#f_script").value.trim(),
     bgm:$("#f_bgm").value.trim(),
     notes:$("#f_notes").value.trim(),
+    // PPT汇报模板专业字段
+    creativeOutline:$("#f_creativeOutline")?.value.trim()||"",
+    creativeDescription:$("#f_creativeDescription")?.value.trim()||"",
+    creativeMeaning:$("#f_creativeMeaning")?.value.trim()||"",
+    narrationDescription:$("#f_narrationDescription")?.value.trim()||"",
+    scene:$("#f_scene")?.value.trim()||"",
+    location:$("#f_location")?.value.trim()||"",
+    artDirection:$("#f_artDirection")?.value.trim()||"",
+    props:$("#f_props")?.value.trim()||"",
+    visualAtmosphere:$("#f_visualAtmosphere")?.value.trim()||"",
+    cinematographyStyle:$("#f_cinematographyStyle")?.value.trim()||"",
     createdAt:isNew?today():(state.topics.find(t=>t.id===id)?.createdAt||today())
   };
   if(!data.title){toast("请填写选题名称","error");return;}
@@ -2177,7 +2251,14 @@ function saveTopic(id,isNew){
       version:"v1",
       createdAt:today(),
       changeNote:"初始创意",
-      data:{hook:data.hook,script:data.script,storyboard:[],bgm:data.bgm,references:[],notes:data.notes}
+      data:{
+        hook:data.hook,script:data.script,storyboard:[],bgm:data.bgm,references:[],notes:data.notes,
+        // PPT汇报模板专业字段
+        creativeOutline:data.creativeOutline,creativeDescription:data.creativeDescription,
+        creativeMeaning:data.creativeMeaning,narrationDescription:data.narrationDescription,
+        scene:data.scene,location:data.location,artDirection:data.artDirection,
+        props:data.props,visualAtmosphere:data.visualAtmosphere,cinematographyStyle:data.cinematographyStyle
+      }
     }];
     data.currentVersion="v1";
     data.coreDirection={theme:"",tone:"",narrative:"",keyVisuals:"",description:"",locked:false};
@@ -2197,6 +2278,17 @@ function saveTopic(id,isNew){
         v.data.script=data.script;
         v.data.bgm=data.bgm;
         v.data.notes=data.notes;
+        // PPT汇报模板专业字段
+        v.data.creativeOutline=data.creativeOutline;
+        v.data.creativeDescription=data.creativeDescription;
+        v.data.creativeMeaning=data.creativeMeaning;
+        v.data.narrationDescription=data.narrationDescription;
+        v.data.scene=data.scene;
+        v.data.location=data.location;
+        v.data.artDirection=data.artDirection;
+        v.data.props=data.props;
+        v.data.visualAtmosphere=data.visualAtmosphere;
+        v.data.cinematographyStyle=data.cinematographyStyle;
       }
       toast("选题已更新（当前版本："+state.topics[idx].currentVersion+"）","success");
     }
@@ -2348,39 +2440,63 @@ async function aiGenerateStoryboard(){
   }
 }
 
-// 生成选题汇报文档
+// 获取字段值（优先用版本数据，其次用顶层字段，用于兼容旧数据）
+function getFieldValue(t, curData, fieldName){
+  if(curData && curData[fieldName] !== undefined && curData[fieldName] !== "") return curData[fieldName];
+  if(t && t[fieldName] !== undefined && t[fieldName] !== "") return t[fieldName];
+  return "";
+}
+
+// 生成选题汇报文档（完全按照PPT汇报模板，支持视觉参考和舞台参考）
 function generateReport(id){
   const t=state.topics.find(x=>x.id===id);
   if(!t) return;
   migrateTopicData(t);
   const curData=getCurrentVersionData(t);
-  const ti=getTypeInfo(t.type);
 
+  // 获取PPT汇报模板字段（兼容旧数据）
+  const creativeOutline = getFieldValue(t, curData, 'creativeOutline');
+  const creativeDescription = getFieldValue(t, curData, 'creativeDescription');
+  const creativeMeaning = getFieldValue(t, curData, 'creativeMeaning');
+  const narrationDescription = getFieldValue(t, curData, 'narrationDescription');
+  const scene = getFieldValue(t, curData, 'scene');
+  const location = getFieldValue(t, curData, 'location');
+  const artDirection = getFieldValue(t, curData, 'artDirection');
+  const props = getFieldValue(t, curData, 'props');
+  const visualAtmosphere = getFieldValue(t, curData, 'visualAtmosphere');
+  const cinematographyStyle = getFieldValue(t, curData, 'cinematographyStyle');
+  const bgm = curData.bgm || t.bgm || "";
+  const script = curData.script || t.script || "";
+  const hook = curData.hook || t.hook || "";
+
+  // 分镜表HTML
   const storyboardHtml = curData.storyboard&&curData.storyboard.length?`
     <div class="section">
-      <h2>🎬 分镜表（${curData.storyboard.length}镜）</h2>
+      <div class="section-num">12</div>
+      <h2>🎬 分镜脚本（${curData.storyboard.length}镜）</h2>
       <table>
-        <thead><tr><th>镜号</th><th>景别</th><th>运镜</th><th>时长</th><th>画面描述</th><th>台词/旁白</th></tr></thead>
+        <thead><tr><th style="width:50px">镜号</th><th style="width:70px">景别</th><th style="width:70px">运镜</th><th style="width:60px">时长</th><th>画面描述</th><th>台词/旁白</th></tr></thead>
         <tbody>
           ${curData.storyboard.map(s=>`<tr>
-            <td>${s.shot||""}</td>
-            <td>${s.shotType||""}</td>
+            <td style="text-align:center;font-weight:700;color:var(--accent)">${s.shot||""}</td>
+            <td>${s.shotSize||s.shotType||""}</td>
             <td>${s.cameraMove||""}</td>
-            <td>${s.duration||""}s</td>
+            <td style="text-align:center">${s.duration||""}s</td>
             <td>${s.visual||""}</td>
-            <td>${s.subtitle||""}</td>
+            <td>${s.dialogue||s.subtitle||""}</td>
           </tr>`).join("")}
         </tbody>
       </table>
     </div>`:"";
 
+  // 参考案例HTML
   const referencesHtml = curData.references&&curData.references.length?`
     <div class="section">
       <h2>📚 参考案例</h2>
       ${curData.references.map(r=>`<div class="ref-item">
         <div class="ref-title">${r.title||""}</div>
         <div class="ref-desc">${r.desc||""}</div>
-        ${r.url?`<a href="${r.url}" target="_blank">查看参考</a>`:""}
+        ${r.url?`<a href="${r.url}" target="_blank">查看参考 →</a>`:""}
       </div>`).join("")}
     </div>`:"";
 
@@ -2389,79 +2505,148 @@ function generateReport(id){
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>${t.title} - 创意汇报文档</title>
+  <title>${t.title} - 创意汇报方案</title>
   <style>
     *{margin:0;padding:0;box-sizing:border-box}
-    body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:#0a0a0f;color:#e5e5e5;line-height:1.6;padding:40px 20px}
-    .container{max-width:900px;margin:0 auto;background:#12121a;border-radius:16px;padding:40px;box-shadow:0 10px 40px rgba(0,0,0,0.5)}
-    .header{text-align:center;margin-bottom:40px;padding-bottom:30px;border-bottom:1px solid #2a2a3a}
-    .header h1{font-size:36px;font-weight:700;margin-bottom:10px;background:linear-gradient(135deg,#C4A96B,#D4AF6E);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
-    .header .meta{display:flex;gap:20px;justify-content:center;flex-wrap:wrap}
-    .header .meta span{font-size:14px;color:#888;padding:4px 12px;background:#1a1a24;border-radius:20px}
-    .section{margin-bottom:30px}
-    .section h2{font-size:20px;font-weight:600;margin-bottom:15px;color:#C4A96B;padding-bottom:8px;border-bottom:1px solid #2a2a3a}
-    .section .content{font-size:15px;color:#ccc;white-space:pre-wrap}
-    table{width:100%;border-collapse:collapse;margin-top:10px}
-    th,td{padding:10px;text-align:left;border-bottom:1px solid #2a2a3a;font-size:13px}
-    th{background:#1a1a24;color:#C4A96B;font-weight:600}
-    tr:hover{background:#1a1a24}
-    .ref-item{padding:12px;background:#1a1a24;border-radius:8px;margin-bottom:10px}
-    .ref-title{font-weight:600;color:#e5e5e5;margin-bottom:4px}
-    .ref-desc{font-size:13px;color:#888;margin-bottom:6px}
-    .ref-item a{color:#C4A96B;text-decoration:none;font-size:13px}
-    .footer{text-align:center;margin-top:40px;padding-top:20px;border-top:1px solid #2a2a3a;font-size:12px;color:#666}
-    .print-btn{position:fixed;top:20px;right:20px;padding:10px 20px;background:#C4A96B;color:#000;border:none;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;box-shadow:0 4px 12px rgba(196,169,107,0.3)}
-    .print-btn:hover{background:#D4AF6E}
-    @media print{.print-btn{display:none}body{background:#fff;color:#000}.container{box-shadow:none;background:#fff}}
+    body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;background:#0a0a0f;color:#e5e5e5;line-height:1.8;padding:40px 20px}
+    .container{max-width:1000px;margin:0 auto;background:#12121a;border-radius:20px;padding:50px;box-shadow:0 20px 60px rgba(0,0,0,0.6)}
+    .cover{text-align:center;padding:60px 20px;margin-bottom:50px;background:linear-gradient(135deg,rgba(196,169,107,0.1),rgba(196,169,107,0.05));border-radius:16px;border:1px solid rgba(196,169,107,0.2)}
+    .cover .label{font-size:14px;letter-spacing:8px;color:#C4A96B;margin-bottom:20px;text-transform:uppercase}
+    .cover h1{font-size:48px;font-weight:800;margin-bottom:16px;background:linear-gradient(135deg,#C4A96B,#D4AF6E,#E8C99A);-webkit-background-clip:text;-webkit-text-fill-color:transparent;line-height:1.2}
+    .cover .subtitle{font-size:18px;color:#888;margin-bottom:30px}
+    .cover .meta{display:flex;gap:16px;justify-content:center;flex-wrap:wrap}
+    .cover .meta span{font-size:13px;color:#aaa;padding:6px 16px;background:rgba(255,255,255,0.05);border-radius:20px;border:1px solid rgba(255,255,255,0.1)}
+    .section{margin-bottom:40px;position:relative}
+    .section h2{font-size:22px;font-weight:700;margin-bottom:16px;color:#C4A96B;padding-bottom:12px;border-bottom:2px solid rgba(196,169,107,0.3);display:flex;align-items:center;gap:10px}
+    .section .content{font-size:15px;color:#ccc;white-space:pre-wrap;line-height:1.9}
+    .section-num{position:absolute;top:-10px;right:0;font-size:80px;font-weight:900;color:rgba(196,169,107,0.08);line-height:1}
+    .two-col{display:grid;grid-template-columns:1fr 1fr;gap:20px}
+    .two-col .section{margin-bottom:0}
+    table{width:100%;border-collapse:collapse;margin-top:10px;font-size:13px}
+    th,td{padding:12px 10px;text-align:left;border-bottom:1px solid rgba(255,255,255,0.08);vertical-align:top}
+    th{background:rgba(196,169,107,0.1);color:#C4A96B;font-weight:700;font-size:12px;letter-spacing:1px}
+    tr:hover{background:rgba(255,255,255,0.02)}
+    .ref-item{padding:16px;background:rgba(255,255,255,0.03);border-radius:10px;margin-bottom:12px;border-left:3px solid #C4A96B}
+    .ref-title{font-weight:700;color:#e5e5e5;margin-bottom:6px;font-size:15px}
+    .ref-desc{font-size:13px;color:#888;margin-bottom:8px;line-height:1.7}
+    .ref-item a{color:#C4A96B;text-decoration:none;font-size:13px;font-weight:600}
+    .footer{text-align:center;margin-top:60px;padding-top:30px;border-top:1px solid rgba(255,255,255,0.1);font-size:12px;color:#555}
+    .print-btn{position:fixed;top:20px;right:20px;padding:12px 24px;background:linear-gradient(135deg,#C4A96B,#D4AF6E);color:#000;border:none;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;box-shadow:0 4px 20px rgba(196,169,107,0.4);z-index:1000}
+    .print-btn:hover{transform:translateY(-2px);box-shadow:0 6px 24px rgba(196,169,107,0.5)}
+    .empty-field{color:#555;font-style:italic;font-size:14px}
+    @media print{
+      .print-btn{display:none}
+      body{background:#fff;color:#000;padding:0}
+      .container{box-shadow:none;background:#fff;padding:30px}
+      .section h2{color:#000;border-bottom-color:#000}
+      .cover{background:#fff;border:1px solid #000}
+      .cover h1{-webkit-text-fill-color:#000}
+      th{background:#f0f0f0;color:#000}
+      .ref-item{background:#f9f9f9;border-color:#ddd}
+      .ref-title{color:#000}
+      .content,.ref-desc{color:#333}
+    }
   </style>
 </head>
 <body>
   <button class="print-btn" onclick="window.print()">🖨️ 打印 / 导出PDF</button>
   <div class="container">
-    <div class="header">
+    <div class="cover">
+      <div class="label">CREATIVE PROPOSAL</div>
       <h1>${t.title}</h1>
+      <div class="subtitle">${creativeOutline||hook||"造势预热视频创意方案"}</div>
       <div class="meta">
         <span>📋 ${t.id}</span>
         <span>🎯 ${t.type}</span>
         <span>📌 ${t.status}</span>
-        <span>📅 创建于 ${t.createdAt}</span>
         ${t.session?`<span>🎪 ${t.session}</span>`:""}
+        <span>📅 ${t.createdAt}</span>
       </div>
     </div>
 
     <div class="section">
-      <h2>🎣 核心钩子</h2>
-      <div class="content">${curData.hook||"暂无"}</div>
+      <div class="section-num">01</div>
+      <h2>💡 创意大纲</h2>
+      <div class="content">${creativeOutline||hook||'<span class="empty-field">待填写</span>'}</div>
     </div>
 
     <div class="section">
-      <h2>📝 完整脚本</h2>
-      <div class="content">${curData.script||"暂无脚本内容"}</div>
+      <div class="section-num">02</div>
+      <h2>📝 创意描述</h2>
+      <div class="content">${creativeDescription||script||'<span class="empty-field">待填写</span>'}</div>
+    </div>
+
+    <div class="section">
+      <div class="section-num">03</div>
+      <h2>🎯 创意的寓意</h2>
+      <div class="content">${creativeMeaning||'<span class="empty-field">待填写</span>'}</div>
+    </div>
+
+    <div class="section">
+      <div class="section-num">04</div>
+      <h2>🎙️ 旁白台词描述</h2>
+      <div class="content">${narrationDescription||'<span class="empty-field">待填写</span>'}</div>
+    </div>
+
+    <div class="two-col">
+      <div class="section">
+        <div class="section-num">05</div>
+        <h2>🎬 场景</h2>
+        <div class="content">${scene||'<span class="empty-field">待填写</span>'}</div>
+      </div>
+      <div class="section">
+        <div class="section-num">06</div>
+        <h2>📍 场地</h2>
+        <div class="content">${location||'<span class="empty-field">待填写</span>'}</div>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-num">07</div>
+      <h2>🎨 美术制景参考</h2>
+      <div class="content">${artDirection||'<span class="empty-field">待填写</span>'}</div>
+    </div>
+
+    <div class="section">
+      <div class="section-num">08</div>
+      <h2>🎭 道具参考</h2>
+      <div class="content">${props||'<span class="empty-field">待填写</span>'}</div>
+    </div>
+
+    <div class="section">
+      <div class="section-num">09</div>
+      <h2>🌅 影像氛围参考</h2>
+      <div class="content">${visualAtmosphere||'<span class="empty-field">待填写</span>'}</div>
+    </div>
+
+    <div class="section">
+      <div class="section-num">10</div>
+      <h2>📷 摄影调性参考</h2>
+      <div class="content">${cinematographyStyle||'<span class="empty-field">待填写</span>'}</div>
+    </div>
+
+    <div class="section">
+      <div class="section-num">11</div>
+      <h2>🎵 配乐参考</h2>
+      <div class="content">${bgm||'<span class="empty-field">待填写</span>'}</div>
     </div>
 
     ${storyboardHtml}
-
-    <div class="section">
-      <h2>🎵 BGM建议</h2>
-      <div class="content">${curData.bgm||"暂无"}</div>
-    </div>
-
     ${referencesHtml}
 
-    ${curData.notes?`
+    ${script?`
     <div class="section">
-      <h2>📝 备注</h2>
-      <div class="content">${curData.notes}</div>
+      <h2>📄 附录：完整脚本</h2>
+      <div class="content" style="background:rgba(255,255,255,0.03);padding:20px;border-radius:10px;font-size:14px">${script}</div>
     </div>`:""}
 
     <div class="footer">
-      <p>Lance 智能裤 · 创意汇报文档 · 生成于 ${new Date().toLocaleString('zh-CN')}</p>
+      <p>Lance 智能裤 · 创意汇报方案 · 生成于 ${new Date().toLocaleString('zh-CN')}</p>
     </div>
   </div>
 </body>
 </html>`;
 
-  // 在新窗口中打开汇报文档
   const win=window.open("", "_blank");
   win.document.write(reportHtml);
   win.document.close();
