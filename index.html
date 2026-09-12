@@ -5249,7 +5249,7 @@ async function generateAiImage(){
     if(cloudConfig.jimengDirectMode && cloudConfig.jimengAK && cloudConfig.jimengSK){
       // 直接调用模式
       const result=await callJimengDirect("CVSync2AsyncSubmitTask",{
-        req_key:"jimeng_t2i_v20",
+        req_key:"jimeng_t2i_v30",
         prompt:prompt,
         width:width,
         height:height,
@@ -5262,7 +5262,7 @@ async function generateAiImage(){
       const resp=await fetch(proxyUrl+"/submit",{
         method:"POST",
         headers:{"Content-Type":"application/json"},
-        body:JSON.stringify({prompt,width,height,req_key:"jimeng_t2i_v20",return_url:true})
+        body:JSON.stringify({prompt,width,height,req_key:"jimeng_t2i_v30",return_url:true})
       });
       const data=await resp.json();
       if(data.error)throw new Error(data.error);
@@ -5280,7 +5280,7 @@ async function generateAiImage(){
         let data;
         if(cloudConfig.jimengDirectMode && cloudConfig.jimengAK && cloudConfig.jimengSK){
           data=await callJimengDirect("CVSync2AsyncGetResult",{
-            req_key:"jimeng_t2i_v20",
+            req_key:"jimeng_t2i_v30",
             task_id:taskId
           });
         }else{
@@ -5288,7 +5288,7 @@ async function generateAiImage(){
           const resp=await fetch(proxyUrl+"/query",{
             method:"POST",
             headers:{"Content-Type":"application/json"},
-            body:JSON.stringify({task_id:taskId,req_key:"jimeng_t2i_v20"})
+            body:JSON.stringify({task_id:taskId,req_key:"jimeng_t2i_v30"})
           });
           data=await resp.json();
           if(data.error)throw new Error(data.error);
@@ -5296,7 +5296,10 @@ async function generateAiImage(){
         const status=data.data?.status;
         if(status==="done"){
           clearInterval(aiImageState.pollTimer);
-          const imageUrl=data.data?.image_url || data.data?.url;
+          let imageUrl=data.data?.image_url || data.data?.url;
+          if(!imageUrl && data.data?.binary_data_base64 && data.data.binary_data_base64.length>0){
+            imageUrl="data:image/jpeg;base64,"+data.data.binary_data_base64[0];
+          }
           if(imageUrl){
             aiImageState.resultUrl=imageUrl;
             $("#aiImageResultImg").src=imageUrl;
@@ -8763,7 +8766,7 @@ async function generateImageForShot(prompt){
       let taskId;
       if(cloudConfig.jimengDirectMode && cloudConfig.jimengAK && cloudConfig.jimengSK){
         const result=await callJimengDirect("CVSync2AsyncSubmitTask",{
-          req_key:"jimeng_t2i_v20",
+          req_key:"jimeng_t2i_v30",
           prompt:prompt,
           width:1024,
           height:1536,
@@ -8775,7 +8778,7 @@ async function generateImageForShot(prompt){
         const resp=await fetch(proxyUrl+"/submit",{
           method:"POST",
           headers:{"Content-Type":"application/json"},
-          body:JSON.stringify({prompt,width:1024,height:1536,req_key:"jimeng_t2i_v20",return_url:true})
+          body:JSON.stringify({prompt,width:1024,height:1536,req_key:"jimeng_t2i_v30",return_url:true})
         });
         const data=await resp.json();
         if(data.error)throw new Error(data.error);
@@ -8793,7 +8796,7 @@ async function generateImageForShot(prompt){
           let data;
           if(cloudConfig.jimengDirectMode && cloudConfig.jimengAK && cloudConfig.jimengSK){
             data=await callJimengDirect("CVSync2AsyncGetResult",{
-              req_key:"jimeng_t2i_v20",
+              req_key:"jimeng_t2i_v30",
               task_id:taskId
             });
           }else{
@@ -8801,14 +8804,17 @@ async function generateImageForShot(prompt){
             const resp=await fetch(proxyUrl+"/query",{
               method:"POST",
               headers:{"Content-Type":"application/json"},
-              body:JSON.stringify({task_id:taskId,req_key:"jimeng_t2i_v20"})
+              body:JSON.stringify({task_id:taskId,req_key:"jimeng_t2i_v30"})
             });
             data=await resp.json();
           }
           const status=data.data?.status;
           if(status==="done"){
             clearInterval(poll);
-            const imageUrl=data.data?.image_url || data.data?.url;
+            let imageUrl=data.data?.image_url || data.data?.url;
+            if(!imageUrl && data.data?.binary_data_base64 && data.data.binary_data_base64.length>0){
+              imageUrl="data:image/jpeg;base64,"+data.data.binary_data_base64[0];
+            }
             if(imageUrl){
               resolve(imageUrl);
             }else{
