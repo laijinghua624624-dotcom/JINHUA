@@ -2082,7 +2082,14 @@ function openDetail(id){
     <button class="btn" onclick="deleteTopic('${t.id}')">删除</button>
     <button class="btn" onclick="openStoryboardEditor('${t.id}')">分镜脚本</button>
     <button class="btn" onclick="showNewVersionForm('${t.id}')">+ 新版本</button>
-    <button class="btn btn-primary" onclick="openEdit('${t.id}')">编辑</button>
+    ${t.status==="搁置"?`<button class="btn btn-primary" style="background:#22c55e;border-color:#22c55e" onclick="restartTopic('${t.id}')">▶ 重新启动</button>`:`<button class="btn btn-primary" onclick="openEdit('${t.id}')">编辑</button>`}
+    ${t.status!=="搁置"?`
+    <div style="position:relative;display:inline-block">
+      <button class="btn" onclick="this.nextElementSibling.classList.toggle('hidden')">状态: ${t.status} ▾</button>
+      <div class="hidden" style="position:absolute;bottom:100%;right:0;margin-bottom:4px;background:var(--bg-card);border:1px solid var(--border);border-radius:8px;box-shadow:0 4px 12px rgba(0,0,0,0.3);z-index:100;min-width:120px">
+        ${STATUSES.filter(s=>s!==t.status).map(s=>`<div style="padding:8px 12px;cursor:pointer;font-size:13px;color:var(--text-secondary)" onmouseover="this.style.background='var(--hover-bg)'" onmouseout="this.style.background='transparent'" onclick="updateTopicStatus('${t.id}','${s}');this.parentElement.classList.add('hidden')">${s}</div>`).join("")}
+      </div>
+    </div>`:""}
   `;
   $("#detailModal").classList.remove("hidden");
 }
@@ -2205,6 +2212,28 @@ function deleteTopic(id){
 }
 
 function closeDetailModal(){$("#detailModal").classList.add("hidden");}
+
+// 更新选题状态
+function updateTopicStatus(id, newStatus){
+  const t=state.topics.find(x=>x.id===id);
+  if(!t) return;
+  const oldStatus=t.status;
+  t.status=newStatus;
+  saveData();
+  renderAll();
+  // 如果详情弹窗还开着，更新状态标签
+  if(!$("#detailModal").classList.contains("hidden")){
+    openDetail(id);
+  }
+  const statusText={待拍:"待拍摄",已拍:"已拍摄",已发:"已发布",搁置:"已搁置"};
+  toast(`选题状态已从「${oldStatus}」更新为「${newStatus}」`,"success");
+}
+
+// 重新启动搁置的选题
+function restartTopic(id){
+  updateTopicStatus(id, "待拍");
+  toast("选题已重新启动，状态更新为「待拍」","success");
+}
 
 // ========== 版本管理系统 ==========
 // 数据迁移：为旧选题添加versions和coreDirection
