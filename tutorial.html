@@ -1,0 +1,448 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lance智能裤 · 使用教程</title>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#0a0a0f;color:#e5e5e5;line-height:1.7}
+  .container{max-width:900px;margin:0 auto;padding:40px 20px}
+  .header{text-align:center;margin-bottom:50px}
+  .logo{width:80px;height:80px;border-radius:50%;background:linear-gradient(135deg,#C4A96B,#8B7355);margin:0 auto 20px;display:flex;align-items:center;justify-content:center;font-size:32px;font-weight:900;color:#fff}
+  h1{font-size:36px;font-weight:800;background:linear-gradient(135deg,#C4A96B,#fff);-webkit-background-clip:text;-webkit-text-fill-color:transparent;margin-bottom:10px}
+  .subtitle{font-size:16px;color:#888}
+  .toc{background:#15151f;border:1px solid #2a2a3a;border-radius:12px;padding:24px;margin-bottom:40px}
+  .toc h3{font-size:14px;color:#C4A96B;margin-bottom:12px;letter-spacing:0.1em}
+  .toc ol{padding-left:20px}
+  .toc li{margin-bottom:8px}
+  .toc a{color:#93c5fd;text-decoration:none;font-size:14px}
+  .toc a:hover{text-decoration:underline}
+  .section{margin-bottom:50px}
+  .section h2{font-size:24px;font-weight:700;color:#C4A96B;margin-bottom:20px;padding-bottom:10px;border-bottom:2px solid #2a2a3a}
+  .section h3{font-size:18px;font-weight:600;color:#e5e5e5;margin:20px 0 10px}
+  .section p{margin-bottom:12px;color:#bbb;font-size:15px}
+  .feature-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:16px;margin:20px 0}
+  .feature-card{background:#15151f;border:1px solid #2a2a3a;border-radius:10px;padding:18px}
+  .feature-card .icon{font-size:28px;margin-bottom:8px}
+  .feature-card h4{font-size:15px;font-weight:600;color:#C4A96B;margin-bottom:6px}
+  .feature-card p{font-size:13px;color:#999;margin:0}
+  .step{background:#15151f;border-left:3px solid #C4A96B;border-radius:0 8px 8px 0;padding:16px 20px;margin-bottom:16px}
+  .step-num{display:inline-block;width:28px;height:28px;background:#C4A96B;color:#000;border-radius:50%;text-align:center;line-height:28px;font-weight:700;font-size:14px;margin-right:10px}
+  .step h4{display:inline;font-size:16px;font-weight:600;color:#e5e5e5}
+  .step p{margin-top:10px;margin-left:38px;font-size:14px;color:#999}
+  .tip{background:rgba(196,169,107,0.1);border:1px solid rgba(196,169,107,0.3);border-radius:8px;padding:14px 18px;margin:16px 0}
+  .tip strong{color:#C4A96B}
+  .tip p{margin:0;font-size:14px;color:#bbb}
+  .shortcut{display:inline-block;background:#2a2a3a;color:#C4A96B;padding:2px 8px;border-radius:4px;font-family:monospace;font-size:13px;margin:0 4px}
+  .footer{text-align:center;margin-top:60px;padding-top:30px;border-top:1px solid #2a2a3a;color:#666;font-size:13px}
+  @media(max-width:600px){
+    .feature-grid{grid-template-columns:1fr}
+    h1{font-size:28px}
+  }
+</style>
+</head>
+<body>
+<div class="container">
+  <div class="header">
+    <div class="logo">L</div>
+    <h1>Lance智能裤 · 使用教程</h1>
+    <p class="subtitle">内容策划总监的个人创作工作系统 · 快速上手指南</p>
+  </div>
+
+  <div class="toc">
+    <h3>📑 目录</h3>
+    <ol>
+      <li><a href="#overview">系统概览</a></li>
+      <li><a href="#quickstart">快速上手（5分钟）</a></li>
+      <li><a href="#xinxuan">TMD（辛选）板块详解</a></li>
+      <li><a href="#personal">My（个人项目）板块详解</a></li>
+      <li><a href="#core">核心功能使用指南</a></li>
+      <li><a href="#ai">AI智能体团队使用</a></li>
+      <li><a href="#advanced">进阶技巧</a></li>
+      <li><a href="#faq">常见问题</a></li>
+    </ol>
+  </div>
+
+  <div class="section" id="overview">
+    <h2>一、系统概览</h2>
+    <p><strong>Lance智能裤</strong>是为内容策划总监量身定制的个人创作工作系统，核心定位是<strong>造势型预热视频选题库</strong>，帮助你快速完成从创意灵感→选题策划→脚本分镜→项目管理的全流程工作。</p>
+    
+    <div class="feature-grid">
+      <div class="feature-card">
+        <div class="icon">🎯</div>
+        <h4>双项目模式</h4>
+        <p>TMD（辛选）+ My（个人项目），数据隔离，一键切换</p>
+      </div>
+      <div class="feature-card">
+        <div class="icon">📚</div>
+        <h4>选题库</h4>
+        <p>8种造势类型分类，支持版本管理、核心方向锁定</p>
+      </div>
+      <div class="feature-card">
+        <div class="icon">🎬</div>
+        <h4>分镜脚本</h4>
+        <p>25镜模板，支持拍照/拍视频/上传参考图</p>
+      </div>
+      <div class="feature-card">
+        <div class="icon">🎨</div>
+        <h4>审美参考库</h4>
+        <p>14种类型，60+标签，全局共用，AI视频生成</p>
+      </div>
+      <div class="feature-card">
+        <div class="icon">🏗️</div>
+        <h4>舞美舞台库</h4>
+        <p>体育馆/摄影棚/户外，电影节/秀场/音乐会类型</p>
+      </div>
+      <div class="feature-card">
+        <div class="icon">🤖</div>
+        <h4>AI智能体团队</h4>
+        <p>想法策划/参考搜索/库管助手，支持附件上传</p>
+      </div>
+      <div class="feature-card">
+        <div class="icon">💡</div>
+        <h4>灵感速记</h4>
+        <p>录音捕捉灵感，AI整理成创意模型库</p>
+      </div>
+      <div class="feature-card">
+        <div class="icon">📊</div>
+        <h4>专场策划案</h4>
+        <p>大项目管理，完成度提醒，内容规划表</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="section" id="quickstart">
+    <h2>二、快速上手（5分钟）</h2>
+    
+    <div class="step">
+      <span class="step-num">1</span><h4>打开系统</h4>
+      <p>在浏览器中打开 <code>https://laijinghua624624-dotcom.github.io/JINHUA/</code>，或直接打开本地 <code>index.html</code> 文件。系统支持 iPhone、iPad、Mac 多平台自适应。</p>
+    </div>
+
+    <div class="step">
+      <span class="step-num">2</span><h4>切换项目模式</h4>
+      <p>点击顶部左上角的项目切换器（默认显示"TMD"），可以在 <strong>TMD（辛选）</strong> 和 <strong>My（个人项目）</strong> 之间切换。两个模式的数据完全隔离，审美参考库全局共用。</p>
+    </div>
+
+    <div class="step">
+      <span class="step-num">3</span><h4>创建第一个选题</h4>
+      <p>点击左下角的 <span class="shortcut">+ 新建选题</span> 按钮，填写选题标题、类型、核心创意描述。系统预置了8种造势类型：重磅官宣型、倒计时系列、悬念预告型、气场大片型、战绩回顾型、筹备幕后型、机制炸场型、联名嘉宾型。</p>
+    </div>
+
+    <div class="step">
+      <span class="step-num">4</span><h4>完善分镜脚本</h4>
+      <p>在选题详情页点击 <span class="shortcut">分镜脚本</span> 按钮，打开分镜编辑器。系统预置25镜模板，你可以逐镜填写景别、运镜、时长、画面描述、台词旁白。点击每个镜头的参考图区域，可以<strong>拍照/拍视频/上传文件</strong>作为参考。</p>
+    </div>
+
+    <div class="step">
+      <span class="step-num">5</span><h4>使用AI助手</h4>
+      <p>点击右上角 <span class="shortcut">AI助手</span> 按钮，打开AI智能体团队。你可以：① 把零散想法发给"想法策划"生成结构化选题；② 上传参考图片/视频给AI分析；③ 让"库管助手"整理你的选题库。</p>
+    </div>
+
+    <div class="tip">
+      <strong>💡 小贴士：</strong>系统数据默认保存在浏览器本地（localStorage），清除浏览器数据会丢失。建议定期使用"导出"功能备份数据，或配置云端同步（Supabase）实现多设备自动同步。
+    </div>
+  </div>
+
+  <div class="section" id="xinxuan">
+    <h2>三、TMD（辛选）板块详解</h2>
+    <p>TMD模式是为辛选团初瑞雪直播账号量身定制的工作模式，聚焦<strong>造势型预热视频</strong>的全流程管理。</p>
+
+    <h3>3.1 左侧导航功能</h3>
+    <div class="feature-grid">
+      <div class="feature-card">
+        <div class="icon">📋</div>
+        <h4>选题库</h4>
+        <p>核心功能，管理所有预热视频选题，支持筛选、搜索、排序</p>
+      </div>
+      <div class="feature-card">
+        <div class="icon">💡</div>
+        <h4>灵感速记</h4>
+        <p>录音捕捉灵感，AI整理成结构化创意，一键转为选题</p>
+      </div>
+      <div class="feature-card">
+        <div class="icon">📅</div>
+        <h4>专场排期</h4>
+        <p>按直播专场管理预热视频排期，支持策划案和完成度提醒</p>
+      </div>
+      <div class="feature-card">
+        <div class="icon">📊</div>
+        <h4>数据看板</h4>
+        <p>选题状态统计、类型分布、专场进度可视化</p>
+      </div>
+      <div class="feature-card">
+        <div class="icon">🎨</div>
+        <h4>审美参考库</h4>
+        <p>收藏视觉参考，14种类型，支持AI视频生成（全局共用）</p>
+      </div>
+      <div class="feature-card">
+        <div class="icon">🏗️</div>
+        <h4>舞美舞台库</h4>
+        <p>舞台设计方案管理，场地类型+舞台类型双维度筛选</p>
+      </div>
+      <div class="feature-card">
+        <div class="icon">⭐</div>
+        <h4>辛选专属</h4>
+        <p>品牌档案、账号画像、历史预热库、视觉规范、内部资源</p>
+      </div>
+    </div>
+
+    <h3>3.2 选题状态流转</h3>
+    <p>每个选题有4种状态，帮助你跟踪进度：</p>
+    <div class="step">
+      <span class="step-num">→</span><h4>待拍</h4>
+      <p>创意已确认，等待拍摄执行</p>
+    </div>
+    <div class="step">
+      <span class="step-num">→</span><h4>已拍</h4>
+      <p>拍摄完成，进入后期制作</p>
+    </div>
+    <div class="step">
+      <span class="step-num">→</span><h4>已发</h4>
+      <p>视频已发布，可复盘数据</p>
+    </div>
+    <div class="step">
+      <span class="step-num">→</span><h4>搁置</h4>
+      <p>暂时不执行，保留创意</p>
+    </div>
+
+    <h3>3.3 版本管理系统</h3>
+    <p>每个选题支持多版本管理，适合"慢下来细化修改"的工作方式：</p>
+    <ul style="padding-left:20px;margin:10px 0;color:#bbb">
+      <li><strong>核心方向锁定</strong>：锁定主题、调性、叙事结构、核心画面，防止修改跑偏</li>
+      <li><strong>版本时间线</strong>：可视化展示所有版本，当前版本高亮</li>
+      <li><strong>版本对比</strong>：并排显示两个版本的差异，修改处红色标注</li>
+      <li><strong>回退版本</strong>：创建新版本回退到历史版本，旧版本保留不删除</li>
+    </ul>
+  </div>
+
+  <div class="section" id="personal">
+    <h2>四、My（个人项目）板块详解</h2>
+    <p>My模式是你的个人创作工作室，以<strong>导演/摄影师</strong>身份管理商业广告、纪录片、电影创作等个人项目。</p>
+
+    <h3>4.1 个人身份横幅</h3>
+    <p>进入My模式后，顶部会显示你的个人创作档案：</p>
+    <ul style="padding-left:20px;margin:10px 0;color:#bbb">
+      <li><strong>创作履历</strong>：入行年份、坐标、片中职务、作品数量</li>
+      <li><strong>荣誉成就</strong>：新片场徽章、编辑精选、创意精选等</li>
+      <li><strong>代表作品</strong>：魔法人生档案馆系列、创维、大疆、酷鲨等</li>
+      <li><strong>新片场链接</strong>：一键访问你的新片场主页</li>
+    </ul>
+
+    <h3>4.2 项目类型分类</h3>
+    <div class="feature-grid">
+      <div class="feature-card">
+        <div class="icon">📺</div>
+        <h4>商业广告</h4>
+        <p>品牌TVC、产品宣传片、品牌形象片</p>
+      </div>
+      <div class="feature-card">
+        <div class="icon">🎞️</div>
+        <h4>纪录片</h4>
+        <p>纪实长片、系列纪录片、人物专题</p>
+      </div>
+      <div class="feature-card">
+        <div class="icon">🎬</div>
+        <h4>电影长片</h4>
+        <p>院线电影、网络大电影、艺术电影</p>
+      </div>
+      <div class="feature-card">
+        <div class="icon">🎭</div>
+        <h4>电影短片</h4>
+        <p>短片创作、实验影像、电影节参赛作品</p>
+      </div>
+      <div class="feature-card">
+        <div class="icon">📱</div>
+        <h4>个人博主</h4>
+        <p>自媒体内容、Vlog、知识分享</p>
+      </div>
+      <div class="feature-card">
+        <div class="icon">📖</div>
+        <h4>创作方法论</h4>
+        <p>摄影技巧、导演思路、行业经验总结</p>
+      </div>
+    </div>
+
+    <div class="tip">
+      <strong>💡 数据隔离说明：</strong>切换到My模式后，选题库、灵感速记、舞美舞台库、专场策划案等数据与TMD模式完全隔离。只有<strong>审美参考库</strong>是全局共用的，因为审美是你个人的积累，不分项目。
+    </div>
+  </div>
+
+  <div class="section" id="core">
+    <h2>五、核心功能使用指南</h2>
+
+    <h3>5.1 分镜脚本编辑器</h3>
+    <p>分镜编辑器是系统的核心功能之一，支持完整的镜头脚本管理：</p>
+    <div class="step">
+      <span class="step-num">1</span><h4>打开分镜编辑器</h4>
+      <p>在选题详情页点击底部的 <span class="shortcut">分镜脚本</span> 按钮，或在选题卡片上点击"分镜"图标。</p>
+    </div>
+    <div class="step">
+      <span class="step-num">2</span><h4>填写镜头信息</h4>
+      <p>每个镜头包含：镜号、景别（远景/全景/中景/近景/特写/大特写）、运镜（固定/推/拉/摇/移/跟/升降/旋转/手持）、时长、画面描述、台词旁白、备注。</p>
+    </div>
+    <div class="step">
+      <span class="step-num">3</span><h4>添加参考图</h4>
+      <p>点击每个镜头的参考图区域，有3种方式：<strong>📷拍照</strong>（直接调用摄像头）、<strong>🎥拍视频</strong>（录制视频参考）、<strong>📎上传</strong>（从相册选择）。手机上特别方便，看到好的构图直接拍照保存。</p>
+    </div>
+    <div class="step">
+      <span class="step-num">4</span><h4>画面比例策略</h4>
+      <p>系统采用 <strong>4:3 Open Gate</strong> 拍摄母版，<strong>9:16竖屏</strong>为主输出（快手/抖音/视频号），<strong>16:9横屏</strong>为保底（B站/西瓜/微博）。在分镜中可以标注每个镜头的构图重点。</p>
+    </div>
+
+    <h3>5.2 审美参考库</h3>
+    <p>审美参考库是你个人的审美积累平台，支持14种类型：</p>
+    <p style="color:#bbb">舞台设计 / 声光电 / 灯光设计 / 音效参考 / 真实照片 / AI生成 / CG视觉 / 电影截图 / 广告TVC / 秀场参考 / 音乐会现场 / 运镜参考 / 调色参考</p>
+    <div class="step">
+      <span class="step-num">→</span><h4>添加参考</h4>
+      <p>点击"添加参考"按钮，上传图片（自动压缩）或粘贴视频链接，填写标题、类型、标签、描述。</p>
+    </div>
+    <div class="step">
+      <span class="step-num">→</span><h4>AI视频生成</h4>
+      <p>点击"AI生成视频"按钮，输入画面描述，调用即梦API生成5-10秒视频，自动保存到审美参考库。需要本地代理运行（<code>python3 jimeng_proxy.py</code>）。</p>
+    </div>
+
+    <h3>5.3 专场策划案</h3>
+    <p>对于大型直播专场（如双十一），可以创建专场策划案进行整体管理：</p>
+    <ul style="padding-left:20px;margin:10px 0;color:#bbb">
+      <li><strong>内容规划表</strong>：默认预热视频4条 / 福利视频10条 / 直播流程1条 / 幕后花絮3条</li>
+      <li><strong>完成度进度条</strong>：实时显示项目整体完成度</li>
+      <li><strong>待办提醒</strong>：催促你往前推进，不会遗漏关键节点</li>
+      <li><strong>关联选题</strong>：把选题库中的选题关联到专场，统一管理</li>
+    </ul>
+
+    <h3>5.4 灵感速记 + 创意模型库</h3>
+    <p>你有随时录音捕捉灵感的习惯，系统为你定制了灵感速记功能：</p>
+    <div class="step">
+      <span class="step-num">1</span><h4>录音捕捉</h4>
+      <p>点击灵感速记页面的录音按钮，直接录制你的想法。支持手机和电脑，录制完成后自动保存。</p>
+    </div>
+    <div class="step">
+      <span class="step-num">2</span><h4>AI整理结构化</h4>
+      <p>点击"AI整理"按钮，系统会从混乱的录音中提取：主题、核心画面、调性关键词、叙事结构、创意要点、标签。</p>
+    </div>
+    <div class="step">
+      <span class="step-num">3</span><h4>创意模型库</h4>
+      <p>整理后的灵感会进入创意模型库，系统会统计高频标签、生成AI创意建议。随着使用越多，系统越了解你的创作偏好。</p>
+    </div>
+    <div class="step">
+      <span class="step-num">4</span><h4>一键转为选题</h4>
+      <p>在灵感详情页点击"转为选题"，直接把灵感创建为正式选题，进入选题库管理。</p>
+    </div>
+  </div>
+
+  <div class="section" id="ai">
+    <h2>六、AI智能体团队使用</h2>
+    <p>系统内置3个AI智能体，各司其职，帮助你提升工作效率：</p>
+
+    <div class="feature-grid">
+      <div class="feature-card">
+        <div class="icon">💡</div>
+        <h4>想法策划</h4>
+        <p>把你脑子里的零散想法、录音转文字内容发过来，帮你整理成结构化选题+完整可执行脚本。</p>
+      </div>
+      <div class="feature-card">
+        <div class="icon">🔍</div>
+        <h4>参考搜索</h4>
+        <p>根据你的创意方向，搜索全网类似案例、视觉参考、音乐参考，帮你拓宽创意视野。</p>
+      </div>
+      <div class="feature-card">
+        <div class="icon">📦</div>
+        <h4>库管助手</h4>
+        <p>帮你管理选题库，自动分类、打标签、整理归档，提醒你待办事项和项目进度。</p>
+      </div>
+    </div>
+
+    <h3>6.1 配置API</h3>
+    <p>首次使用AI助手需要配置API：</p>
+    <div class="step">
+      <span class="step-num">1</span><h4>打开设置</h4>
+      <p>点击顶部右上角的设置图标（齿轮），打开API设置面板。</p>
+    </div>
+    <div class="step">
+      <span class="step-num">2</span><h4>填写API信息</h4>
+      <p>填写 API Base URL、API Key、模型/接入点ID。你有豆包API Key，直接填入即可。</p>
+    </div>
+    <div class="step">
+      <span class="step-num">3</span><h4>配置即梦AI视频</h4>
+      <p>在"AI视频生成（即梦API·火山引擎）"部分，填写代理地址（默认 <code>http://localhost:8765</code>），点击"测试连接"确认可用。</p>
+    </div>
+
+    <h3>6.2 上传附件给AI</h3>
+    <p>AI助手支持上传附件，让AI基于你的参考素材生成创意：</p>
+    <ul style="padding-left:20px;margin:10px 0;color:#bbb">
+      <li><strong>图片</strong>：上传参考图，AI会分析画面风格、构图、色调</li>
+      <li><strong>视频</strong>：上传视频参考，AI会分析运镜、节奏、叙事结构</li>
+      <li><strong>文档</strong>：上传PDF/Word/TXT，AI会提取关键信息</li>
+    </ul>
+    <p>点击输入框旁边的 <span class="shortcut">📎</span> 按钮，选择文件上传。附件会显示在输入框上方，可以删除。发送消息后，AI会自动结合附件内容和文字描述生成回复。</p>
+  </div>
+
+  <div class="section" id="advanced">
+    <h2>七、进阶技巧</h2>
+
+    <h3>7.1 项目制 vs 单条创意</h3>
+    <p>系统支持两种创建模式：</p>
+    <ul style="padding-left:20px;margin:10px 0;color:#bbb">
+      <li><strong>项目制</strong>：你负责整场直播的预热视频规划、创意、执行及落地。创建专场策划案，统一管理多条预热视频。</li>
+      <li><strong>单条创意补全</strong>：项目其他人在执行，你只负责出一条视频创意补全现有的项目。直接创建选题，关联到已有专场。</li>
+    </ul>
+
+    <h3>7.2 快速响应 vs 慢下来细化</h3>
+    <p>系统同时支持两种工作节奏：</p>
+    <ul style="padding-left:20px;margin:10px 0;color:#bbb">
+      <li><strong>快速响应</strong>：有创意马上录入选题库，用AI助手快速生成脚本大纲，随时可以跟初瑞雪汇报。</li>
+      <li><strong>慢下来细化</strong>：使用版本管理系统，锁定核心方向，逐版本细化修改。每个版本都有修改说明，可以对比差异，可以回退。</li>
+    </ul>
+
+    <h3>7.3 多设备同步</h3>
+    <p>系统支持3种数据同步方式：</p>
+    <div class="step">
+      <span class="step-num">1</span><h4>本地模式（默认）</h4>
+      <p>数据保存在浏览器本地，无需网络，速度最快。但清除浏览器数据会丢失，多设备不同步。</p>
+    </div>
+    <div class="step">
+      <span class="step-num">2</span><h4>导出/导入备份</h4>
+      <p>点击"导出"按钮，把所有数据导出为JSON文件。在另一台设备上点击"导入"，恢复数据。适合定期备份。</p>
+    </div>
+    <div class="step">
+      <span class="step-num">3</span><h4>云端同步（Supabase）</h4>
+      <p>在设置中配置Supabase项目URL和anon public key，启用后选题、视图和视觉参考数据会自动同步到云端数据库。iPhone/iPad/Mac打开同一个网址即可看到相同数据，免费注册Supabase即可使用。</p>
+    </div>
+
+    <h3>7.4 部署方式</h3>
+    <p>系统已部署到GitHub Pages，访问地址：</p>
+    <p style="background:#15151f;padding:12px;border-radius:6px;font-family:monospace;color:#C4A96B;margin:10px 0">https://laijinghua624624-dotcom.github.io/JINHUA/</p>
+    <p>你也可以在本地运行：直接用浏览器打开 <code>index.html</code> 文件即可，无需服务器。</p>
+  </div>
+
+  <div class="section" id="faq">
+    <h2>八、常见问题</h2>
+
+    <h3>Q1：数据会丢失吗？</h3>
+    <p>A：默认数据保存在浏览器本地（localStorage），只要不清除浏览器数据就不会丢失。建议定期使用"导出"功能备份，或配置Supabase云端同步。</p>
+
+    <h3>Q2：AI助手用不了怎么办？</h3>
+    <p>A：首先确认在设置中配置了正确的API Key和接入点。如果调用失败，检查网络连接，或配置代理地址。即梦AI视频生成需要本地运行代理脚本 <code>python3 jimeng_proxy.py</code>。</p>
+
+    <h3>Q3：手机上怎么使用拍照功能？</h3>
+    <p>A：在分镜编辑器中点击参考图区域的"📷拍照"按钮，手机会自动调用摄像头。拍照后可以选择重拍或使用，照片会自动保存为该镜头的参考图。</p>
+
+    <h3>Q4：TMD和My模式的数据会混在一起吗？</h3>
+    <p>A：不会。两个模式的选题库、灵感速记、舞美舞台库、专场策划案等数据完全隔离。只有审美参考库是全局共用的，因为审美是你个人的积累。</p>
+
+    <h3>Q5：怎么把创意快速汇报给初瑞雪？</h3>
+    <p>A：在选题详情页，系统已经按照你的汇报习惯组织了内容：创意大纲、创意描述、创意寓意、旁白台词、场景场地、美术制景参考、道具参考、影像氛围参考、摄影调性参考、配乐参考、25镜分镜脚本。可以直接截图或导出为PPT汇报。</p>
+
+    <h3>Q6：系统可以自主学习吗？</h3>
+    <p>A：当前版本是"数据飞轮"模式——你使用越多，录入的选题、灵感、参考越多，AI生成的建议就越符合你的风格。但这不是真正的自主学习，AI不会自动修改你的数据。建议先把三大库（选题库、审美参考库、舞美舞台库）数据攒到50条以上，再加智能推荐模块。</p>
+  </div>
+
+  <div class="footer">
+    <p>Lance智能裤 · 内容策划总监的个人创作工作系统</p>
+    <p style="margin-top:8px">制作于 2026 · 持续迭代中</p>
+  </div>
+</div>
+</body>
+</html>
