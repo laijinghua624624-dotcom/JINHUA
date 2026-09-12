@@ -437,6 +437,23 @@ input,textarea,select{font-family:inherit;outline:none;border:none;background:no
 }
 @media(max-width:400px){
   .visual-grid{grid-template-columns:1fr!important}
+  .ai-header{padding:10px 12px}
+  .ai-header-title{font-size:12px}
+  .agent-tabs{padding:8px}
+  .agent-tab{padding:6px 4px;font-size:10px}
+  .agent-tab .tab-icon{font-size:14px}
+  .agent-desc{padding:6px 12px;font-size:10px}
+  .ai-messages{padding:10px;gap:8px}
+  .msg{font-size:12px;padding:8px 10px}
+  .ai-input-area{padding:8px}
+  .ai-input-wrap{padding:6px 8px;gap:6px}
+  .ai-input-wrap textarea{font-size:12px;max-height:80px}
+  .media-btn{padding:6px}
+  .send-btn{width:32px;height:32px}
+  .ai-hint{font-size:9px}
+  .logo{width:30px;height:30px}
+  .header-title{font-size:13px}
+  .header-sub{font-size:10px}
 }
 
 /* ========== 审美参考库 ========== */
@@ -1222,13 +1239,21 @@ input,textarea,select{font-family:inherit;outline:none;border:none;background:no
     <div class="ai-messages" id="aiMessages"></div>
     <div class="ai-input-area">
       <div class="quick-prompts" id="quickPrompts"></div>
+      <!-- 附件预览区 -->
+      <div id="attachmentPreview" class="hidden" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px;padding:8px;background:var(--bg-card);border-radius:8px;border:1px solid var(--border)"></div>
       <div class="ai-input-wrap">
-        <textarea id="aiInput" placeholder="描述你的想法，或直接发送文字..." rows="1"></textarea>
+        <textarea id="aiInput" placeholder="描述你的想法，或上传参考文件..." rows="1"></textarea>
+        <div style="display:flex;align-items:center;gap:4px;padding-right:4px">
+          <button class="media-btn" id="uploadBtn" title="上传文件" onclick="document.getElementById('fileInput').click()">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
+          </button>
+          <input type="file" id="fileInput" class="hidden" accept="image/*,video/*,.pdf,.doc,.docx,.txt" multiple onchange="handleFileUpload(this.files)">
+        </div>
         <button class="send-btn" id="sendBtn">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
         </button>
       </div>
-      <div class="ai-hint">Enter 发送 · Shift+Enter 换行 · 需先在设置中配置API</div>
+      <div class="ai-hint">Enter 发送 · Shift+Enter 换行 · 支持上传图片/视频/文档 · 需先在设置中配置API</div>
     </div>
   </aside>
 </div>
