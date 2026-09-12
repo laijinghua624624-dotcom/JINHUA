@@ -878,7 +878,7 @@ input,textarea,select{font-family:inherit;outline:none;border:none;background:no
       </div>
       <div class="nav-item" data-view="personal">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-        个人项目<span class="count" id="navCountPersonal">0</span>
+        My<span class="count" id="navCountPersonal">0</span>
       </div>
       <div class="nav-item" data-view="xinxuan" id="navXinxuan">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
@@ -1124,7 +1124,7 @@ input,textarea,select{font-family:inherit;outline:none;border:none;background:no
     <!-- 个人项目视图 -->
     <section id="view-personal" class="hidden">
       <div class="view-header">
-        <div class="view-title">个人项目 <span id="personalSubtitle">导演 × 摄影师</span></div>
+        <div class="view-title">My <span id="personalSubtitle">导演 × 摄影师</span></div>
         <div class="view-actions">
           <button class="btn" id="personalSearchBtn">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
@@ -1222,27 +1222,13 @@ input,textarea,select{font-family:inherit;outline:none;border:none;background:no
     <div class="ai-messages" id="aiMessages"></div>
     <div class="ai-input-area">
       <div class="quick-prompts" id="quickPrompts"></div>
-      <!-- 附件预览区 -->
-      <div id="attachmentPreview" class="hidden" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px;padding:8px;background:var(--bg-card);border-radius:8px;border:1px solid var(--border)"></div>
       <div class="ai-input-wrap">
-        <textarea id="aiInput" placeholder="描述你的想法，或拍照/上传参考，多维度告诉我你要干嘛..." rows="1"></textarea>
-        <div style="display:flex;align-items:center;gap:4px;padding-right:4px">
-          <button class="media-btn" id="cameraBtn" title="拍照" onclick="openCamera()">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
-          </button>
-          <button class="media-btn" id="videoBtn" title="拍视频" onclick="openVideoRecorder()">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
-          </button>
-          <button class="media-btn" id="uploadBtn" title="上传文件" onclick="document.getElementById('fileInput').click()">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
-          </button>
-          <input type="file" id="fileInput" class="hidden" accept="image/*,video/*,.pdf,.doc,.docx,.txt" multiple onchange="handleFileUpload(this.files)">
-        </div>
+        <textarea id="aiInput" placeholder="描述你的想法，或直接发送文字..." rows="1"></textarea>
         <button class="send-btn" id="sendBtn">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
         </button>
       </div>
-      <div class="ai-hint">Enter 发送 · Shift+Enter 换行 · 支持拍照/拍视频/上传参考 · 需先在设置中配置API</div>
+      <div class="ai-hint">Enter 发送 · Shift+Enter 换行 · 需先在设置中配置API</div>
     </div>
   </aside>
 </div>
@@ -4129,7 +4115,7 @@ function initXinxuan(){
 
 // ========== 项目切换 ==========
 const PROJECT_KEY="xuan_ti_ku_projects";
-let projectState={currentProject:"xinxuan",projects:[{id:"xinxuan",name:"TMD",color:"#C4A96B"},{id:"personal",name:"个人项目",color:"#3b82f6"}]};
+let projectState={currentProject:"xinxuan",projects:[{id:"xinxuan",name:"TMD",color:"#C4A96B"},{id:"personal",name:"My",color:"#3b82f6"}]};
 
 // 按项目隔离数据key
 function getProjectKey(baseKey){
