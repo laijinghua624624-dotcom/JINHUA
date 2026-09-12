@@ -1569,8 +1569,8 @@ function loadData(){
   try{
     const raw=localStorage.getItem(getProjectKey(STORAGE_KEY));
     if(raw){state.topics=JSON.parse(raw);}
-    else{initSampleData();}
-  }catch(e){initSampleData();}
+    else{state.topics=[];}
+  }catch(e){state.topics=[];}
 }
 function persistSettings(){
   localStorage.setItem(SETTINGS_KEY, JSON.stringify(state.apiSettings));
@@ -3509,13 +3509,9 @@ function deleteVisualRef(id){
 // 初始化审美参考库
 function initVisualLib(){
   loadVisual();
-  // 预置示例数据（仅首次）
+  // 不预置示例数据，空库启动
   if(visualState.refs.length===0){
-    visualState.refs=[
-      {id:genVid(),title:"隧道剪影参考",type:"电影截图",tags:["暗黑","隧道","剪影","追光"],note:"漆黑隧道中人物剪影背对镜头，远处一束微光，适合开场迷茫感",url:null,image:null,topicId:null,createdAt:new Date().toISOString(),updatedAt:new Date().toISOString()},
-      {id:genVid(),title:"战争史诗舞台",type:"音乐会现场",tags:["战争","史诗","舞台","冷烟火"],note:"舞台两侧冷烟火爆发，金纸漫天，五人高举拳头，适合结尾高潮",url:null,image:null,topicId:null,createdAt:new Date().toISOString(),updatedAt:new Date().toISOString()},
-      {id:genVid(),title:"低角度仰拍战士",type:"运镜参考",tags:["仰拍","战士","慢动作","巨星"],note:"超广角低角度仰拍人物前行，披风飘动，营造力量感和巨星气场",url:null,image:null,topicId:null,createdAt:new Date().toISOString(),updatedAt:new Date().toISOString()}
-    ];
+    visualState.refs=[];
     saveVisual();
   }
   renderVisualFilters();renderVisualGrid();
@@ -3872,10 +3868,7 @@ function deleteStage(id){
 function initStageLib(){
   loadStage();
   if(stageState.stages.length===0){
-    stageState.stages=[
-      {id:genVid(),name:"双十一冠军之夜舞台",venue:"体育馆",stageType:"颁奖典礼",size:"30m×20m×12m",budget:"80",duration:"4天搭建+1天彩排",lighting:"主舞台6束追光+两侧LED洗墙+地面光束灯矩阵+冷烟火12组",setDesc:"背景LED大屏120㎡+两侧金属框架+中央升降台+T台延伸+金纸机4台",note:"参考冠军篇创意方案，需配合战鼓BGM和灯光秀开场",image:null,createdAt:new Date().toISOString(),updatedAt:new Date().toISOString()},
-      {id:genVid(),name:"魔术奇迹秀场舞台",venue:"摄影棚",stageType:"秀场",size:"15m×10m×6m",budget:"35",duration:"2天搭建+半天彩排",lighting:"单束顶光+两侧侧逆光+地面追光+烟雾机2台",setDesc:"深红丝绒幕布+金色装饰线条+中央魔术台+两侧道具架+背景暗门",note:"参考魔术篇创意方案，需配合魔术道具和快速换景机制",image:null,createdAt:new Date().toISOString(),updatedAt:new Date().toISOString()}
-    ];
+    stageState.stages=[];
     saveStageData();
   }
   renderStageFilters();renderStageGrid();
