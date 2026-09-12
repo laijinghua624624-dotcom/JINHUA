@@ -806,7 +806,7 @@ input,textarea,select{font-family:inherit;outline:none;border:none;background:no
 <!-- ========== 顶部导航 ========== -->
 <header class="header">
   <div class="header-left">
-    <div class="logo">瑞</div>
+    <div class="logo">L</div>
     <div>
       <div class="header-title">Lance 智能裤</div>
       <div class="header-sub">个人应用中心</div>
@@ -814,7 +814,7 @@ input,textarea,select{font-family:inherit;outline:none;border:none;background:no
     <div style="margin-left:20px;position:relative">
       <button class="icon-btn" id="projectSwitcher" style="display:flex;align-items:center;gap:6px;padding:6px 14px;border:1px solid var(--border);border-radius:8px;background:var(--card-bg);cursor:pointer" onclick="toggleProjectMenu()">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7l9-4 9 4-9 4-9-4z"/><path d="M3 12l9 4 9-4"/><path d="M3 17l9 4 9-4"/></svg>
-        <span id="currentProjectName" style="font-size:13px;font-weight:600;color:var(--accent)">辛选</span>
+        <span id="currentProjectName" style="font-size:13px;font-weight:600;color:var(--accent)">TMD</span>
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
       </button>
       <div id="projectMenu" class="hidden" style="position:absolute;top:100%;left:0;margin-top:8px;background:var(--card-bg);border:1px solid var(--border);border-radius:10px;padding:8px;min-width:180px;z-index:1000;box-shadow:0 8px 32px rgba(0,0,0,0.4)">
@@ -2885,6 +2885,19 @@ let recordTimer=null;
 let capturedPhoto=null;
 let recordedVideo=null;
 let facingMode="user";
+let currentShotRefIndex=null; // 当前正在设置参考图的镜头索引
+
+// 为分镜镜头打开相机
+function openCameraForShot(index){
+  currentShotRefIndex=index;
+  openCamera();
+}
+
+// 为分镜镜头打开录像机
+function openVideoForShot(index){
+  currentShotRefIndex=index;
+  openVideoRecorder();
+}
 
 function addAttachment(type,data,name){
   const id=uid();
@@ -3002,9 +3015,18 @@ function takePhoto(){
 }
 
 function usePhoto(){
-  addAttachment("image",capturedPhoto,`拍照_${new Date().toLocaleString()}.jpg`);
-  closeCamera();
-  toast("照片已添加到附件","success");
+  if(currentShotRefIndex!==null){
+    // 保存为分镜参考图
+    storyboardData[currentShotRefIndex].refImage=capturedPhoto;
+    renderStoryboard();
+    currentShotRefIndex=null;
+    closeCamera();
+    toast("分镜参考图已保存","success");
+  }else{
+    addAttachment("image",capturedPhoto,`拍照_${new Date().toLocaleString()}.jpg`);
+    closeCamera();
+    toast("照片已添加到附件","success");
+  }
 }
 
 function retakePhoto(){
@@ -3068,9 +3090,18 @@ function stopRecording(){
 }
 
 function useVideo(){
-  addAttachment("video",recordedVideo,`视频_${new Date().toLocaleString()}.webm`);
-  closeCamera();
-  toast("视频已添加到附件","success");
+  if(currentShotRefIndex!==null){
+    // 保存为分镜参考视频
+    storyboardData[currentShotRefIndex].refVideo=recordedVideo;
+    renderStoryboard();
+    currentShotRefIndex=null;
+    closeCamera();
+    toast("分镜参考视频已保存","success");
+  }else{
+    addAttachment("video",recordedVideo,`视频_${new Date().toLocaleString()}.webm`);
+    closeCamera();
+    toast("视频已添加到附件","success");
+  }
 }
 
 function retakeVideo(){
@@ -4098,7 +4129,7 @@ function initXinxuan(){
 
 // ========== 项目切换 ==========
 const PROJECT_KEY="xuan_ti_ku_projects";
-let projectState={currentProject:"xinxuan",projects:[{id:"xinxuan",name:"辛选",color:"#C4A96B"},{id:"personal",name:"个人项目",color:"#3b82f6"}]};
+let projectState={currentProject:"xinxuan",projects:[{id:"xinxuan",name:"TMD",color:"#C4A96B"},{id:"personal",name:"个人项目",color:"#3b82f6"}]};
 
 // 按项目隔离数据key
 function getProjectKey(baseKey){
@@ -4642,18 +4673,37 @@ function renderStoryboardList(){
             </div>
           </div>
           <div>
-            <div style="font-size:11px;color:var(--text-muted);margin-bottom:4px">分镜参考图</div>
-            ${s.refImage?`
+            <div style="font-size:11px;color:var(--text-muted);margin-bottom:4px">分镜参考</div>
+            ${s.refVideo?`
+              <div style="position:relative;width:100%;aspect-ratio:16/9;border-radius:8px;overflow:hidden;border:1px solid var(--border)">
+                <video src="${s.refVideo}" controls style="width:100%;height:100%;object-fit:cover"></video>
+                <div style="position:absolute;top:4px;right:4px;background:rgba(0,0,0,0.6);color:#fff;padding:2px 6px;border-radius:4px;font-size:10px;cursor:pointer" onclick="clearShotRef(${i})">移除</div>
+              </div>
+            `:s.refImage?`
               <div style="position:relative;width:100%;aspect-ratio:16/9;border-radius:8px;overflow:hidden;border:1px solid var(--border);cursor:pointer" onclick="viewShotRef(${i})">
                 <img src="${s.refImage}" style="width:100%;height:100%;object-fit:cover" alt="分镜参考">
                 <div style="position:absolute;top:4px;right:4px;background:rgba(0,0,0,0.6);color:#fff;padding:2px 6px;border-radius:4px;font-size:10px;cursor:pointer" onclick="event.stopPropagation();clearShotRef(${i})">移除</div>
               </div>
             `:`
-              <div style="width:100%;aspect-ratio:16/9;border:2px dashed var(--border);border-radius:8px;display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer;color:var(--text-muted)" onclick="document.getElementById('shotRefUpload_${i}').click()">
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>
-                <span style="font-size:10px;margin-top:4px">点击上传或AI生成</span>
+              <div style="width:100%;aspect-ratio:16/9;border:2px dashed var(--border);border-radius:8px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px">
+                <div style="display:flex;gap:8px">
+                  <button style="display:flex;flex-direction:column;align-items:center;gap:2px;padding:8px 12px;background:var(--bg-card);border:1px solid var(--border);border-radius:6px;cursor:pointer;color:var(--text-muted);font-size:10px;transition:all .2s" onmouseover="this.style.borderColor='var(--accent)';this.style.color='var(--accent)'" onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--text-muted)'" onclick="openCameraForShot(${i})">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+                    <span>拍照</span>
+                  </button>
+                  <button style="display:flex;flex-direction:column;align-items:center;gap:2px;padding:8px 12px;background:var(--bg-card);border:1px solid var(--border);border-radius:6px;cursor:pointer;color:var(--text-muted);font-size:10px;transition:all .2s" onmouseover="this.style.borderColor='var(--accent)';this.style.color='var(--accent)'" onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--text-muted)'" onclick="openVideoForShot(${i})">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
+                    <span>拍视频</span>
+                  </button>
+                  <button style="display:flex;flex-direction:column;align-items:center;gap:2px;padding:8px 12px;background:var(--bg-card);border:1px solid var(--border);border-radius:6px;cursor:pointer;color:var(--text-muted);font-size:10px;transition:all .2s" onmouseover="this.style.borderColor='var(--accent)';this.style.color='var(--accent)'" onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--text-muted)'" onclick="document.getElementById('shotRefUpload_${i}').click()">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
+                    <span>上传</span>
+                  </button>
+                </div>
+                <div style="font-size:9px;color:var(--text-muted)">或点击上方"AI生图"按钮生成</div>
               </div>
             `}
+            <input type="file" id="shotRefUpload_${i}" class="hidden" accept="image/*,video/*" onchange="handleShotRefUpload(${i},this)">
           </div>
         </div>
       </div>
@@ -4673,28 +4723,39 @@ function updateStoryboardShot(index,field,value){
   }
 }
 
-// 分镜参考图上传
+// 分镜参考上传（支持图片和视频）
 function handleShotRefUpload(index,input){
   const file=input.files[0];
   if(!file) return;
   const reader=new FileReader();
-  reader.onload=function(e){
-    const img=new Image();
-    img.onload=function(){
-      const canvas=document.createElement('canvas');
-      const maxW=800,maxH=450;
-      let w=img.width,h=img.height;
-      if(w>maxW){h=h*maxW/w;w=maxW;}
-      if(h>maxH){w=w*maxH/h;h=maxH;}
-      canvas.width=w;canvas.height=h;
-      canvas.getContext('2d').drawImage(img,0,0,w,h);
-      storyboardData[index].refImage=canvas.toDataURL('image/jpeg',0.85);
+  if(file.type.startsWith('video/')){
+    // 上传视频
+    reader.onload=function(e){
+      storyboardData[index].refVideo=e.target.result;
       renderStoryboardList();
-      toast("参考图已上传","success");
+      toast("参考视频已上传","success");
     };
-    img.src=e.target.result;
-  };
-  reader.readAsDataURL(file);
+    reader.readAsDataURL(file);
+  }else{
+    // 上传图片
+    reader.onload=function(e){
+      const img=new Image();
+      img.onload=function(){
+        const canvas=document.createElement('canvas');
+        const maxW=800,maxH=450;
+        let w=img.width,h=img.height;
+        if(w>maxW){h=h*maxW/w;w=maxW;}
+        if(h>maxH){w=w*maxH/h;h=maxH;}
+        canvas.width=w;canvas.height=h;
+        canvas.getContext('2d').drawImage(img,0,0,w,h);
+        storyboardData[index].refImage=canvas.toDataURL('image/jpeg',0.85);
+        renderStoryboardList();
+        toast("参考图已上传","success");
+      };
+      img.src=e.target.result;
+    };
+    reader.readAsDataURL(file);
+  }
   input.value='';
 }
 
