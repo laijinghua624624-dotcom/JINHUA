@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lance智能裤 · API配置指南</title>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#0a0a0f;color:#e5e5e5;line-height:1.7}
+  .container{max-width:900px;margin:0 auto;padding:40px 20px}
+  .header{text-align:center;margin-bottom:50px}
+  .logo{width:80px;height:80px;border-radius:50%;background:linear-gradient(135deg,#C4A96B,#8B7355);margin:0 auto 20px;display:flex;align-items:center;justify-content:center;font-size:32px;font-weight:900;color:#fff}
+  h1{font-size:36px;font-weight:800;background:linear-gradient(135deg,#C4A96B,#fff);-webkit-background-clip:text;-webkit-text-fill-color:transparent;margin-bottom:10px}
+  .subtitle{font-size:16px;color:#888}
+  .api-card{background:#15151f;border:1px solid #2a2a3a;border-radius:12px;padding:28px;margin-bottom:30px}
+  .api-card h2{font-size:22px;font-weight:700;color:#C4A96B;margin-bottom:8px;display:flex;align-items:center;gap:10px}
+  .api-card .api-desc{font-size:14px;color:#999;margin-bottom:20px}
+  .api-card .api-status{display:inline-block;padding:4px 12px;border-radius:20px;font-size:12px;font-weight:600;margin-bottom:16px}
+  .status-required{background:rgba(239,68,68,0.15);color:#f87171;border:1px solid rgba(239,68,68,0.3)}
+  .status-optional{background:rgba(59,130,246,0.15);color:#60a5fa;border:1px solid rgba(59,130,246,0.3)}
+  .status-configured{background:rgba(34,197,94,0.15);color:#4ade80;border:1px solid rgba(34,197,94,0.3)}
+  .field{background:#0f0f17;border:1px solid #2a2a3a;border-radius:8px;padding:16px;margin-bottom:12px}
+  .field label{display:block;font-size:12px;color:#888;margin-bottom:6px;letter-spacing:0.05em}
+  .field .value{font-family:'SF Mono',Monaco,monospace;font-size:13px;color:#C4A96B;word-break:break-all}
+  .field .hint{font-size:11px;color:#666;margin-top:6px}
+  .step{margin-bottom:16px;padding-left:20px;position:relative}
+  .step::before{content:'';position:absolute;left:0;top:8px;width:8px;height:8px;background:#C4A96B;border-radius:50%}
+  .step h4{font-size:15px;font-weight:600;color:#e5e5e5;margin-bottom:4px}
+  .step p{font-size:13px;color:#999;margin:0}
+  .step code{background:#2a2a3a;padding:2px 6px;border-radius:4px;font-size:12px;color:#C4A96B}
+  .tip{background:rgba(196,169,107,0.1);border:1px solid rgba(196,169,107,0.3);border-radius:8px;padding:14px 18px;margin:16px 0}
+  .tip strong{color:#C4A96B}
+  .tip p{margin:0;font-size:13px;color:#bbb}
+  .warning{background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.3);border-radius:8px;padding:14px 18px;margin:16px 0}
+  .warning strong{color:#f87171}
+  .warning p{margin:0;font-size:13px;color:#bbb}
+  .code-block{background:#0f0f17;border:1px solid #2a2a3a;border-radius:8px;padding:16px;margin:12px 0;overflow-x:auto}
+  .code-block pre{font-family:'SF Mono',Monaco,monospace;font-size:12px;color:#93c5fd;line-height:1.6;margin:0}
+  .toc{background:#15151f;border:1px solid #2a2a3a;border-radius:12px;padding:24px;margin-bottom:40px}
+  .toc h3{font-size:14px;color:#C4A96B;margin-bottom:12px;letter-spacing:0.1em}
+  .toc ol{padding-left:20px}
+  .toc li{margin-bottom:8px}
+  .toc a{color:#93c5fd;text-decoration:none;font-size:14px}
+  .toc a:hover{text-decoration:underline}
+  .footer{text-align:center;margin-top:60px;padding-top:30px;border-top:1px solid #2a2a3a;color:#666;font-size:13px}
+  @media(max-width:600px){
+    h1{font-size:28px}
+    .api-card{padding:20px}
+  }
+</style>
+</head>
+<body>
+<div class="container">
+  <div class="header">
+    <div class="logo">L</div>
+    <h1>Lance智能裤 · API配置指南</h1>
+    <p class="subtitle">系统集成的所有API · 获取方式 · 配置步骤 · 常见问题</p>
+  </div>
+
+  <div class="toc">
+    <h3>📑 目录</h3>
+    <ol>
+      <li><a href="#doubao">豆包API（AI智能体团队）</a></li>
+      <li><a href="#jimeng">即梦API（AI视频生成）</a></li>
+      <li><a href="#supabase">Supabase（云端数据同步）</a></li>
+      <li><a href="#proxy">本地代理服务器配置</a></li>
+      <li><a href="#faq">常见问题</a></li>
+    </ol>
+  </div>
+
+  <!-- 豆包API -->
+  <div class="api-card" id="doubao">
+    <h2>🤖 豆包API <span class="api-status status-required">必需</span></h2>
+    <p class="api-desc">用于AI智能体团队（想法策划/参考搜索/库管助手），支持文字对话、附件上传、创意生成。你已有API Key。</p>
+
+    <h3 style="font-size:16px;color:#e5e5e5;margin:20px 0 12px">📋 配置字段</h3>
+    <div class="field">
+      <label>API Base URL</label>
+      <div class="value">https://ark.cn-beijing.volces.com/api/v3</div>
+      <div class="hint">火山引擎方舟平台的API端点，固定不变</div>
+    </div>
+    <div class="field">
+      <label>API Key</label>
+      <div class="value">你的API Key（在火山引擎控制台获取）</div>
+      <div class="hint">以"AKLT"开头的字符串，注意保密不要泄露</div>
+    </div>
+    <div class="field">
+      <label>模型/接入点ID</label>
+      <div class="value">如 doubao-1-5-pro-32k 或 ep-xxxxxxxx</div>
+      <div class="hint">可以是模型名称，也可以是你创建的接入点ID（推荐用接入点）</div>
+    </div>
+
+    <h3 style="font-size:16px;color:#e5e5e5;margin:20px 0 12px">🔑 获取步骤</h3>
+    <div class="step">
+      <h4>注册/登录火山引擎</h4>
+      <p>访问 <code>https://www.volcengine.com/</code>，注册账号并完成实名认证。</p>
+    </div>
+    <div class="step">
+      <h4>开通方舟（Ark）服务</h4>
+      <p>在控制台搜索"方舟"或"机器学习平台"，开通大模型服务。</p>
+    </div>
+    <div class="step">
+      <h4>创建API Key</h4>
+      <p>进入方舟控制台 → API Key管理 → 创建新的API Key，复制保存。</p>
+    </div>
+    <div class="step">
+      <h4>创建模型接入点（推荐）</h4>
+      <p>进入"在线推理" → "创建接入点" → 选择模型（如doubao-1.5-pro-32k）→ 获取接入点ID（ep-开头）。</p>
+    </div>
+    <div class="step">
+      <h4>在系统中配置</h4>
+      <p>打开Lance智能裤 → 点击右上角设置图标 → 填入API Base URL、API Key、模型/接入点ID → 保存。</p>
+    </div>
+
+    <div class="tip">
+      <strong>💡 小贴士：</strong>你已经有火山引擎账号（即梦API也是同一个平台），可以直接在同一个控制台获取豆包API Key，无需重复注册。
+    </div>
+  </div>
+
+  <!-- 即梦API -->
+  <div class="api-card" id="jimeng">
+    <h2>🎬 即梦API（AI视频生成） <span class="api-status status-configured">已配置</span></h2>
+    <p class="api-desc">用于审美参考库中的AI视频生成功能，支持文生视频和图生视频。你已有API Key并已配置本地代理。</p>
+
+    <h3 style="font-size:16px;color:#e5e5e5;margin:20px 0 12px">📋 配置字段</h3>
+    <div class="field">
+      <label>代理地址</label>
+      <div class="value">http://localhost:8765</div>
+      <div class="hint">本地Python代理服务器地址，需要先运行代理脚本</div>
+    </div>
+    <div class="field">
+      <label>Access Key ID（AK）</label>
+      <div class="value">AKLTOGY0ODAwYWI4MGZiNDFlZTkxMzI1OTVhY2MwZWQxZDM</div>
+      <div class="hint">已内置在代理脚本中，无需重复填写</div>
+    </div>
+    <div class="field">
+      <label>Secret Access Key（SK）</label>
+      <div class="value">TldFMU16TXdaV0ZpTmpZMk5HTTJaRGcyWTJJd01URTBZbUV4TWpRMVpqVQ==</div>
+      <div class="hint">已内置在代理脚本中，无需重复填写</div>
+    </div>
+
+    <h3 style="font-size:16px;color:#e5e5e5;margin:20px 0 12px">🚀 使用步骤</h3>
+    <div class="step">
+      <h4>启动本地代理服务器</h4>
+      <p>在终端中运行：<code>cd /Users/lancelai/Doubao/chats/2026-09-12/new-chat/xuan-ti-ku && python3 jimeng_proxy.py</code></p>
+    </div>
+    <div class="step">
+      <h4>确认代理运行</h4>
+      <p>看到"代理服务器已启动，端口: 8765"表示成功，保持终端窗口打开。</p>
+    </div>
+    <div class="step">
+      <h4>在系统中生成视频</h4>
+      <p>打开审美参考库 → 点击"AI生成视频" → 输入画面描述 → 选择时长和比例 → 提交生成。</p>
+    </div>
+    <div class="step">
+      <h4>等待生成完成</h4>
+      <p>5秒视频约需1-2分钟，生成完成后自动保存到审美参考库。</p>
+    </div>
+
+    <div class="warning">
+      <strong>⚠️ 注意：</strong>即梦API不能直接在浏览器中调用（有CORS限制），必须通过本地代理服务器转发。关闭终端窗口后代理会停止，需要重新启动。
+    </div>
+
+    <h3 style="font-size:16px;color:#e5e5e5;margin:20px 0 12px">🎯 支持的模型</h3>
+    <div class="code-block">
+      <pre>文生视频：jimeng_t2v_v30（720P）
+图生视频：jimeng_i2v_first_v30（首帧图生视频）
+Pro版：jimeng_ti2v_v30_pro（更高质量）
+
+视频规格：
+- 时长：5秒 / 10秒
+- 比例：9:16（竖屏）/ 16:9（横屏）/ 1:1（方形）
+- 分辨率：720P</pre>
+    </div>
+  </div>
+
+  <!-- Supabase -->
+  <div class="api-card" id="supabase">
+    <h2>☁️ Supabase（云端数据同步） <span class="api-status status-optional">可选</span></h2>
+    <p class="api-desc">用于多设备数据自动同步，启用后iPhone/iPad/Mac打开同一个网址即可看到相同数据。免费注册即可使用。</p>
+
+    <h3 style="font-size:16px;color:#e5e5e5;margin:20px 0 12px">📋 配置字段</h3>
+    <div class="field">
+      <label>Supabase Project URL</label>
+      <div class="value">https://xxxx.supabase.co</div>
+      <div class="hint">创建项目后在项目设置中获取</div>
+    </div>
+    <div class="field">
+      <label>Supabase anon public key</label>
+      <div class="value">eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...</div>
+      <div class="hint">公开密钥，可以安全放在前端</div>
+    </div>
+
+    <h3 style="font-size:16px;color:#e5e5e5;margin:20px 0 12px">🔑 获取步骤</h3>
+    <div class="step">
+      <h4>注册Supabase账号</h4>
+      <p>访问 <code>https://supabase.com/</code>，用GitHub账号注册（免费）。</p>
+    </div>
+    <div class="step">
+      <h4>创建新项目</h4>
+      <p>点击"New Project" → 填写项目名称 → 设置数据库密码 → 选择区域（推荐新加坡/东京，离中国近）→ 创建。</p>
+    </div>
+    <div class="step">
+      <h4>获取Project URL和anon key</h4>
+      <p>项目创建完成后 → 进入Project Settings → API → 复制Project URL和anon public key。</p>
+    </div>
+    <div class="step">
+      <h4>创建数据表</h4>
+      <p>进入SQL Editor → 执行以下SQL创建数据表：</p>
+    </div>
+
+    <div class="code-block">
+      <pre>-- 创建选题库表
+CREATE TABLE topics (
+  id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
+  user_id TEXT,
+  project TEXT,
+  data JSONB,
+  created_at TIMESTAMP DEFAULT NOW(),
+  updated_at TIMESTAMP DEFAULT NOW()
+);
+
+-- 创建审美参考库表
+CREATE TABLE visuals (
+  id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
+  user_id TEXT,
+  data JSONB,
+  created_at TIMESTAMP DEFAULT NOW()
+);
+
+-- 启用行级安全
+ALTER TABLE topics ENABLE ROW LEVEL SECURITY;
+ALTER TABLE visuals ENABLE ROW LEVEL SECURITY;
+
+-- 创建策略（允许所有操作，个人使用）
+CREATE POLICY "Allow all" ON topics FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Allow all" ON visuals FOR ALL USING (true) WITH CHECK (true);</pre>
+    </div>
+
+    <div class="step">
+      <h4>在系统中配置</h4>
+      <p>打开Lance智能裤 → 设置 → 云端同步 → 填入Project URL和anon key → 勾选"启用云端同步" → 保存。</p>
+    </div>
+
+    <div class="tip">
+      <strong>💡 免费额度：</strong>Supabase免费版包含500MB数据库空间、1GB文件存储、每月5GB流量，个人使用完全足够。
+    </div>
+  </div>
+
+  <!-- 本地代理 -->
+  <div class="api-card" id="proxy">
+    <h2>🖥️ 本地代理服务器配置 <span class="api-status status-configured">已配置</span></h2>
+    <p class="api-desc">用于转发即梦API请求，解决浏览器CORS限制。代理脚本已创建并内置AK/SK。</p>
+
+    <h3 style="font-size:16px;color:#e5e5e5;margin:20px 0 12px">📁 文件位置</h3>
+    <div class="field">
+      <label>代理脚本路径</label>
+      <div class="value">/Users/lancelai/Doubao/chats/2026-09-12/new-chat/xuan-ti-ku/jimeng_proxy.py</div>
+    </div>
+    <div class="field">
+      <label>监听端口</label>
+      <div class="value">8765</div>
+    </div>
+
+    <h3 style="font-size:16px;color:#e5e5e5;margin:20px 0 12px">🚀 启动命令</h3>
+    <div class="code-block">
+      <pre>cd /Users/lancelai/Doubao/chats/2026-09-12/new-chat/xuan-ti-ku
+python3 jimeng_proxy.py</pre>
+    </div>
+
+    <h3 style="font-size:16px;color:#e5e5e5;margin:20px 0 12px">🔌 API端点</h3>
+    <div class="code-block">
+      <pre>提交任务：POST http://localhost:8765/submit
+Body: {"prompt":"画面描述","duration":5,"ratio":"9:16"}
+
+查询结果：POST http://localhost:8765/query
+Body: {"task_id":"任务ID"}
+
+返回：{"status":"done","video_url":"视频地址"}</pre>
+    </div>
+
+    <div class="tip">
+      <strong>💡 开机自启（可选）：</strong>如果希望每次开机自动启动代理，可以创建一个launchd服务或用Automator创建启动项。需要的话告诉我，我帮你配置。
+    </div>
+  </div>
+
+  <!-- 常见问题 -->
+  <div class="api-card" id="faq">
+    <h2>❓ 常见问题</h2>
+
+    <h3 style="font-size:16px;color:#e5e5e5;margin:20px 0 10px">Q1：AI助手回复"API调用失败"怎么办？</h3>
+    <p style="font-size:14px;color:#999;margin-bottom:20px">A：首先检查API Key是否正确，然后检查网络连接。如果是公司网络，可能需要配置代理。也可以尝试更换模型/接入点ID。</p>
+
+    <h3 style="font-size:16px;color:#e5e5e5;margin:20px 0 10px">Q2：即梦视频生成一直显示"生成中"怎么办？</h3>
+    <p style="font-size:14px;color:#999;margin-bottom:20px">A：5秒视频通常需要1-2分钟，10秒视频需要2-3分钟。如果超过5分钟还没完成，可能是代理服务器断开了，检查终端窗口是否还在运行。</p>
+
+    <h3 style="font-size:16px;color:#e5e5e5;margin:20px 0 10px">Q3：Supabase同步后数据会覆盖本地吗？</h3>
+    <p style="font-size:14px;color:#999;margin-bottom:20px">A：系统采用"云端优先"策略，启用同步后会先从云端拉取数据，如果云端没有数据则上传本地数据。建议先在一台设备上配置好同步，确认数据上传成功后，再在其他设备上启用同步。</p>
+
+    <h3 style="font-size:16px;color:#e5e5e5;margin:20px 0 10px">Q4：API Key安全吗？会上传到服务器吗？</h3>
+    <p style="font-size:14px;color:#999;margin-bottom:20px">A：API Key仅保存在你本地浏览器的localStorage中，不会上传到任何第三方服务器。即梦API的AK/SK内置在本地代理脚本中，也只在你电脑上运行。</p>
+
+    <h3 style="font-size:16px;color:#e5e5e5;margin:20px 0 10px">Q5：换电脑了怎么迁移数据？</h3>
+    <p style="font-size:14px;color:#999;margin-bottom:20px">A：有两种方式：① 使用"导出"功能把数据导出为JSON文件，在新电脑上"导入"；② 配置Supabase云端同步，新电脑上启用同步后自动拉取数据。</p>
+
+    <h3 style="font-size:16px;color:#e5e5e5;margin:20px 0 10px">Q6：即梦API怎么计费？</h3>
+    <p style="font-size:14px;color:#999;margin-bottom:20px">A：即梦API按生成次数计费，具体价格参考火山引擎官网。新用户通常有免费额度，可以在控制台查看余额和用量。</p>
+  </div>
+
+  <div class="footer">
+    <p>Lance智能裤 · API配置指南</p>
+    <p style="margin-top:8px">制作于 2026 · 持续更新中</p>
+  </div>
+</div>
+</body>
+</html>
