@@ -2283,6 +2283,7 @@ function loadSettings(){
     const raw=localStorage.getItem(SETTINGS_KEY);
     if(raw){state.apiSettings=JSON.parse(raw);}
   }catch(e){}
+  return state.apiSettings || {};
 }
 
 // ========== 示例数据 ==========
@@ -5806,7 +5807,7 @@ async function startReverseAnalysis(){
 
 // 调用豆包API生成反推脚本
 async function generateReverseScript(title,type,duration,desc){
-  const apiConfig=loadApiConfig();
+  const apiConfig=loadSettings();
   if(!apiConfig.apiKey){
     throw new Error("请先在设置中配置豆包API");
   }
