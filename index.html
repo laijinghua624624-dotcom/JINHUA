@@ -4620,6 +4620,278 @@ function saveAiImageToLibrary(){
 }
 
 
+
+// ========== 批量生成AI视频 ==========
+let batchVideoState={
+  selectedShots:[],
+  generating:false,
+  stopRequested:false,
+  currentIndex:0,
+  completed:0,
+  failed:0,
+  activeTasks:0
+};
+
+function openBatchVideoGenerator(){
+  batchVideoState={selectedShots:[],generating:false,stopRequested:false,currentIndex:0,completed:0,failed:0,activeTasks:0};
+  renderBatchShotList();
+  $("#batchVideoProgress").style.display="none";
+  $("#batchVideoStartBtn").style.display="inline-block";
+  $("#batchVideoStopBtn").style.display="none";
+  openModal("batchVideoModal");
+}
+
+function renderBatchShotList(){
+  const list=$("#batchShotList");
+  if(!list) return;
+  list.innerHTML=storyboardData.map((s,i)=>{
+    const selected=batchVideoState.selectedShots.includes(i);
+    const hasVideo=s.videoUrl;
+    return `
+      <div style="background:${selected?'rgba(245,158,11,0.1)':'var(--bg-card)'};border:2px solid ${selected?'#f59e0b':'var(--border)'};border-radius:8px;padding:10px;cursor:pointer;transition:all 0.2s" onclick="toggleBatchShot(${i})">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+          <div style="width:24px;height:24px;border-radius:50%;background:linear-gradient(135deg,var(--accent),#D4AF6E);display:flex;align-items:center;justify-content:center;color:#14121A;font-weight:700;font-size:11px;flex-shrink:0">${s.shot}</div>
+          <span style="font-size:11px;color:var(--text-secondary)">${s.shotSize||""} · ${s.duration||0}s</span>
+          ${hasVideo?'<span style="margin-left:auto;font-size:10px;color:#10b981">✓ 已有视频</span>':''}
+        </div>
+        <div style="font-size:11px;color:var(--text-muted);line-height:1.4;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden">${s.visual||"无画面描述"}</div>
+        <div style="margin-top:6px;font-size:10px;color:${selected?'#f59e0b':'var(--text-muted)'}">${selected?'✓ 已选择':'点击选择'}</div>
+      </div>
+    `;
+  }).join("");
+}
+
+function toggleBatchShot(index){
+  const idx=batchVideoState.selectedShots.indexOf(index);
+  if(idx>-1){
+    batchVideoState.selectedShots.splice(idx,1);
+  }else{
+    batchVideoState.selectedShots.push(index);
+  }
+  renderBatchShotList();
+}
+
+function selectAllBatchShots(select){
+  if(select){
+    batchVideoState.selectedShots=storyboardData.map((_,i)=>i);
+  }else{
+    batchVideoState.selectedShots=[];
+  }
+  renderBatchShotList();
+}
+
+function selectKeyShots(){
+  // 选择开场（前3镜）、高潮（中间3镜）、结尾（后3镜）
+  const n=storyboardData.length;
+  const keyShots=new Set();
+  for(let i=0;i<Math.min(3,n);i++) keyShots.add(i);
+  const mid=Math.floor(n/2);
+  for(let i=Math.max(0,mid-1);i<Math.min(n,mid+2);i++) keyShots.add(i);
+  for(let i=Math.max(0,n-3);i<n;i++) keyShots.add(i);
+  batchVideoState.selectedShots=Array.from(keyShots);
+  renderBatchShotList();
+}
+
+async function startBatchVideoGeneration(){
+  if(batchVideoState.selectedShots.length===0){
+    toast("请先选择要生成视频的镜头","error");
+    return;
+  }
+  
+  batchVideoState.generating=true;
+  batchVideoState.stopRequested=false;
+  batchVideoState.currentIndex=0;
+  batchVideoState.completed=0;
+  batchVideoState.failed=0;
+  batchVideoState.activeTasks=0;
+  
+  const total=batchVideoState.selectedShots.length;
+  const concurrency=parseInt($("#batchVideoConcurrency").value)||2;
+  const duration=$("#batchVideoDuration").value;
+  const ratio=$("#batchVideoRatio").value;
+  const stylePrefix=$("#batchVideoStylePrefix").value.trim();
+  
+  $("#batchVideoProgress").style.display="block";
+  $("#batchVideoStartBtn").style.display="none";
+  $("#batchVideoStopBtn").style.display="inline-block";
+  $("#batchVideoProgressText").textContent=`0/${total}`;
+  $("#batchVideoProgressBar").style.width="0%";
+  $("#batchVideoStatus").textContent=`开始生成，共${total}个镜头，并发${concurrency}`;
+  
+  // 批量生成队列
+  const queue=[...batchVideoState.selectedShots];
+  
+  async function processNext(){
+    if(batchVideoState.stopRequested || queue.length===0){
+      if(batchVideoState.activeTasks===0){
+        // 全部完成
+        batchVideoState.generating=false;
+        $("#batchVideoStatus").textContent=`生成完成！成功${batchVideoState.completed}个，失败${batchVideoState.failed}个`;
+        $("#batchVideoStopBtn").style.display="none";
+        $("#batchVideoStartBtn").style.display="inline-block";
+        $("#batchVideoStartBtn").textContent="重新生成";
+        renderStoryboardList();
+        toast(`批量生成完成！成功${batchVideoState.completed}个，失败${batchVideoState.failed}个`, batchVideoState.failed>0?"warning":"success");
+      }
+      return;
+    }
+    
+    const shotIndex=queue.shift();
+    batchVideoState.activeTasks++;
+    const shotNum=batchVideoState.selectedShots.indexOf(shotIndex)+1;
+    
+    try{
+      $("#batchVideoStatus").textContent=`正在生成第${shotNum}/${total}个镜头（镜号${storyboardData[shotIndex].shot}）...`;
+      
+      const prompt=stylePrefix?`${stylePrefix}，${storyboardData[shotIndex].visual||""}`:storyboardData[shotIndex].visual||"";
+      
+      // 调用即梦API生成视频
+      const videoUrl=await generateVideoForShot(prompt,duration,ratio);
+      
+      if(videoUrl){
+        storyboardData[shotIndex].videoUrl=videoUrl;
+        batchVideoState.completed++;
+      }else{
+        batchVideoState.failed++;
+      }
+    }catch(e){
+      console.error("生成视频失败:",e);
+      batchVideoState.failed++;
+    }
+    
+    batchVideoState.activeTasks--;
+    const done=batchVideoState.completed+batchVideoState.failed;
+    $("#batchVideoProgressText").textContent=`${done}/${total}`;
+    $("#batchVideoProgressBar").style.width=`${(done/total)*100}%`;
+    
+    processNext();
+  }
+  
+  // 启动并发任务
+  for(let i=0;i<concurrency;i++){
+    processNext();
+  }
+}
+
+function stopBatchVideoGeneration(){
+  batchVideoState.stopRequested=true;
+  $("#batchVideoStatus").textContent="正在停止...";
+  $("#batchVideoStopBtn").style.display="none";
+}
+
+// 单镜头生成视频
+async function generateSingleShotVideo(index){
+  const shot=storyboardData[index];
+  if(!shot||!shot.visual){
+    toast("请先填写该镜头的画面描述","error");
+    return;
+  }
+  
+  const stylePrefix="电影感，暗调，金色光影，巨星登场，4K画质，慢动作";
+  const prompt=`${stylePrefix}，${shot.visual}`;
+  
+  try{
+    toast(`正在生成镜号${shot.shot}的视频...`,"info");
+    const videoUrl=await generateVideoForShot(prompt,"5","9:16");
+    if(videoUrl){
+      storyboardData[index].videoUrl=videoUrl;
+      renderStoryboardList();
+      toast("视频生成成功！","success");
+    }else{
+      toast("视频生成失败","error");
+    }
+  }catch(e){
+    console.error("生成视频失败:",e);
+    toast("生成失败："+e.message,"error");
+  }
+}
+
+// 调用即梦API生成视频（通用函数）
+async function generateVideoForShot(prompt,duration,ratio){
+  return new Promise((resolve,reject)=>{
+    let taskId;
+    
+    async function submitTask(){
+      if(cloudConfig.jimengDirectMode && cloudConfig.jimengAK && cloudConfig.jimengSK){
+        const result=await callJimengDirect("CVSync2AsyncSubmitTask",{
+          req_key:"jimeng_t2v_v30",
+          prompt:prompt,
+          duration:parseInt(duration),
+          ratio:ratio
+        });
+        return result.data?.task_id;
+      }else{
+        const proxyUrl=(cloudConfig.jimengProxy||"http://localhost:8765").replace(/\/+$/,"");
+        const resp=await fetch(proxyUrl+"/submit",{
+          method:"POST",
+          headers:{"Content-Type":"application/json"},
+          body:JSON.stringify({prompt,duration:parseInt(duration),ratio,req_key:"jimeng_t2v_v30"})
+        });
+        const data=await resp.json();
+        if(data.error)throw new Error(data.error);
+        return data.task_id;
+      }
+    }
+    
+    async function queryTask(){
+      if(cloudConfig.jimengDirectMode && cloudConfig.jimengAK && cloudConfig.jimengSK){
+        return await callJimengDirect("CVSync2AsyncGetResult",{
+          req_key:"jimeng_t2v_v30",
+          task_id:taskId
+        });
+      }else{
+        const proxyUrl=(cloudConfig.jimengProxy||"http://localhost:8765").replace(/\/+$/,"");
+        const resp=await fetch(proxyUrl+"/query",{
+          method:"POST",
+          headers:{"Content-Type":"application/json"},
+          body:JSON.stringify({task_id:taskId,req_key:"jimeng_t2v_v30"})
+        });
+        return await resp.json();
+      }
+    }
+    
+    (async ()=>{
+      try{
+        taskId=await submitTask();
+        if(!taskId)throw new Error("未获取到任务ID");
+        
+        // 轮询查询结果
+        let attempts=0;
+        const maxAttempts=90; // 最多3分钟
+        
+        const poll=setInterval(async ()=>{
+          attempts++;
+          try{
+            const data=await queryTask();
+            const status=data.data?.status;
+            if(status==="done"){
+              clearInterval(poll);
+              const videoUrl=data.data?.video_url;
+              if(videoUrl){
+                resolve(videoUrl);
+              }else{
+                reject(new Error("未获取到视频地址"));
+              }
+            }else if(status==="failed"||status==="error"){
+              clearInterval(poll);
+              reject(new Error(data.data?.message||"生成失败"));
+            }else if(attempts>=maxAttempts){
+              clearInterval(poll);
+              reject(new Error("生成超时"));
+            }
+          }catch(e){
+            clearInterval(poll);
+            reject(e);
+          }
+        },2000);
+      }catch(e){
+        reject(e);
+      }
+    })();
+  });
+}
+
+
 // ========== 事件绑定 ==========
 function initEvents(){
   // 视图切换
@@ -5866,6 +6138,7 @@ function renderStoryboardList(){
             <span style="font-size:11px;color:var(--text-muted)">秒</span>
           </div>
           <button style="background:rgba(196,169,107,0.15);border:1px solid rgba(196,169,107,0.3);color:var(--accent);cursor:pointer;padding:4px 10px;border-radius:6px;font-size:11px" onclick="openAiShotGenerator(${i})" title="AI根据画面描述生成分镜图">AI生图</button>
+          <button style="background:rgba(245,158,11,0.15);border:1px solid rgba(245,158,11,0.3);color:#f59e0b;cursor:pointer;padding:4px 10px;border-radius:6px;font-size:11px" onclick="generateSingleShotVideo(${i})" title="AI根据画面描述生成视频">🎬 AI生视频</button>
           <button style="background:none;border:1px solid var(--border);color:var(--text-muted);cursor:pointer;padding:4px 10px;border-radius:6px;font-size:11px" onclick="document.getElementById('shotRefUpload_${i}').click()">上传参考</button>
           <input type="file" id="shotRefUpload_${i}" accept="image/*" style="display:none" onchange="handleShotRefUpload(${i},this)">
           <button style="margin-left:auto;background:none;border:none;color:var(--text-muted);cursor:pointer;padding:4px 8px;border-radius:4px;font-size:12px" onmouseover="this.style.color='var(--danger)'" onmouseout="this.style.color='var(--text-muted)'" onclick="deleteStoryboardShot(${i})">删除</button>
@@ -5887,10 +6160,11 @@ function renderStoryboardList(){
           </div>
           <div>
             <div style="font-size:11px;color:var(--text-muted);margin-bottom:4px">分镜参考</div>
-            ${s.refVideo?`
+            ${s.videoUrl||s.refVideo?`
               <div style="position:relative;width:100%;aspect-ratio:16/9;border-radius:8px;overflow:hidden;border:1px solid var(--border)">
-                <video src="${s.refVideo}" controls style="width:100%;height:100%;object-fit:cover"></video>
-                <div style="position:absolute;top:4px;right:4px;background:rgba(0,0,0,0.6);color:#fff;padding:2px 6px;border-radius:4px;font-size:10px;cursor:pointer" onclick="clearShotRef(${i})">移除</div>
+                <video src="${s.videoUrl||s.refVideo}" controls style="width:100%;height:100%;object-fit:cover"></video>
+                <div style="position:absolute;top:4px;left:4px;background:rgba(245,158,11,0.9);color:#fff;padding:2px 6px;border-radius:4px;font-size:10px;font-weight:600">AI生成</div>
+                <div style="position:absolute;top:4px;right:4px;background:rgba(0,0,0,0.6);color:#fff;padding:2px 6px;border-radius:4px;font-size:10px;cursor:pointer" onclick="clearShotVideo(${i})">移除视频</div>
               </div>
             `:s.refImage?`
               <div style="position:relative;width:100%;aspect-ratio:16/9;border-radius:8px;overflow:hidden;border:1px solid var(--border);cursor:pointer" onclick="viewShotRef(${i})">
@@ -5981,6 +6255,11 @@ function viewShotRef(index){
 
 function clearShotRef(index){
   storyboardData[index].refImage=null;
+  renderStoryboardList();
+}
+
+function clearShotVideo(index){
+  storyboardData[index].videoUrl=null;
   renderStoryboardList();
 }
 
@@ -6733,6 +7012,7 @@ init();
           <button class="btn" onclick="addStoryboardShot()">+ 添加镜头</button>
           <button class="btn" onclick="apply25ShotTemplate()">套用25镜模板</button>
           <button class="btn" style="background:linear-gradient(135deg,#8b5cf6,#6366f1);border-color:#8b5cf6;color:#fff" onclick="aiGenerateStoryboard()">✨ AI生成分镜</button>
+          <button class="btn" style="background:linear-gradient(135deg,#f59e0b,#ef4444);border-color:#f59e0b;color:#fff" onclick="openBatchVideoGenerator()">🎬 批量生成AI视频</button>
           <button class="btn" onclick="clearStoryboard()">清空</button>
         </div>
       </div>
@@ -6793,6 +7073,79 @@ init();
       <button class="btn" onclick="closeModal('aiShotModal')">取消</button>
       <button class="btn" onclick="saveAiShotAsRef()">保存为分镜参考</button>
       <button class="btn btn-primary" onclick="generateAiShot()">生成</button>
+    </div>
+  </div>
+</div>
+
+<!-- ========== 批量生成AI视频模态框 ========== -->
+<div class="modal-overlay hidden" id="batchVideoModal">
+  <div class="modal-content" style="max-width:900px;max-height:90vh;display:flex;flex-direction:column">
+    <div class="modal-header">
+      <div class="modal-title">🎬 批量生成AI视频（分镜动效预览）</div>
+      <button class="modal-close" onclick="closeModal('batchVideoModal')">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="modal-body" style="flex:1;overflow-y:auto">
+      <!-- 配置区域 -->
+      <div style="background:var(--bg-card);border-radius:10px;padding:16px;margin-bottom:16px">
+        <div style="font-size:14px;font-weight:700;margin-bottom:12px;color:var(--text-primary)">生成配置</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px">
+          <div>
+            <label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:4px">视频时长</label>
+            <select id="batchVideoDuration" style="width:100%;background:var(--input-bg);border:1px solid var(--border);border-radius:6px;padding:8px;color:var(--text-primary);font-size:12px">
+              <option value="5">5秒（推荐）</option>
+              <option value="10">10秒</option>
+            </select>
+          </div>
+          <div>
+            <label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:4px">画幅比例</label>
+            <select id="batchVideoRatio" style="width:100%;background:var(--input-bg);border:1px solid var(--border);border-radius:6px;padding:8px;color:var(--text-primary);font-size:12px">
+              <option value="9:16">9:16 竖屏（快手）</option>
+              <option value="16:9">16:9 横屏</option>
+              <option value="1:1">1:1 方形</option>
+            </select>
+          </div>
+          <div>
+            <label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:4px">并发数</label>
+            <select id="batchVideoConcurrency" style="width:100%;background:var(--input-bg);border:1px solid var(--border);border-radius:6px;padding:8px;color:var(--text-primary);font-size:12px">
+              <option value="1">1（稳定）</option>
+              <option value="2" selected>2（推荐）</option>
+              <option value="3">3（快速）</option>
+            </select>
+          </div>
+        </div>
+        <div style="margin-top:12px">
+          <label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:4px">统一风格前缀（可选，保证25镜风格一致）</label>
+          <input type="text" id="batchVideoStylePrefix" value="电影感，暗调，金色光影，巨星登场，4K画质，慢动作" style="width:100%;background:var(--input-bg);border:1px solid var(--border);border-radius:6px;padding:8px;color:var(--text-primary);font-size:12px" placeholder="例如：电影感，暗调，金色光影，巨星登场">
+        </div>
+      </div>
+
+      <!-- 进度区域 -->
+      <div id="batchVideoProgress" style="display:none;margin-bottom:16px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+          <span style="font-size:13px;font-weight:600;color:var(--text-primary)">生成进度</span>
+          <span id="batchVideoProgressText" style="font-size:13px;color:var(--accent)">0/0</span>
+        </div>
+        <div style="width:100%;height:8px;background:var(--bg-card);border-radius:4px;overflow:hidden">
+          <div id="batchVideoProgressBar" style="height:100%;background:linear-gradient(90deg,#f59e0b,#ef4444);width:0%;transition:width 0.3s"></div>
+        </div>
+        <div id="batchVideoStatus" style="font-size:12px;color:var(--text-muted);margin-top:8px">准备中...</div>
+      </div>
+
+      <!-- 镜头列表 -->
+      <div style="font-size:14px;font-weight:700;margin-bottom:12px;color:var(--text-primary)">选择要生成视频的镜头</div>
+      <div style="display:flex;gap:8px;margin-bottom:12px">
+        <button class="btn" style="padding:6px 12px;font-size:12px" onclick="selectAllBatchShots(true)">全选</button>
+        <button class="btn" style="padding:6px 12px;font-size:12px" onclick="selectAllBatchShots(false)">全不选</button>
+        <button class="btn" style="padding:6px 12px;font-size:12px" onclick="selectKeyShots()">选择关键镜头（开场/高潮/结尾）</button>
+      </div>
+      <div id="batchShotList" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeModal('batchVideoModal')">关闭</button>
+      <button class="btn" id="batchVideoStopBtn" style="display:none;color:var(--danger);border-color:rgba(239,68,68,.3)" onclick="stopBatchVideoGeneration()">停止生成</button>
+      <button class="btn btn-primary" id="batchVideoStartBtn" style="background:linear-gradient(135deg,#f59e0b,#ef4444);border-color:#f59e0b" onclick="startBatchVideoGeneration()">开始批量生成</button>
     </div>
   </div>
 </div>
