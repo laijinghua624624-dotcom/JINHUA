@@ -893,6 +893,10 @@ input,textarea,select{font-family:inherit;outline:none;border:none;background:no
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
         舞美舞台库<span class="count" id="navCountStage">0</span>
       </div>
+      <div class="nav-item" data-view="costume">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.38 3.46L16 2a4 4 0 0 1-8 0L3.62 3.46a2 2 0 0 0-1.34 2.23l.58 3.47a1 1 0 0 0 .99.84H6v10c0 1.1.9 2 2 2h8a2 2 0 0 0 2-2V10h2.15a1 1 0 0 0 .99-.84l.58-3.47a2 2 0 0 0-1.34-2.23z"/></svg>
+        服装库<span class="count" id="navCountCostume">0</span>
+      </div>
       <div class="nav-item" data-view="personal">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
         My<span class="count" id="navCountPersonal">0</span>
@@ -1103,6 +1107,29 @@ input,textarea,select{font-family:inherit;outline:none;border:none;background:no
         <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
         <p>还没有舞台设计方案</p>
         <p class="sub">点击右上角"添加方案"记录舞台设计，沉淀你的舞美知识库</p>
+      </div>
+    </section>
+    <!-- 服装库视图 -->
+    <section id="view-costume" class="hidden">
+      <div class="view-header">
+        <div class="view-title">服装库 <span id="costumeSubtitle">全部服装</span></div>
+        <div class="view-actions">
+          <button class="btn" id="costumeSearchBtn">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+            搜索
+          </button>
+          <button class="btn btn-primary" id="addCostumeBtn" onclick="openAddCostume()">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            添加服装
+          </button>
+        </div>
+      </div>
+      <div class="filter-bar" id="costumeFilterBar"></div>
+      <div class="visual-grid" id="costumeGrid"></div>
+      <div class="empty-state hidden" id="costumeEmpty">
+        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M20.38 3.46L16 2a4 4 0 0 1-8 0L3.62 3.46a2 2 0 0 0-1.34 2.23l.58 3.47a1 1 0 0 0 .99.84H6v10c0 1.1.9 2 2 2h8a2 2 0 0 0 2-2V10h2.15a1 1 0 0 0 .99-.84l.58-3.47a2 2 0 0 0-1.34-2.23z"/></svg>
+        <p>还没有服装参考</p>
+        <p class="sub">点击右上角"添加服装"记录服装参考，沉淀你的服饰知识库</p>
       </div>
     </section>
     <!-- 辛选专属视图 -->
@@ -2014,12 +2041,14 @@ function switchView(view){
   $("#view-dashboard").classList.toggle("hidden",view!=="dashboard");
   $("#view-visual").classList.toggle("hidden",view!=="visual");
   $("#view-stage").classList.toggle("hidden",view!=="stage");
+  $("#view-costume").classList.toggle("hidden",view!=="costume");
   $("#view-xinxuan").classList.toggle("hidden",view!=="xinxuan");
   $("#view-personal").classList.toggle("hidden",view!=="personal");
   if(view==="sessions") renderSessions();
   if(view==="dashboard") renderDashboard();
   if(view==="visual") renderVisualGrid();
   if(view==="stage") renderStageGrid();
+  if(view==="costume") renderCostumeGrid();
   if(view==="xinxuan") renderXinxuan();
   if(view==="personal") renderPersonal();
   if(view==="inspiration") renderInspirationGrid();
@@ -2105,7 +2134,8 @@ function openEdit(id){
     id:uid(),title:"",type:TYPES[0].name,status:"待拍",hook:"",script:"",storyboard:[],bgm:"",references:[],session:"",sessionDate:"",createdAt:today(),notes:"",
     // PPT汇报模板专业字段
     creativeOutline:"",creativeDescription:"",creativeMeaning:"",narrationDescription:"",
-    scene:"",location:"",artDirection:"",props:"",visualAtmosphere:"",cinematographyStyle:""
+    scene:"",location:"",artDirection:"",props:"",visualAtmosphere:"",cinematographyStyle:"",
+    costumeReference:""  // 服饰搭配推荐
   }:state.topics.find(x=>x.id===id);
   $("#detailTitle").textContent=isNew?"新建选题":"编辑选题";
   $("#detailBody").innerHTML=`
@@ -2197,6 +2227,11 @@ function openEdit(id){
       <label class="form-label">摄影调性参考</label>
       <textarea class="form-textarea" id="f_cinematographyStyle" style="min-height:60px" placeholder="镜头语言、运镜风格、焦距选择、帧率">${t.cinematographyStyle||""}</textarea>
     </div>
+
+    <div class="form-group">
+      <label class="form-label">👗 服饰搭配推荐</label>
+      <textarea class="form-textarea" id="f_costumeReference" style="min-height:80px" placeholder="主角服装款式、颜色、材质、配饰、造型建议；可参考历史视频中的服装风格">${t.costumeReference||""}</textarea>
+    </div>
     <!-- ========== PPT汇报模板专业字段结束 ========== -->
 
     <div class="form-group">
@@ -2242,6 +2277,7 @@ function saveTopic(id,isNew){
     props:$("#f_props")?.value.trim()||"",
     visualAtmosphere:$("#f_visualAtmosphere")?.value.trim()||"",
     cinematographyStyle:$("#f_cinematographyStyle")?.value.trim()||"",
+    costumeReference:$("#f_costumeReference")?.value.trim()||"",
     createdAt:isNew?today():(state.topics.find(t=>t.id===id)?.createdAt||today())
   };
   if(!data.title){toast("请填写选题名称","error");return;}
@@ -2257,7 +2293,8 @@ function saveTopic(id,isNew){
         creativeOutline:data.creativeOutline,creativeDescription:data.creativeDescription,
         creativeMeaning:data.creativeMeaning,narrationDescription:data.narrationDescription,
         scene:data.scene,location:data.location,artDirection:data.artDirection,
-        props:data.props,visualAtmosphere:data.visualAtmosphere,cinematographyStyle:data.cinematographyStyle
+        props:data.props,visualAtmosphere:data.visualAtmosphere,cinematographyStyle:data.cinematographyStyle,
+        costumeReference:data.costumeReference
       }
     }];
     data.currentVersion="v1";
@@ -2289,6 +2326,7 @@ function saveTopic(id,isNew){
         v.data.props=data.props;
         v.data.visualAtmosphere=data.visualAtmosphere;
         v.data.cinematographyStyle=data.cinematographyStyle;
+        v.data.costumeReference=data.costumeReference;
       }
       toast("选题已更新（当前版本："+state.topics[idx].currentVersion+"）","success");
     }
@@ -2465,6 +2503,7 @@ function generateReport(id){
   const props = getFieldValue(t, curData, 'props');
   const visualAtmosphere = getFieldValue(t, curData, 'visualAtmosphere');
   const cinematographyStyle = getFieldValue(t, curData, 'cinematographyStyle');
+  const costumeReference = getFieldValue(t, curData, 'costumeReference');
   const bgm = curData.bgm || t.bgm || "";
   const script = curData.script || t.script || "";
   const hook = curData.hook || t.hook || "";
@@ -2472,7 +2511,7 @@ function generateReport(id){
   // 分镜表HTML
   const storyboardHtml = curData.storyboard&&curData.storyboard.length?`
     <div class="section">
-      <div class="section-num">12</div>
+      <div class="section-num">13</div>
       <h2>🎬 分镜脚本（${curData.storyboard.length}镜）</h2>
       <table>
         <thead><tr><th style="width:50px">镜号</th><th style="width:70px">景别</th><th style="width:70px">运镜</th><th style="width:60px">时长</th><th>画面描述</th><th>台词/旁白</th></tr></thead>
@@ -2629,6 +2668,12 @@ function generateReport(id){
       <div class="section-num">11</div>
       <h2>🎵 配乐参考</h2>
       <div class="content">${bgm||'<span class="empty-field">待填写</span>'}</div>
+    </div>
+
+    <div class="section">
+      <div class="section-num">12</div>
+      <h2>👗 服饰搭配推荐</h2>
+      <div class="content">${costumeReference||'<span class="empty-field">待填写</span>'}</div>
     </div>
 
     ${storyboardHtml}
@@ -4609,6 +4654,212 @@ function initStageLib(){
   suz.addEventListener("drop",e=>{e.preventDefault();suz.classList.remove("dragover");if(e.dataTransfer.files[0])handleStageImageUpload(e.dataTransfer.files[0]);});
 }
 
+
+// ========== 服装库 ==========
+const COSTUME_KEY="xuan_ti_ku_costume";
+const COSTUME_TYPES=["上衣","裤装","裙装","外套","套装","鞋履","配饰","帽子","包包","其他"];
+const COSTUME_STYLES=["华丽巨星","优雅知性","酷飒街头","甜美可爱","商务正式","休闲舒适","国风古典","未来科技","复古怀旧","运动活力"];
+const COSTUME_COLORS=["黑色","白色","金色","银色","红色","蓝色","绿色","紫色","粉色","米色","多色"];
+
+let costumeState={costumes:[],filterType:"all",filterStyle:"all",filterColor:"all",search:"",editingId:null,tempImage:null};
+
+function loadCostumeData(){
+  try{const d=localStorage.getItem(getProjectKey(COSTUME_KEY));if(d){costumeState.costumes=JSON.parse(d);}}catch(e){console.error("加载服装库失败",e);}
+}
+function saveCostumeData(){
+  try{localStorage.setItem(getProjectKey(COSTUME_KEY),JSON.stringify(costumeState.costumes));}catch(e){console.error("保存服装库失败",e);}
+}
+
+function renderCostumeFilters(){
+  const bar=$("#costumeFilterBar");
+  if(!bar) return;
+  bar.innerHTML=`
+    <div class="filter-group">
+      <span class="filter-label">类型</span>
+      <div class="type-filter ${costumeState.filterType==='all'?'active':''}" onclick="costumeState.filterType='all';renderCostumeFilters();renderCostumeGrid()">全部</div>
+      ${COSTUME_TYPES.map(t=>`<div class="type-filter ${costumeState.filterType===t?'active':''}" onclick="costumeState.filterType='${t}';renderCostumeFilters();renderCostumeGrid()">${t}</div>`).join("")}
+    </div>
+    <div class="filter-group">
+      <span class="filter-label">风格</span>
+      <div class="type-filter ${costumeState.filterStyle==='all'?'active':''}" onclick="costumeState.filterStyle='all';renderCostumeFilters();renderCostumeGrid()">全部</div>
+      ${COSTUME_STYLES.slice(0,5).map(s=>`<div class="type-filter ${costumeState.filterStyle===s?'active':''}" onclick="costumeState.filterStyle='${s}';renderCostumeFilters();renderCostumeGrid()">${s}</div>`).join("")}
+    </div>
+  `;
+}
+
+function renderCostumeGrid(){
+  const grid=$("#costumeGrid");
+  const empty=$("#costumeEmpty");
+  if(!grid) return;
+  
+  let list=costumeState.costumes;
+  if(costumeState.filterType!=="all") list=list.filter(c=>c.type===costumeState.filterType);
+  if(costumeState.filterStyle!=="all") list=list.filter(c=>c.style===costumeState.filterStyle);
+  if(costumeState.filterColor!=="all") list=list.filter(c=>c.color===costumeState.filterColor);
+  if(costumeState.search){
+    const q=costumeState.search.toLowerCase();
+    list=list.filter(c=>(c.name+c.brand+c.desc+c.tags).toLowerCase().includes(q));
+  }
+  
+  $("#navCountCostume").textContent=costumeState.costumes.length;
+  $("#costumeSubtitle").textContent=`${list.length}件服装`;
+  
+  if(list.length===0){
+    grid.innerHTML="";empty.classList.remove("hidden");return;
+  }
+  empty.classList.add("hidden");
+  
+  grid.innerHTML=list.map(c=>`
+    <div class="visual-card" onclick="openCostumeDetail('${c.id}')">
+      <div class="visual-image">
+        ${c.image?`<img src="${c.image}" alt="${c.name}">`:`<div class="visual-placeholder"><svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M20.38 3.46L16 2a4 4 0 0 1-8 0L3.62 3.46a2 2 0 0 0-1.34 2.23l.58 3.47a1 1 0 0 0 .99.84H6v10c0 1.1.9 2 2 2h8a2 2 0 0 0 2-2V10h2.15a1 1 0 0 0 .99-.84l.58-3.47a2 2 0 0 0-1.34-2.23z"/></svg></div>`}
+        <div class="visual-type-tag">${c.type||""}</div>
+      </div>
+      <div class="visual-info">
+        <div class="visual-title">${c.name||"未命名"}</div>
+        <div class="visual-desc">${c.style||""} · ${c.color||""}${c.brand?` · ${c.brand}`:""}</div>
+      </div>
+    </div>
+  `).join("");
+}
+
+function openAddCostume(){
+  costumeState.editingId=null;
+  costumeState.tempImage=null;
+  $("#costumeModalTitle").textContent="添加服装参考";
+  $("#costumeName").value="";
+  $("#costumeType").value=COSTUME_TYPES[0];
+  $("#costumeStyle").value=COSTUME_STYLES[0];
+  $("#costumeColor").value=COSTUME_COLORS[0];
+  $("#costumeBrand").value="";
+  $("#costumeDesc").value="";
+  $("#costumeTags").value="";
+  $("#costumeImagePreview").innerHTML='<div class="image-placeholder">点击上传服装图片</div>';
+  $("#costumeModal").classList.remove("hidden");
+}
+
+function editCostume(id){
+  const c=costumeState.costumes.find(x=>x.id===id);
+  if(!c) return;
+  costumeState.editingId=id;
+  costumeState.tempImage=c.image||null;
+  $("#costumeModalTitle").textContent="编辑服装参考";
+  $("#costumeName").value=c.name||"";
+  $("#costumeType").value=c.type||COSTUME_TYPES[0];
+  $("#costumeStyle").value=c.style||COSTUME_STYLES[0];
+  $("#costumeColor").value=c.color||COSTUME_COLORS[0];
+  $("#costumeBrand").value=c.brand||"";
+  $("#costumeDesc").value=c.desc||"";
+  $("#costumeTags").value=(c.tags||[]).join(", ");
+  $("#costumeImagePreview").innerHTML=c.image?`<img src="${c.image}" alt="服装图片">`:'<div class="image-placeholder">点击上传服装图片</div>';
+  $("#costumeModal").classList.remove("hidden");
+}
+
+function saveCostume(){
+  const name=$("#costumeName").value.trim();
+  if(!name){toast("请填写服装名称","error");return;}
+  
+  const data={
+    id:costumeState.editingId||uid(),
+    name:name,
+    type:$("#costumeType").value,
+    style:$("#costumeStyle").value,
+    color:$("#costumeColor").value,
+    brand:$("#costumeBrand").value.trim(),
+    desc:$("#costumeDesc").value.trim(),
+    tags:$("#costumeTags").value.split(",").map(t=>t.trim()).filter(t=>t),
+    image:costumeState.tempImage,
+    createdAt:costumeState.editingId?(costumeState.costumes.find(x=>x.id===costumeState.editingId)?.createdAt||today()):today()
+  };
+  
+  if(costumeState.editingId){
+    const idx=costumeState.costumes.findIndex(x=>x.id===costumeState.editingId);
+    if(idx>-1) costumeState.costumes[idx]=data;
+    toast("服装参考已更新","success");
+  }else{
+    costumeState.costumes.unshift(data);
+    toast("服装参考已添加","success");
+  }
+  
+  saveCostumeData();
+  renderCostumeFilters();
+  renderCostumeGrid();
+  closeModal("costumeModal");
+}
+
+function handleCostumeImageUpload(input){
+  const file=input.files[0];
+  if(!file) return;
+  const reader=new FileReader();
+  reader.onload=function(e){
+    const img=new Image();
+    img.onload=function(){
+      const canvas=document.createElement("canvas");
+      const maxSize=800;
+      let w=img.width,h=img.height;
+      if(w>maxSize||h>maxSize){
+        if(w>h){h=h*maxSize/w;w=maxSize;}
+        else{w=w*maxSize/h;h=maxSize;}
+      }
+      canvas.width=w;canvas.height=h;
+      canvas.getContext("2d").drawImage(img,0,0,w,h);
+      costumeState.tempImage=canvas.toDataURL("image/jpeg",0.8);
+      $("#costumeImagePreview").innerHTML=`<img src="${costumeState.tempImage}" alt="服装图片">`;
+    };
+    img.src=e.target.result;
+  };
+  reader.readAsDataURL(file);
+}
+
+function openCostumeDetail(id){
+  const c=costumeState.costumes.find(x=>x.id===id);
+  if(!c) return;
+  $("#costumeDetailTitle").textContent=c.name;
+  $("#costumeDetailBody").innerHTML=`
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:20px">
+      <div>
+        ${c.image?`<img src="${c.image}" style="width:100%;border-radius:10px" alt="${c.name}">`:`<div style="width:100%;aspect-ratio:1;background:var(--bg-card);border-radius:10px;display:flex;align-items:center;justify-content:center;color:var(--text-muted)">无图片</div>`}
+      </div>
+      <div style="display:flex;flex-direction:column;gap:12px">
+        <div><strong style="color:var(--accent)">类型：</strong>${c.type||"-"}</div>
+        <div><strong style="color:var(--accent)">风格：</strong>${c.style||"-"}</div>
+        <div><strong style="color:var(--accent)">颜色：</strong>${c.color||"-"}</div>
+        <div><strong style="color:var(--accent)">品牌：</strong>${c.brand||"-"}</div>
+        <div><strong style="color:var(--accent)">创建时间：</strong>${c.createdAt||"-"}</div>
+        ${c.tags&&c.tags.length?`<div><strong style="color:var(--accent)">标签：</strong>${c.tags.map(t=>`<span style="display:inline-block;padding:2px 8px;background:rgba(196,169,107,0.15);color:var(--accent);border-radius:10px;font-size:11px;margin:2px">${t}</span>`).join("")}</div>`:""}
+      </div>
+    </div>
+    ${c.desc?`<div style="margin-bottom:20px"><div style="font-weight:700;color:var(--accent);margin-bottom:8px">描述</div><div style="color:var(--text-secondary);line-height:1.8">${c.desc}</div></div>`:""}
+  `;
+  $("#costumeDetailEditBtn").onclick=()=>{closeModal("costumeDetailModal");editCostume(id);};
+  $("#costumeDetailDeleteBtn").onclick=()=>{
+    if(confirm("确定删除这个服装参考吗？")){
+      costumeState.costumes=costumeState.costumes.filter(x=>x.id!==id);
+      saveCostumeData();
+      renderCostumeFilters();
+      renderCostumeGrid();
+      closeModal("costumeDetailModal");
+      toast("服装参考已删除","success");
+    }
+  };
+  $("#costumeDetailModal").classList.remove("hidden");
+}
+
+// 初始化服装库
+function initCostumeLibrary(){
+  loadCostumeData();
+  renderCostumeFilters();
+  renderCostumeGrid();
+  $("#addCostumeBtn").addEventListener("click",openAddCostume);
+  $("#costumeSearchBtn").addEventListener("click",()=>{
+    const q=prompt("输入搜索关键词（服装名/品牌/描述/标签）：",costumeState.search);
+    if(q!==null){costumeState.search=q.trim();renderCostumeGrid();}
+  });
+  $("#costumeImageUpload").addEventListener("change",function(){handleCostumeImageUpload(this);});
+  $("#costumeSaveBtn").addEventListener("click",saveCostume);
+}
+
+
 // ========== 辛选专属 ==========
 const XINXUAN_KEY="xuan_ti_ku_xinxuan";
 let xinxuanState={currentTab:"brand",brand:{},account:{},history:[],visual:{},resource:[]};
@@ -4949,6 +5200,7 @@ function switchProject(projectId){
   loadData();           // 选题库
   loadInspirationData(); // 灵感速记
   loadStage();          // 舞美舞台
+  loadCostumeData();    // 服装库
   loadXinxuan();        // 辛选专属
   loadPersonal();       // 个人项目
   loadProjectPlans();   // 专场策划案
@@ -5841,6 +6093,7 @@ function init(){
   renderMessages();
   initVisualLib();
   initStageLib();
+  initCostumeLibrary();
   initXinxuan();
   loadProjects();
   initPersonal();
@@ -6143,6 +6396,93 @@ init();
       <button class="btn" onclick="closeModal('stageDetailModal')">关闭</button>
       <button class="btn" id="stageDetailEditBtn">编辑</button>
       <button class="btn" style="color:var(--danger);border-color:rgba(239,68,68,.3)" id="stageDetailDeleteBtn">删除</button>
+    </div>
+  </div>
+</div>
+
+<!-- ========== 服装库：添加/编辑模态框 ========== -->
+<div class="modal-overlay hidden" id="costumeModal">
+  <div class="modal-content" style="max-width:640px">
+    <div class="modal-header">
+      <div class="modal-title" id="costumeModalTitle">添加服装参考</div>
+      <button class="modal-close" onclick="closeModal('costumeModal')">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px">
+        <div>
+          <label class="form-label">服装名称 *</label>
+          <input class="form-input" id="costumeName" placeholder="如：金色华丽礼服">
+        </div>
+        <div>
+          <label class="form-label">品牌</label>
+          <input class="form-input" id="costumeBrand" placeholder="品牌名称">
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;margin-bottom:16px">
+        <div>
+          <label class="form-label">类型</label>
+          <select class="form-select" id="costumeType">
+            <option>上衣</option><option>裤装</option><option>裙装</option><option>外套</option>
+            <option>套装</option><option>鞋履</option><option>配饰</option><option>帽子</option>
+            <option>包包</option><option>其他</option>
+          </select>
+        </div>
+        <div>
+          <label class="form-label">风格</label>
+          <select class="form-select" id="costumeStyle">
+            <option>华丽巨星</option><option>优雅知性</option><option>酷飒街头</option>
+            <option>甜美可爱</option><option>商务正式</option><option>休闲舒适</option>
+            <option>国风古典</option><option>未来科技</option><option>复古怀旧</option><option>运动活力</option>
+          </select>
+        </div>
+        <div>
+          <label class="form-label">颜色</label>
+          <select class="form-select" id="costumeColor">
+            <option>黑色</option><option>白色</option><option>金色</option><option>银色</option>
+            <option>红色</option><option>蓝色</option><option>绿色</option><option>紫色</option>
+            <option>粉色</option><option>米色</option><option>多色</option>
+          </select>
+        </div>
+      </div>
+      <div style="margin-bottom:16px">
+        <label class="form-label">服装图片</label>
+        <div id="costumeImagePreview" style="width:100%;aspect-ratio:16/9;background:var(--bg-card);border:2px dashed var(--border);border-radius:10px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--text-muted);margin-bottom:8px" onclick="document.getElementById('costumeImageUpload').click()">
+          <div class="image-placeholder">点击上传服装图片</div>
+        </div>
+        <input type="file" id="costumeImageUpload" accept="image/*" style="display:none">
+      </div>
+      <div style="margin-bottom:16px">
+        <label class="form-label">描述</label>
+        <textarea class="form-textarea" id="costumeDesc" style="min-height:80px" placeholder="服装的详细描述、材质、设计细节、适用场景等"></textarea>
+      </div>
+      <div>
+        <label class="form-label">标签（用逗号分隔）</label>
+        <input class="form-input" id="costumeTags" placeholder="如：华丽,金色,礼服,巨星感">
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeModal('costumeModal')">取消</button>
+      <button class="btn btn-primary" id="costumeSaveBtn">保存</button>
+    </div>
+  </div>
+</div>
+
+<!-- ========== 服装库：详情模态框 ========== -->
+<div class="modal-overlay hidden" id="costumeDetailModal">
+  <div class="modal-content" style="max-width:720px">
+    <div class="modal-header">
+      <div class="modal-title" id="costumeDetailTitle">服装详情</div>
+      <button class="modal-close" onclick="closeModal('costumeDetailModal')">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="modal-body" id="costumeDetailBody"></div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeModal('costumeDetailModal')">关闭</button>
+      <button class="btn" id="costumeDetailEditBtn">编辑</button>
+      <button class="btn" style="color:var(--danger);border-color:rgba(239,68,68,.3)" id="costumeDetailDeleteBtn">删除</button>
     </div>
   </div>
 </div>
