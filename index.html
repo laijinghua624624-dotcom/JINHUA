@@ -897,6 +897,10 @@ input,textarea,select{font-family:inherit;outline:none;border:none;background:no
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.38 3.46L16 2a4 4 0 0 1-8 0L3.62 3.46a2 2 0 0 0-1.34 2.23l.58 3.47a1 1 0 0 0 .99.84H6v10c0 1.1.9 2 2 2h8a2 2 0 0 0 2-2V10h2.15a1 1 0 0 0 .99-.84l.58-3.47a2 2 0 0 0-1.34-2.23z"/></svg>
         服装库<span class="count" id="navCountCostume">0</span>
       </div>
+      <div class="nav-item" data-view="reverse">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
+        视频反推<span class="count" id="navCountReverse">0</span>
+      </div>
       <div class="nav-item" data-view="personal">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
         My<span class="count" id="navCountPersonal">0</span>
@@ -1138,6 +1142,48 @@ input,textarea,select{font-family:inherit;outline:none;border:none;background:no
         <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M20.38 3.46L16 2a4 4 0 0 1-8 0L3.62 3.46a2 2 0 0 0-1.34 2.23l.58 3.47a1 1 0 0 0 .99.84H6v10c0 1.1.9 2 2 2h8a2 2 0 0 0 2-2V10h2.15a1 1 0 0 0 .99-.84l.58-3.47a2 2 0 0 0-1.34-2.23z"/></svg>
         <p>还没有服装参考</p>
         <p class="sub">点击右上角"添加服装"记录服装参考，沉淀你的服饰知识库</p>
+      </div>
+    </section>
+    <!-- 视频反推视图 -->
+    <section id="view-reverse" class="hidden">
+      <div class="view-header">
+        <div class="view-title">视频反推 <span id="reverseSubtitle">创意资产库</span></div>
+        <div class="view-actions">
+          <button class="btn" id="reverseSearchBtn">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+            搜索
+          </button>
+          <button class="btn btn-primary" onclick="openReverseUpload()">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            上传视频反推
+          </button>
+        </div>
+      </div>
+      <!-- 说明横幅 -->
+      <div style="background:linear-gradient(135deg,rgba(139,92,246,0.1) 0%,rgba(20,18,26,0.9) 100%);border:1px solid rgba(139,92,246,0.3);border-radius:12px;padding:20px;margin-bottom:20px">
+        <div style="display:flex;align-items:flex-start;gap:16px">
+          <div style="width:48px;height:48px;border-radius:12px;background:rgba(139,92,246,0.2);display:flex;align-items:center;justify-content:center;flex-shrink:0">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#8b5cf6" stroke-width="2"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
+          </div>
+          <div style="flex:1">
+            <div style="font-size:16px;font-weight:700;color:var(--text-primary);margin-bottom:6px">视频反推 · 重建创意资产库</div>
+            <div style="font-size:13px;color:var(--text-secondary);line-height:1.6;margin-bottom:10px">上传过往拍摄的视频/广告，AI自动反推完整脚本、创意分析、分镜拆解，把没有保留剧本的作品重新结构化，沉淀为可复用的创意资产。</div>
+            <div style="display:flex;gap:20px;flex-wrap:wrap">
+              <div style="font-size:12px;color:var(--text-muted)"><span style="color:#8b5cf6;font-weight:600">✓</span> 创意大纲/描述/寓意</div>
+              <div style="font-size:12px;color:var(--text-muted)"><span style="color:#8b5cf6;font-weight:600">✓</span> 旁白台词/场景/场地</div>
+              <div style="font-size:12px;color:var(--text-muted)"><span style="color:#8b5cf6;font-weight:600">✓</span> 美术制景/道具/影像氛围</div>
+              <div style="font-size:12px;color:var(--text-muted)"><span style="color:#8b5cf6;font-weight:600">✓</span> 摄影调性/配乐/服饰</div>
+              <div style="font-size:12px;color:var(--text-muted)"><span style="color:#8b5cf6;font-weight:600">✓</span> 25镜分镜自动拆解</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="filter-bar" id="reverseFilterBar"></div>
+      <div class="visual-grid" id="reverseGrid"></div>
+      <div class="empty-state hidden" id="reverseEmpty">
+        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>
+        <p>还没有反推的视频</p>
+        <p class="sub">点击右上角"上传视频反推"，把过往作品重新结构化</p>
       </div>
     </section>
     <!-- 辛选专属视图 -->
@@ -2050,6 +2096,7 @@ function switchView(view){
   $("#view-visual").classList.toggle("hidden",view!=="visual");
   $("#view-stage").classList.toggle("hidden",view!=="stage");
   $("#view-costume").classList.toggle("hidden",view!=="costume");
+  $("#view-reverse").classList.toggle("hidden",view!=="reverse");
   $("#view-xinxuan").classList.toggle("hidden",view!=="xinxuan");
   $("#view-personal").classList.toggle("hidden",view!=="personal");
   if(view==="sessions") renderSessions();
@@ -2057,6 +2104,7 @@ function switchView(view){
   if(view==="visual") renderVisualGrid();
   if(view==="stage") renderStageGrid();
   if(view==="costume") renderCostumeGrid();
+  if(view==="reverse") renderReverseGrid();
   if(view==="xinxuan") renderXinxuan();
   if(view==="personal") renderPersonal();
   if(view==="inspiration") renderInspirationGrid();
@@ -4892,6 +4940,439 @@ async function generateVideoForShot(prompt,duration,ratio){
 }
 
 
+
+// ========== 视频反推功能 ==========
+const REVERSE_KEY="xuan_ti_ku_reverse";
+let reverseState={items:[],filterType:"all",search:""};
+
+function loadReverseData(){
+  try{
+    const data=localStorage.getItem(getProjectKey(REVERSE_KEY));
+    if(data) reverseState.items=JSON.parse(data);
+  }catch(e){console.error("加载视频反推数据失败",e);}
+}
+
+function saveReverseData(){
+  localStorage.setItem(getProjectKey(REVERSE_KEY),JSON.stringify(reverseState.items));
+  const navCount=$("#navCountReverse");
+  if(navCount) navCount.textContent=reverseState.items.length;
+}
+
+function renderReverseGrid(){
+  const grid=$("#reverseGrid");
+  const empty=$("#reverseEmpty");
+  if(!grid) return;
+  
+  let items=[...reverseState.items];
+  if(reverseState.filterType!=="all"){
+    items=items.filter(i=>i.type===reverseState.filterType);
+  }
+  if(reverseState.search){
+    const q=reverseState.search.toLowerCase();
+    items=items.filter(i=>(i.title||"").toLowerCase().includes(q)||(i.creativeOutline||"").toLowerCase().includes(q));
+  }
+  
+  if(items.length===0){
+    grid.innerHTML="";
+    empty.classList.remove("hidden");
+  }else{
+    empty.classList.add("hidden");
+    grid.innerHTML=items.map((item,idx)=>{
+      const originalIdx=reverseState.items.indexOf(item);
+      return `
+        <div class="visual-card" onclick="viewReverseDetail(${originalIdx})" style="cursor:pointer">
+          <div class="visual-thumb" style="background:linear-gradient(135deg,#1a1a2e,#16213e);display:flex;align-items:center;justify-content:center;position:relative">
+            ${item.videoUrl?`<video src="${item.videoUrl}" muted style="width:100%;height:100%;object-fit:cover"></video>`:`
+              <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="rgba(139,92,246,0.6)" stroke-width="1.5"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>
+            `}
+            <div style="position:absolute;top:8px;left:8px;background:rgba(139,92,246,0.9);color:#fff;padding:2px 8px;border-radius:4px;font-size:10px;font-weight:600">${item.type||"未分类"}</div>
+            ${item.duration?`<div style="position:absolute;bottom:8px;right:8px;background:rgba(0,0,0,0.7);color:#fff;padding:2px 6px;border-radius:4px;font-size:10px">${item.duration}s</div>`:""}
+          </div>
+          <div class="visual-info">
+            <div class="visual-title">${item.title||"未命名视频"}</div>
+            <div class="visual-desc" style="display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden">${item.creativeOutline||"点击查看反推详情"}</div>
+            <div class="visual-tags">
+              ${(item.tags||[]).slice(0,3).map(t=>`<span class="tag">${t}</span>`).join("")}
+              <span class="tag" style="margin-left:auto;background:rgba(139,92,246,0.15);color:#8b5cf6">${item.shotCount||0}镜</span>
+            </div>
+          </div>
+        </div>
+      `;
+    }).join("");
+  }
+  
+  // 渲染筛选栏
+  renderReverseFilters();
+}
+
+function renderReverseFilters(){
+  const bar=$("#reverseFilterBar");
+  if(!bar) return;
+  const types=["all","预热视频","广告片","纪录片","MV","短片","其他"];
+  bar.innerHTML=types.map(t=>`
+    <span class="filter-chip ${reverseState.filterType===t?'active':''}" onclick="reverseState.filterType='${t}';renderReverseGrid()">${t==="all"?"全部":t}</span>
+  `).join("");
+}
+
+// 打开视频反推上传模态框
+function openReverseUpload(){
+  $("#reverseUploadModal").classList.remove("hidden");
+  $("#reverseVideoUrl").value="";
+  $("#reverseVideoTitle").value="";
+  $("#reverseVideoType").value="预热视频";
+  $("#reverseVideoDesc").value="";
+  $("#reverseUploadProgress").style.display="none";
+  $("#reverseUploadResult").style.display="none";
+  $("#reverseUploadForm").style.display="block";
+}
+
+// 处理视频上传
+function handleReverseVideoUpload(input){
+  const file=input.files[0];
+  if(!file) return;
+  
+  // 显示视频预览
+  const video=document.createElement("video");
+  video.preload="metadata";
+  video.onloadedmetadata=function(){
+    $("#reverseVideoDuration").value=Math.round(video.duration);
+  };
+  video.src=URL.createObjectURL(file);
+  
+  // 保存视频URL（临时，实际应该上传到服务器）
+  reverseTempVideoUrl=URL.createObjectURL(file);
+  
+  toast("视频已加载，时长："+Math.round(video.duration)+"秒","success");
+}
+
+let reverseTempVideoUrl=null;
+
+// 开始AI反推
+async function startReverseAnalysis(){
+  const title=$("#reverseVideoTitle").value.trim();
+  const type=$("#reverseVideoType").value;
+  const duration=$("#reverseVideoDuration").value;
+  const desc=$("#reverseVideoDesc").value.trim();
+  
+  if(!title){
+    toast("请输入视频标题","error");
+    return;
+  }
+  
+  $("#reverseUploadForm").style.display="none";
+  $("#reverseUploadProgress").style.display="block";
+  
+  const steps=[
+    "正在分析视频内容结构...",
+    "正在提取创意大纲和核心概念...",
+    "正在拆解旁白台词和场景...",
+    "正在分析美术制景和道具...",
+    "正在识别摄影调性和影像氛围...",
+    "正在自动拆解25镜分镜脚本...",
+    "正在生成创意分析报告..."
+  ];
+  
+  for(let i=0;i<steps.length;i++){
+    $("#reverseProgressText").textContent=steps[i];
+    $("#reverseProgressBar").style.width=`${((i+1)/steps.length)*100}%`;
+    await new Promise(r=>setTimeout(r,800));
+  }
+  
+  // 调用豆包API生成反推结果
+  try{
+    const result=await generateReverseScript(title,type,duration,desc);
+    showReverseResult(result);
+  }catch(e){
+    console.error("反推失败",e);
+    toast("AI反推失败："+e.message,"error");
+    $("#reverseUploadForm").style.display="block";
+    $("#reverseUploadProgress").style.display="none";
+  }
+}
+
+// 调用豆包API生成反推脚本
+async function generateReverseScript(title,type,duration,desc){
+  const apiConfig=loadApiConfig();
+  if(!apiConfig.apiKey){
+    throw new Error("请先在设置中配置豆包API");
+  }
+  
+  const prompt=`你是一位资深的影视内容策划和分镜师。请根据以下视频信息，反推完整的创意脚本和分镜：
+
+视频标题：${title}
+视频类型：${type}
+视频时长：${duration}秒
+视频描述：${desc||"（用户未提供描述，请根据标题和类型合理推断）"}
+
+请输出以下结构化内容（用JSON格式返回）：
+{
+  "creativeOutline": "创意大纲（一句话概括核心创意）",
+  "creativeDescription": "创意描述（详细描述创意概念、叙事结构、情感曲线）",
+  "creativeMeaning": "创意寓意（这个创意想要传达的深层含义和品牌价值）",
+  "narrationDescription": "旁白台词描述（整体旁白风格、语气、节奏，以及关键台词）",
+  "scene": "场景（主要场景描述，包括环境、氛围、时间）",
+  "location": "场地（拍摄场地类型，如体育馆、摄影棚、户外等）",
+  "artDirection": "美术制景（美术风格、置景特点、色彩搭配）",
+  "props": "道具（主要道具清单和用途）",
+  "visualAtmosphere": "影像氛围（整体影像氛围、光线特点、色调）",
+  "cinematographyStyle": "摄影调性（摄影风格、镜头语言、运动方式）",
+  "bgm": "配乐（音乐风格、节奏、情绪变化）",
+  "costumeReference": "服饰搭配（主要角色的服装风格、搭配建议）",
+  "tags": ["标签1","标签2","标签3"],
+  "storyboard": [
+    {"shot":1,"shotSize":"景别","cameraMove":"运镜","duration":3,"visual":"画面描述","dialogue":"台词/旁白","note":"备注"},
+    ...（根据时长生成合理数量的分镜，约${Math.max(5,Math.min(25,Math.round(duration/2)))}个镜头）
+  ]
+}
+
+请确保内容专业、具体、可执行，符合${type}的创作规律。只返回JSON，不要其他文字。`;
+
+  const response=await fetch(apiConfig.baseUrl+"/chat/completions",{
+    method:"POST",
+    headers:{
+      "Content-Type":"application/json",
+      "Authorization":"Bearer "+apiConfig.apiKey
+    },
+    body:JSON.stringify({
+      model:apiConfig.model||"doubao-seed-evolving",
+      messages:[{role:"user",content:prompt}],
+      temperature:0.7,
+      max_tokens:4000
+    })
+  });
+  
+  const data=await response.json();
+  if(data.error){
+    throw new Error(data.error.message||"API调用失败");
+  }
+  
+  const content=data.choices[0].message.content;
+  // 提取JSON
+  const jsonMatch=content.match(/\{[\s\S]*\}/);
+  if(!jsonMatch){
+    throw new Error("无法解析AI返回的JSON");
+  }
+  
+  return JSON.parse(jsonMatch[0]);
+}
+
+// 显示反推结果
+function showReverseResult(result){
+  $("#reverseUploadProgress").style.display="none";
+  $("#reverseUploadResult").style.display="block";
+  
+  const title=$("#reverseVideoTitle").value.trim();
+  const type=$("#reverseVideoType").value;
+  const duration=$("#reverseVideoDuration").value;
+  
+  $("#reverseResultTitle").textContent=title;
+  $("#reverseResultType").textContent=type;
+  $("#reverseResultDuration").textContent=duration+"秒";
+  $("#reverseResultOutline").textContent=result.creativeOutline||"";
+  $("#reverseResultDescription").textContent=result.creativeDescription||"";
+  $("#reverseResultShotCount").textContent=(result.storyboard||[]).length+"镜";
+  
+  // 保存临时结果
+  reverseTempResult={
+    title:title,
+    type:type,
+    duration:parseInt(duration)||0,
+    videoUrl:reverseTempVideoUrl,
+    ...result
+  };
+}
+
+let reverseTempResult=null;
+
+// 保存反推结果到库
+function saveReverseResult(){
+  if(!reverseTempResult) return;
+  
+  reverseState.items.unshift({
+    id:Date.now(),
+    createdAt:new Date().toISOString(),
+    ...reverseTempResult
+  });
+  
+  saveReverseData();
+  closeModal("reverseUploadModal");
+  toast("视频反推结果已保存！","success");
+  switchView("reverse");
+}
+
+// 保存反推结果为选题
+function saveReverseAsTopic(){
+  if(!reverseTempResult) return;
+  
+  const newTopic={
+    id:Date.now(),
+    title:reverseTempResult.title,
+    type:reverseTempResult.type||"造势预热",
+    status:"参考",
+    hook:reverseTempResult.creativeOutline||"",
+    script:reverseTempResult.creativeDescription||"",
+    creativeOutline:reverseTempResult.creativeOutline,
+    creativeDescription:reverseTempResult.creativeDescription,
+    creativeMeaning:reverseTempResult.creativeMeaning,
+    narrationDescription:reverseTempResult.narrationDescription,
+    scene:reverseTempResult.scene,
+    location:reverseTempResult.location,
+    artDirection:reverseTempResult.artDirection,
+    props:reverseTempResult.props,
+    visualAtmosphere:reverseTempResult.visualAtmosphere,
+    cinematographyStyle:reverseTempResult.cinematographyStyle,
+    bgm:reverseTempResult.bgm,
+    costumeReference:reverseTempResult.costumeReference,
+    storyboard:reverseTempResult.storyboard||[],
+    tags:reverseTempResult.tags||[],
+    createdAt:new Date().toISOString(),
+    versions:[]
+  };
+  
+  topics.unshift(newTopic);
+  saveTopics();
+  closeModal("reverseUploadModal");
+  toast("已保存为选题！","success");
+  switchView("library");
+}
+
+// 查看反推详情
+function viewReverseDetail(index){
+  const item=reverseState.items[index];
+  if(!item) return;
+  
+  // 构建详情HTML
+  const detailHtml=`
+    <div style="padding:20px">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:20px">
+        <div>
+          <h2 style="font-size:22px;font-weight:700;margin:0 0 8px">${item.title}</h2>
+          <div style="display:flex;gap:12px;font-size:12px;color:var(--text-muted)">
+            <span>类型：${item.type||"未分类"}</span>
+            <span>时长：${item.duration||0}秒</span>
+            <span>分镜：${(item.storyboard||[]).length}镜</span>
+          </div>
+        </div>
+        <div style="display:flex;gap:8px">
+          <button class="btn" onclick="saveReverseItemAsTopic(${index})">保存为选题</button>
+          <button class="btn btn-danger" onclick="deleteReverseItem(${index})">删除</button>
+        </div>
+      </div>
+      
+      ${item.videoUrl?`<div style="background:#000;border-radius:10px;overflow:hidden;margin-bottom:20px"><video src="${item.videoUrl}" controls style="width:100%;max-height:400px;display:block"></video></div>`:""}
+      
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px">
+        <div style="background:var(--bg-card);border-radius:10px;padding:16px">
+          <div style="font-size:11px;color:var(--text-muted);margin-bottom:6px">创意大纲</div>
+          <div style="font-size:14px;font-weight:600">${item.creativeOutline||"-"}</div>
+        </div>
+        <div style="background:var(--bg-card);border-radius:10px;padding:16px">
+          <div style="font-size:11px;color:var(--text-muted);margin-bottom:6px">创意寓意</div>
+          <div style="font-size:14px">${item.creativeMeaning||"-"}</div>
+        </div>
+      </div>
+      
+      <div style="background:var(--bg-card);border-radius:10px;padding:16px;margin-bottom:16px">
+        <div style="font-size:11px;color:var(--text-muted);margin-bottom:6px">创意描述</div>
+        <div style="font-size:13px;line-height:1.7">${item.creativeDescription||"-"}</div>
+      </div>
+      
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:16px">
+        <div style="background:var(--bg-card);border-radius:8px;padding:12px"><div style="font-size:10px;color:var(--text-muted);margin-bottom:4px">场景</div><div style="font-size:12px">${item.scene||"-"}</div></div>
+        <div style="background:var(--bg-card);border-radius:8px;padding:12px"><div style="font-size:10px;color:var(--text-muted);margin-bottom:4px">场地</div><div style="font-size:12px">${item.location||"-"}</div></div>
+        <div style="background:var(--bg-card);border-radius:8px;padding:12px"><div style="font-size:10px;color:var(--text-muted);margin-bottom:4px">美术制景</div><div style="font-size:12px">${item.artDirection||"-"}</div></div>
+        <div style="background:var(--bg-card);border-radius:8px;padding:12px"><div style="font-size:10px;color:var(--text-muted);margin-bottom:4px">道具</div><div style="font-size:12px">${item.props||"-"}</div></div>
+        <div style="background:var(--bg-card);border-radius:8px;padding:12px"><div style="font-size:10px;color:var(--text-muted);margin-bottom:4px">影像氛围</div><div style="font-size:12px">${item.visualAtmosphere||"-"}</div></div>
+        <div style="background:var(--bg-card);border-radius:8px;padding:12px"><div style="font-size:10px;color:var(--text-muted);margin-bottom:4px">摄影调性</div><div style="font-size:12px">${item.cinematographyStyle||"-"}</div></div>
+        <div style="background:var(--bg-card);border-radius:8px;padding:12px"><div style="font-size:10px;color:var(--text-muted);margin-bottom:4px">配乐</div><div style="font-size:12px">${item.bgm||"-"}</div></div>
+        <div style="background:var(--bg-card);border-radius:8px;padding:12px"><div style="font-size:10px;color:var(--text-muted);margin-bottom:4px">服饰搭配</div><div style="font-size:12px">${item.costumeReference||"-"}</div></div>
+        <div style="background:var(--bg-card);border-radius:8px;padding:12px"><div style="font-size:10px;color:var(--text-muted);margin-bottom:4px">旁白台词</div><div style="font-size:12px">${(item.narrationDescription||"").slice(0,50)}${(item.narrationDescription||"").length>50?"...":""}</div></div>
+      </div>
+      
+      <div style="background:var(--bg-card);border-radius:10px;padding:16px">
+        <div style="font-size:13px;font-weight:600;margin-bottom:12px">分镜脚本（${(item.storyboard||[]).length}镜）</div>
+        <div style="max-height:400px;overflow-y:auto">
+          ${(item.storyboard||[]).map(s=>`
+            <div style="display:grid;grid-template-columns:40px 60px 60px 50px 1fr 1fr;gap:8px;padding:8px 0;border-bottom:1px solid var(--border);font-size:11px;align-items:start">
+              <div style="font-weight:600;color:var(--accent)">${s.shot}</div>
+              <div>${s.shotSize||""}</div>
+              <div>${s.cameraMove||""}</div>
+              <div>${s.duration||""}s</div>
+              <div style="color:var(--text-secondary)">${s.visual||""}</div>
+              <div style="color:var(--text-muted)">${s.dialogue||""}</div>
+            </div>
+          `).join("")}
+        </div>
+      </div>
+    </div>
+  `;
+  
+  // 使用通用模态框显示详情
+  const modal=document.createElement("div");
+  modal.className="modal-overlay";
+  modal.id="reverseDetailModal";
+  modal.innerHTML=`
+    <div class="modal-content" style="max-width:1000px;max-height:90vh;display:flex;flex-direction:column">
+      <div class="modal-header">
+        <div class="modal-title">视频反推详情</div>
+        <button class="modal-close" onclick="closeModal('reverseDetailModal')">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+      <div class="modal-body" style="flex:1;overflow-y:auto">${detailHtml}</div>
+    </div>
+  `;
+  document.body.appendChild(modal);
+}
+
+// 保存反推项为选题
+function saveReverseItemAsTopic(index){
+  const item=reverseState.items[index];
+  if(!item) return;
+  
+  const newTopic={
+    id:Date.now(),
+    title:item.title,
+    type:item.type||"造势预热",
+    status:"参考",
+    hook:item.creativeOutline||"",
+    script:item.creativeDescription||"",
+    creativeOutline:item.creativeOutline,
+    creativeDescription:item.creativeDescription,
+    creativeMeaning:item.creativeMeaning,
+    narrationDescription:item.narrationDescription,
+    scene:item.scene,
+    location:item.location,
+    artDirection:item.artDirection,
+    props:item.props,
+    visualAtmosphere:item.visualAtmosphere,
+    cinematographyStyle:item.cinematographyStyle,
+    bgm:item.bgm,
+    costumeReference:item.costumeReference,
+    storyboard:item.storyboard||[],
+    tags:item.tags||[],
+    createdAt:new Date().toISOString(),
+    versions:[]
+  };
+  
+  topics.unshift(newTopic);
+  saveTopics();
+  closeModal("reverseDetailModal");
+  toast("已保存为选题！","success");
+  switchView("library");
+}
+
+// 删除反推项
+function deleteReverseItem(index){
+  if(!confirm("确定要删除这个反推结果吗？")) return;
+  reverseState.items.splice(index,1);
+  saveReverseData();
+  closeModal("reverseDetailModal");
+  renderReverseGrid();
+  toast("已删除","success");
+}
+
+
 // ========== 事件绑定 ==========
 function initEvents(){
   // 视图切换
@@ -5644,6 +6125,7 @@ function switchProject(projectId){
   loadInspirationData(); // 灵感速记
   loadStage();          // 舞美舞台
   loadCostumeData();    // 服装库
+  loadReverseData();    // 视频反推
   loadXinxuan();        // 辛选专属
   loadPersonal();       // 个人项目
   loadProjectPlans();   // 专场策划案
@@ -6544,6 +7026,7 @@ function init(){
   initVisualLib();
   initStageLib();
   initCostumeLibrary();
+  loadReverseData();
   initXinxuan();
   loadProjects();
   initPersonal();
@@ -7146,6 +7629,119 @@ init();
       <button class="btn" onclick="closeModal('batchVideoModal')">关闭</button>
       <button class="btn" id="batchVideoStopBtn" style="display:none;color:var(--danger);border-color:rgba(239,68,68,.3)" onclick="stopBatchVideoGeneration()">停止生成</button>
       <button class="btn btn-primary" id="batchVideoStartBtn" style="background:linear-gradient(135deg,#f59e0b,#ef4444);border-color:#f59e0b" onclick="startBatchVideoGeneration()">开始批量生成</button>
+    </div>
+  </div>
+</div>
+
+<!-- ========== 视频反推上传模态框 ========== -->
+<div class="modal-overlay hidden" id="reverseUploadModal">
+  <div class="modal-content" style="max-width:800px;max-height:90vh;display:flex;flex-direction:column">
+    <div class="modal-header">
+      <div class="modal-title">🎬 视频反推 · 重建创意脚本</div>
+      <button class="modal-close" onclick="closeModal('reverseUploadModal')">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="modal-body" style="flex:1;overflow-y:auto">
+      <!-- 上传表单 -->
+      <div id="reverseUploadForm">
+        <div style="margin-bottom:16px">
+          <label style="font-size:12px;color:var(--text-muted);display:block;margin-bottom:6px">上传视频文件（可选，用于预览和元信息提取）</label>
+          <div class="upload-zone" style="padding:30px;text-align:center" onclick="document.getElementById('reverseVideoInput').click()">
+            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="rgba(139,92,246,0.6)" stroke-width="1.5" style="margin:0 auto 10px"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>
+            <p style="font-size:13px;color:var(--text-secondary);margin:0">点击上传视频文件</p>
+            <p style="font-size:11px;color:var(--text-muted);margin:4px 0 0">支持 MP4、MOV、AVI 等常见格式</p>
+            <input type="file" id="reverseVideoInput" accept="video/*" style="display:none" onchange="handleReverseVideoUpload(this)">
+          </div>
+        </div>
+        
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
+          <div>
+            <label style="font-size:12px;color:var(--text-muted);display:block;margin-bottom:4px">视频标题 *</label>
+            <input type="text" id="reverseVideoTitle" class="form-input" placeholder="例如：决战双十一预热视频">
+          </div>
+          <div>
+            <label style="font-size:12px;color:var(--text-muted);display:block;margin-bottom:4px">视频类型</label>
+            <select id="reverseVideoType" class="form-select">
+              <option>预热视频</option>
+              <option>广告片</option>
+              <option>纪录片</option>
+              <option>MV</option>
+              <option>短片</option>
+              <option>其他</option>
+            </select>
+          </div>
+        </div>
+        
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
+          <div>
+            <label style="font-size:12px;color:var(--text-muted);display:block;margin-bottom:4px">视频时长（秒）</label>
+            <input type="number" id="reverseVideoDuration" class="form-input" value="30" placeholder="例如：30">
+          </div>
+          <div>
+            <label style="font-size:12px;color:var(--text-muted);display:block;margin-bottom:4px">视频链接（可选）</label>
+            <input type="text" id="reverseVideoUrl" class="form-input" placeholder="粘贴视频链接">
+          </div>
+        </div>
+        
+        <div style="margin-bottom:16px">
+          <label style="font-size:12px;color:var(--text-muted);display:block;margin-bottom:4px">视频描述（可选，帮助AI更准确反推）</label>
+          <textarea id="reverseVideoDesc" class="form-textarea" rows="3" placeholder="描述这个视频的大致内容、风格、关键场景、你记得的台词等..."></textarea>
+        </div>
+        
+        <div style="padding:12px;background:rgba(139,92,246,0.08);border:1px solid rgba(139,92,246,0.2);border-radius:8px;font-size:11px;color:var(--text-muted);line-height:1.6">
+          <strong style="color:var(--text-secondary)">AI反推内容：</strong>创意大纲、创意描述、创意寓意、旁白台词、场景、场地、美术制景、道具、影像氛围、摄影调性、配乐、服饰搭配、自动分镜拆解（根据时长生成5-25个镜头）
+        </div>
+      </div>
+      
+      <!-- 生成进度 -->
+      <div id="reverseUploadProgress" style="display:none;text-align:center;padding:40px 0">
+        <div style="width:60px;height:60px;border:4px solid var(--border);border-top-color:#8b5cf6;border-radius:50%;animation:spin 1s linear infinite;margin:0 auto 20px"></div>
+        <p style="font-size:14px;font-weight:600;margin-bottom:12px" id="reverseProgressText">正在分析视频...</p>
+        <div style="width:100%;max-width:400px;height:6px;background:var(--bg-card);border-radius:3px;overflow:hidden;margin:0 auto">
+          <div id="reverseProgressBar" style="height:100%;background:linear-gradient(90deg,#8b5cf6,#6366f1);width:0%;transition:width 0.5s"></div>
+        </div>
+        <p style="font-size:11px;color:var(--text-muted);margin-top:12px">AI正在深度分析视频内容，预计需要30-60秒...</p>
+      </div>
+      
+      <!-- 反推结果 -->
+      <div id="reverseUploadResult" style="display:none">
+        <div style="text-align:center;padding:20px 0;margin-bottom:20px">
+          <div style="width:60px;height:60px;border-radius:50%;background:rgba(16,185,129,0.15);display:flex;align-items:center;justify-content:center;margin:0 auto 12px">
+            <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+          </div>
+          <h3 style="font-size:18px;font-weight:700;margin:0 0 6px">反推完成！</h3>
+          <p style="font-size:13px;color:var(--text-secondary);margin:0">AI已成功分析视频并生成完整创意脚本</p>
+        </div>
+        
+        <div style="background:var(--bg-card);border-radius:10px;padding:16px;margin-bottom:16px">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+            <div style="font-size:16px;font-weight:700" id="reverseResultTitle">视频标题</div>
+            <div style="display:flex;gap:8px;font-size:11px">
+              <span style="background:rgba(139,92,246,0.15);color:#8b5cf6;padding:2px 8px;border-radius:4px" id="reverseResultType">类型</span>
+              <span style="background:var(--bg-input);color:var(--text-muted);padding:2px 8px;border-radius:4px" id="reverseResultDuration">时长</span>
+              <span style="background:rgba(16,185,129,0.15);color:#10b981;padding:2px 8px;border-radius:4px" id="reverseResultShotCount">0镜</span>
+            </div>
+          </div>
+          <div style="font-size:11px;color:var(--text-muted);margin-bottom:6px">创意大纲</div>
+          <div style="font-size:14px;font-weight:600;margin-bottom:12px" id="reverseResultOutline">-</div>
+          <div style="font-size:11px;color:var(--text-muted);margin-bottom:6px">创意描述</div>
+          <div style="font-size:12px;color:var(--text-secondary);line-height:1.6" id="reverseResultDescription">-</div>
+        </div>
+        
+        <div style="padding:12px;background:rgba(139,92,246,0.08);border:1px solid rgba(139,92,246,0.2);border-radius:8px;font-size:11px;color:var(--text-muted);line-height:1.6">
+          已生成完整的13项创意字段和分镜脚本，你可以保存到视频反推库，或直接保存为选题继续编辑。
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeModal('reverseUploadModal')">关闭</button>
+      <button class="btn" id="reverseSaveBtn" style="display:none" onclick="saveReverseResult()">保存到反推库</button>
+      <button class="btn btn-primary" id="reverseSaveAsTopicBtn" style="display:none;background:linear-gradient(135deg,#8b5cf6,#6366f1);border-color:#8b5cf6" onclick="saveReverseAsTopic()">保存为选题</button>
+      <button class="btn btn-primary" id="reverseStartBtn" onclick="startReverseAnalysis()" style="background:linear-gradient(135deg,#8b5cf6,#6366f1);border-color:#8b5cf6">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+        开始AI反推
+      </button>
     </div>
   </div>
 </div>
