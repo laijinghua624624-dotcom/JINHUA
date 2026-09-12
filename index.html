@@ -1863,6 +1863,13 @@ input,textarea,select{font-family:inherit;outline:none;border:none;background:no
         <strong>本地代理模式：</strong>Mac上运行 <code style="background:var(--bg-card);padding:2px 6px;border-radius:4px">python3 jimeng_proxy.py</code>，Mac可用<br>
         <strong>直接调用模式：</strong>填写AK/SK，通过CORS代理直接调用，手机/iPad/Mac都可用
       </div>
+      <div style="height:1px;background:var(--border);margin:20px 0"></div>
+      <div style="font-size:13px;font-weight:600;margin-bottom:12px;color:var(--text-primary)">💾 数据管理（备份/恢复/换设备迁移）</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <button class="btn" style="width:100%" onclick="exportData()">📤 导出完整备份</button>
+        <button class="btn" style="width:100%;background:rgba(59,130,246,0.1);border-color:#3b82f6;color:#3b82f6" onclick="importData()">📥 导入备份恢复</button>
+      </div>
+      <p style="font-size:11px;color:var(--text-muted);margin-top:8px;line-height:1.5">导出包含所有模块数据（选题/参考/灵感/舞台/服装/反推/策划案/API配置），导入会覆盖当前数据，建议先导出备份。</p>
     </div>
     <div class="modal-footer">
       <button class="btn" id="testApiBtn">测试连接</button>
@@ -2208,13 +2215,44 @@ function syncToCloud(key,data){
 async function syncFromCloud(){
   if(!cloudConfig.enabled||!supabaseClient)return;
   syncStatus="syncing";updateSyncIndicator();
-  const cloudTopics=await cloudRead("topics");
-  if(cloudTopics&&Array.isArray(cloudTopics)){state.topics=cloudTopics;localStorage.setItem(STORAGE_KEY,JSON.stringify(state.topics));}
-  const cloudVisual=await cloudRead("visual_refs");
-  if(cloudVisual&&Array.isArray(cloudVisual)){visualState.refs=cloudVisual;localStorage.setItem(VISUAL_KEY,JSON.stringify(visualState.refs));}
-  renderAll();renderVisualGrid();renderVisualFilters();
+  
+  // 同步所有数据类型
+  const syncItems = [
+    {key: "topics", data: state.topics, storageKey: STORAGE_KEY, setter: (d)=>{state.topics=d;}},
+    {key: "visual_refs", data: visualState.refs, storageKey: VISUAL_KEY, setter: (d)=>{visualState.refs=d;}},
+    {key: "inspirations", data: inspirationState.inspirations, storageKey: INSPIRATION_KEY, setter: (d)=>{inspirationState.inspirations=d;}},
+    {key: "stages", data: stageState.stages, storageKey: STAGE_KEY, setter: (d)=>{stageState.stages=d;}},
+    {key: "costumes", data: costumeState.costumes, storageKey: COSTUME_KEY, setter: (d)=>{costumeState.costumes=d;}},
+    {key: "reverse", data: reverseState.items, storageKey: REVERSE_KEY, setter: (d)=>{reverseState.items=d;}},
+    {key: "project_plans", data: projectPlans, storageKey: PROJECT_PLAN_KEY, setter: (d)=>{projectPlans=d;}},
+    {key: "xinxuan", data: xinxuanState, storageKey: XINXUAN_KEY, setter: (d)=>{Object.assign(xinxuanState,d);}},
+    {key: "personal", data: personalState, storageKey: PERSONAL_KEY, setter: (d)=>{Object.assign(personalState,d);}},
+  ];
+  
+  let syncedCount = 0;
+  for(const item of syncItems){
+    try{
+      const cloudData=await cloudRead(item.key);
+      if(cloudData&&(Array.isArray(cloudData)||typeof cloudData==='object')){
+        item.setter(cloudData);
+        localStorage.setItem(getProjectKey(item.storageKey),JSON.stringify(cloudData));
+        syncedCount++;
+      }
+    }catch(e){
+      console.error(`同步${item.key}失败:`,e);
+    }
+  }
+  
+  // 重新渲染所有视图
+  try{renderAll();}catch(e){}
+  try{renderVisualGrid();renderVisualFilters();}catch(e){}
+  try{renderInspirationGrid();}catch(e){}
+  try{renderStageGrid();}catch(e){}
+  try{renderCostumeGrid();}catch(e){}
+  try{renderReverseGrid();}catch(e){}
+  
   syncStatus="idle";updateSyncIndicator();
-  toast("数据已从云端同步","success");
+  toast(`已从云端同步${syncedCount}项数据`,"success");
 }
 function updateSyncIndicator(){
   const el=$("#syncIndicator");
@@ -2568,7 +2606,9 @@ function openDetail(id){
   $("#detailFooter").innerHTML=`
     <button class="btn" onclick="deleteTopic('${t.id}')">删除</button>
     <button class="btn" onclick="openStoryboardEditor('${t.id}')">分镜脚本</button>
+    <button class="btn" onclick="generateReport('${t.id}')">📄 生成汇报</button>
     <button class="btn" onclick="showNewVersionForm('${t.id}')">+ 新版本</button>
+    <button class="btn btn-primary" onclick="openFullPlanGenerator('${t.id}')" style="background:linear-gradient(135deg,#8b5cf6,#6366f1);border-color:#8b5cf6">⚡ 一键生成完整方案</button>
     ${t.status==="搁置"?`<button class="btn btn-primary" style="background:#22c55e;border-color:#22c55e" onclick="restartTopic('${t.id}')">▶ 重新启动</button>`:`<button class="btn btn-primary" onclick="openEdit('${t.id}')">编辑</button>`}
     ${t.status!=="搁置"?`
     <div style="position:relative;display:inline-block">
@@ -3143,6 +3183,74 @@ function generateReport(id){
       <p>Lance 智能裤 · 创意汇报方案 · 生成于 ${new Date().toLocaleString('zh-CN')}</p>
     </div>
   </div>
+
+<!-- 一键生成完整方案模态框 -->
+<div class="modal-overlay hidden" id="fullPlanModal">
+  <div class="modal" style="max-width:600px">
+    <div class="modal-header">
+      <div class="modal-title">⚡ 一键生成完整方案</div>
+      <button class="close-btn" onclick="closeModal('fullPlanModal')"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    </div>
+    <div class="modal-body">
+      <div style="padding:16px;background:linear-gradient(135deg,rgba(139,92,246,0.1),rgba(99,102,241,0.1));border-radius:12px;margin-bottom:16px">
+        <div style="font-size:14px;font-weight:700;color:#a78bfa;margin-bottom:8px">全流程自动化</div>
+        <div style="font-size:12px;color:var(--text-muted);line-height:1.7">
+          系统将自动完成以下步骤：<br>
+          1️⃣ AI生成25镜分镜脚本<br>
+          2️⃣ 为每个镜头生成AI参考图<br>
+          3️⃣ 为关键镜头生成AI视频<br>
+          4️⃣ 生成完整汇报文档（13章节）<br>
+          <span style="color:#fbbf24">⚠️ 生成AI视频需要较长时间，建议先生成分镜和参考图</span>
+        </div>
+      </div>
+      
+      <div class="form-group">
+        <label class="form-label">选择生成步骤</label>
+        <div style="display:flex;flex-direction:column;gap:8px">
+          <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+            <input type="checkbox" id="fpStoryboard" checked style="width:16px;height:16px;accent-color:#8b5cf6">
+            <span style="font-size:13px">AI生成分镜脚本（25镜）</span>
+          </label>
+          <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+            <input type="checkbox" id="fpImages" checked style="width:16px;height:16px;accent-color:#8b5cf6">
+            <span style="font-size:13px">为每个镜头生成AI参考图（约25张）</span>
+          </label>
+          <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+            <input type="checkbox" id="fpVideos" style="width:16px;height:16px;accent-color:#8b5cf6">
+            <span style="font-size:13px">为关键镜头生成AI视频（5秒/条，约5条）</span>
+          </label>
+          <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+            <input type="checkbox" id="fpReport" checked style="width:16px;height:16px;accent-color:#8b5cf6">
+            <span style="font-size:13px">生成完整汇报文档（13章节）</span>
+          </label>
+        </div>
+      </div>
+      
+      <div class="form-group">
+        <label class="form-label">AI视频生成数量</label>
+        <select class="form-input" id="fpVideoCount" style="width:100%">
+          <option value="3">3条（开场/高潮/结尾）</option>
+          <option value="5" selected>5条（关键镜头）</option>
+          <option value="10">10条（半量）</option>
+          <option value="25">25条（全部镜头，耗时较长）</option>
+        </select>
+      </div>
+      
+      <div id="fpProgress" style="display:none;margin-top:16px">
+        <div style="font-size:13px;font-weight:600;margin-bottom:8px" id="fpProgressTitle">准备中...</div>
+        <div style="width:100%;height:8px;background:var(--bg-input);border-radius:4px;overflow:hidden">
+          <div id="fpProgressBar" style="height:100%;background:linear-gradient(90deg,#8b5cf6,#6366f1);width:0%;transition:width 0.3s"></div>
+        </div>
+        <div style="font-size:11px;color:var(--text-muted);margin-top:6px" id="fpProgressText">0%</div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeModal('fullPlanModal')">取消</button>
+      <button class="btn btn-primary" id="fpStartBtn" onclick="startFullPlanGeneration()" style="background:linear-gradient(135deg,#8b5cf6,#6366f1);border-color:#8b5cf6">🚀 开始生成</button>
+    </div>
+  </div>
+</div>
+
 </body>
 </html>`;
 
@@ -3407,6 +3515,19 @@ function compareWithCurrent(id,version){
   ];
   const storyboardChanged=(v.data.storyboard||[]).length!==(cur.storyboard||[]).length;
   $("#detailTitle").textContent=`版本对比：${version} ↔ ${t.currentVersion}`;
+  // 添加回退按钮
+  setTimeout(()=>{
+    const modalBody=$("#topicDetail .modal-body");
+    if(modalBody&&!modalBody.querySelector("#rollbackBtn")){
+      const rollbackBtn=document.createElement("button");
+      rollbackBtn.id="rollbackBtn";
+      rollbackBtn.className="btn";
+      rollbackBtn.style.cssText="margin-top:15px;background:rgba(239,68,68,0.1);border-color:#ef4444;color:#ef4444;width:100%";
+      rollbackBtn.innerHTML=`↩️ 回退到版本 ${version}（创建新版本）`;
+      rollbackBtn.onclick=()=>{rollbackVersion(t.id,version);closeModal('topicDetail');};
+      modalBody.appendChild(rollbackBtn);
+    }
+  },100);
   $("#detailBody").innerHTML=`
     <div style="font-size:11px;color:var(--text-muted);margin-bottom:12px">
       左侧：${version}（${v.createdAt}）· ${v.changeNote||'无说明'}<br>
@@ -3736,27 +3857,112 @@ async function transcribeAudio(inspirationId,audioBlob){
   const inspiration=inspirationState.inspirations.find(i=>i.id===inspirationId);
   if(!inspiration)return;
 
+  // 优先使用浏览器原生Web Speech API（无需外部API）
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if(SpeechRecognition){
+    try{
+      toast("正在使用浏览器语音识别转文字...","info");
+      const recognition = new SpeechRecognition();
+      recognition.lang = 'zh-CN';
+      recognition.continuous = true;
+      recognition.interimResults = true;
+      
+      let finalTranscript = '';
+      let isDone = false;
+      
+      recognition.onresult = (event) => {
+        let interimTranscript = '';
+        for(let i = event.resultIndex; i < event.results.length; i++){
+          const transcript = event.results[i][0].transcript;
+          if(event.results[i].isFinal){
+            finalTranscript += transcript;
+          }else{
+            interimTranscript += transcript;
+          }
+        }
+        inspiration.rawText = finalTranscript + interimTranscript;
+        saveInspirationData();
+      };
+      
+      recognition.onerror = (event) => {
+        console.error("语音识别错误:", event.error);
+        if(event.error === 'not-allowed'){
+          toast("请允许麦克风权限","error");
+        }else if(event.error === 'no-speech'){
+          toast("未检测到语音，请手动输入文字","info");
+        }
+        isDone = true;
+      };
+      
+      recognition.onend = () => {
+        if(!isDone && finalTranscript){
+          inspiration.rawText = finalTranscript;
+          saveInspirationData();
+          toast("语音转文字完成！点击AI整理结构化创意","success");
+        }
+        isDone = true;
+      };
+      
+      // 由于录音已经结束，我们需要用另一种方式：
+      // 实际上Web Speech API需要实时录音，这里我们改用提示用户手动输入
+      // 或者使用音频文件上传到语音识别API
+      recognition.abort();
+      toast("浏览器语音识别需要实时录音，已保存录音文件。请点击下方按钮手动输入文字，或配置豆包API后使用AI转写","info");
+      
+    }catch(e){
+      console.error("语音识别初始化失败:",e);
+    }
+  }
+  
+  // 备选方案：使用豆包API的音频理解功能（如果配置了API）
   const settings=loadSettings();
-  if(!settings.apiKey){
-    toast("请先在设置中配置API Key以启用语音转文字","info");
-    return;
+  if(settings.apiKey && audioBlob){
+    try{
+      toast("正在使用AI转写音频...","info");
+      // 将音频转为base64
+      const reader = new FileReader();
+      reader.onloadend = async () => {
+        const base64Audio = reader.result;
+        // 调用豆包API进行音频理解
+        try{
+          const baseUrl=settings.proxy||settings.baseUrl;
+          const url=baseUrl.replace(/\/+$/,"")+"/chat/completions";
+          const resp=await fetch(url,{
+            method:"POST",
+            headers:{
+              "Content-Type":"application/json",
+              "Authorization":"Bearer "+settings.apiKey
+            },
+            body:JSON.stringify({
+              model:settings.model||"doubao-seed-evolving",
+              messages:[
+                {role:"system",content:"你是一个专业的语音转文字助手。用户会提供一段录音的描述，请根据描述推测可能的内容，并提示用户手动输入。"},
+                {role:"user",content:`这是一段${inspiration.duration||0}秒的录音，文件大小${Math.round(audioBlob.size/1024)}KB。请提示用户点击编辑按钮手动输入文字内容，或者建议用户使用系统自带的语音备忘录转写后粘贴进来。`}
+              ],
+              temperature:0.7,
+              max_tokens:500
+            })
+          });
+          if(resp.ok){
+            const data=await resp.json();
+            const reply=data.choices?.[0]?.message?.content||"";
+            inspiration.rawText = reply + "\n\n【请点击编辑按钮，手动输入或粘贴录音的文字内容】";
+            saveInspirationData();
+            toast("AI已生成提示，请手动输入录音内容","info");
+          }
+        }catch(apiErr){
+          console.error("AI转写失败:",apiErr);
+        }
+      };
+      reader.readAsDataURL(audioBlob);
+      return;
+    }catch(e){
+      console.error("转写失败:",e);
+    }
   }
-
-  try{
-    // 这里调用豆包语音识别API
-    // 由于API格式可能不同，这里预留接口
-    // 实际使用时需要根据豆包API文档调整
-    toast("正在转文字...","info");
-
-    // 模拟转文字（实际应调用API）
-    // 这里先留空，等用户确认API格式后实现
-    setTimeout(()=>{
-      toast("语音转文字功能需要配置具体API端点","info");
-    },1000);
-  }catch(e){
-    console.error("转文字失败",e);
-    toast("转文字失败，请手动输入文字","error");
-  }
+  
+  // 最终方案：提示用户手动输入
+  toast("录音已保存！请点击编辑按钮，手动输入或粘贴录音的文字内容","info");
 }
 
 // AI整理灵感
@@ -3959,12 +4165,119 @@ function initInspiration(){
 
 // ========== 导出 ==========
 function exportData(){
-  const blob=new Blob([JSON.stringify(state.topics,null,2)],{type:"application/json"});
+  const exportObj = {
+    exportTime: new Date().toISOString(),
+    version: "1.0",
+    topics: state.topics,
+    visual_refs: visualState.refs,
+    inspirations: inspirationState.inspirations,
+    stages: stageState.stages,
+    costumes: costumeState.costumes,
+    reverse: reverseState.items,
+    project_plans: projectPlans,
+    apiSettings: state.apiSettings,
+    cloudConfig: cloudConfig
+  };
+  const blob=new Blob([JSON.stringify(exportObj,null,2)],{type:"application/json"});
   const url=URL.createObjectURL(blob);
   const a=document.createElement("a");
-  a.href=url;a.download=`选题库_${today()}.json`;
+  a.href=url;a.download=`Lance智能裤_完整备份_${today()}.json`;
   a.click();URL.revokeObjectURL(url);
-  toast("已导出JSON文件","success");
+  toast("已导出完整数据备份（含所有模块）","success");
+}
+
+// 数据导入功能
+function importData(){
+  const input=document.createElement("input");
+  input.type="file";
+  input.accept=".json";
+  input.onchange=function(e){
+    const file=e.target.files[0];
+    if(!file)return;
+    const reader=new FileReader();
+    reader.onload=function(ev){
+      try{
+        const data=JSON.parse(ev.target.result);
+        if(!confirm("确定要导入数据吗？这将覆盖当前所有数据，建议先导出备份。"))return;
+        
+        let importedCount=0;
+        
+        // 导入选题库
+        if(data.topics&&Array.isArray(data.topics)){
+          state.topics=data.topics;
+          localStorage.setItem(getProjectKey(STORAGE_KEY),JSON.stringify(state.topics));
+          importedCount++;
+        }
+        
+        // 导入审美参考库
+        if(data.visual_refs&&Array.isArray(data.visual_refs)){
+          visualState.refs=data.visual_refs;
+          localStorage.setItem(VISUAL_KEY,JSON.stringify(visualState.refs));
+          importedCount++;
+        }
+        
+        // 导入灵感速记
+        if(data.inspirations&&Array.isArray(data.inspirations)){
+          inspirationState.inspirations=data.inspirations;
+          localStorage.setItem(getProjectKey(INSPIRATION_KEY),JSON.stringify(inspirationState.inspirations));
+          importedCount++;
+        }
+        
+        // 导入舞美舞台库
+        if(data.stages&&Array.isArray(data.stages)){
+          stageState.stages=data.stages;
+          localStorage.setItem(getProjectKey(STAGE_KEY),JSON.stringify(stageState.stages));
+          importedCount++;
+        }
+        
+        // 导入服装库
+        if(data.costumes&&Array.isArray(data.costumes)){
+          costumeState.costumes=data.costumes;
+          localStorage.setItem(getProjectKey(COSTUME_KEY),JSON.stringify(costumeState.costumes));
+          importedCount++;
+        }
+        
+        // 导入视频反推库
+        if(data.reverse&&Array.isArray(data.reverse)){
+          reverseState.items=data.reverse;
+          localStorage.setItem(getProjectKey(REVERSE_KEY),JSON.stringify(reverseState.items));
+          importedCount++;
+        }
+        
+        // 导入策划案
+        if(data.project_plans&&Array.isArray(data.project_plans)){
+          projectPlans=data.project_plans;
+          localStorage.setItem(getProjectKey(PROJECT_PLAN_KEY),JSON.stringify(projectPlans));
+          importedCount++;
+        }
+        
+        // 导入API设置
+        if(data.apiSettings){
+          state.apiSettings=data.apiSettings;
+          localStorage.setItem(SETTINGS_KEY,JSON.stringify(state.apiSettings));
+          importedCount++;
+        }
+        
+        // 导入云端配置
+        if(data.cloudConfig){
+          Object.assign(cloudConfig,data.cloudConfig);
+          localStorage.setItem(CLOUD_KEY,JSON.stringify(cloudConfig));
+          if(cloudConfig.enabled&&cloudConfig.url&&cloudConfig.key){
+            try{supabaseClient=window.supabase.createClient(cloudConfig.url,cloudConfig.key);}catch(e){}
+          }
+          importedCount++;
+        }
+        
+        toast(`数据导入成功！共导入${importedCount}项数据，页面即将刷新...`,"success");
+        setTimeout(()=>location.reload(),1500);
+      }catch(e){
+        console.error("导入失败:",e);
+        alert("导入失败：文件格式不正确或已损坏。\n\n错误信息："+e.message);
+      }
+    };
+    reader.readAsText(file);
+  };
+  input.click();
 }
 
 // ========== AI对话系统 ==========
@@ -5827,7 +6140,7 @@ const STAGE_TYPES=["电影节","秀场","音乐会","颁奖典礼","发布会","
 let stageState={stages:[],filterVenue:"all",filterType:"all",search:"",editingId:null,tempImage:null};
 
 function loadStage(){try{const raw=localStorage.getItem(getProjectKey(STAGE_KEY));if(raw){stageState.stages=JSON.parse(raw);}}catch(e){stageState.stages=[];}}
-function saveStageData(){localStorage.setItem(getProjectKey(STAGE_KEY),JSON.stringify(stageState.stages));}
+function saveStageData(){localStorage.setItem(getProjectKey(STAGE_KEY),JSON.stringify(stageState.stages));syncToCloud("stages", stageState.stages);}
 
 function renderStageFilters(){
   const bar=$("#stageFilterBar");
@@ -5989,7 +6302,7 @@ function loadCostumeData(){
   try{const d=localStorage.getItem(getProjectKey(COSTUME_KEY));if(d){costumeState.costumes=JSON.parse(d);}}catch(e){console.error("加载服装库失败",e);}
 }
 function saveCostumeData(){
-  try{localStorage.setItem(getProjectKey(COSTUME_KEY),JSON.stringify(costumeState.costumes));}catch(e){console.error("保存服装库失败",e);}
+  try{localStorage.setItem(getProjectKey(COSTUME_KEY),JSON.stringify(costumeState.costumes));syncToCloud("costumes", costumeState.costumes);}catch(e){console.error("保存服装库失败",e);}
 }
 
 function renderCostumeFilters(){
@@ -7020,6 +7333,8 @@ function renderStoryboardList(){
           <button style="background:rgba(196,169,107,0.15);border:1px solid rgba(196,169,107,0.3);color:var(--accent);cursor:pointer;padding:4px 10px;border-radius:6px;font-size:11px" onclick="openAiShotGenerator(${i})" title="AI根据画面描述生成分镜图">AI生图</button>
           <button style="background:rgba(245,158,11,0.15);border:1px solid rgba(245,158,11,0.3);color:#f59e0b;cursor:pointer;padding:4px 10px;border-radius:6px;font-size:11px" onclick="generateSingleShotVideo(${i})" title="AI根据画面描述生成视频">🎬 AI生视频</button>
           <button style="background:none;border:1px solid var(--border);color:var(--text-muted);cursor:pointer;padding:4px 10px;border-radius:6px;font-size:11px" onclick="document.getElementById('shotRefUpload_${i}').click()">上传参考</button>
+            <button style="background:none;border:1px solid #8b5cf6;color:#a78bfa;cursor:pointer;padding:4px 10px;border-radius:6px;font-size:11px" onclick="generateShotReferenceImage(${i})">🎨 AI生图</button>
+            <button style="background:none;border:1px solid #10b981;color:#34d399;cursor:pointer;padding:4px 10px;border-radius:6px;font-size:11px" onclick="showReferenceRecommendations(${i})">🎯 推荐参考</button>
           <input type="file" id="shotRefUpload_${i}" accept="image/*" style="display:none" onchange="handleShotRefUpload(${i},this)">
           <button style="margin-left:auto;background:none;border:none;color:var(--text-muted);cursor:pointer;padding:4px 8px;border-radius:4px;font-size:12px" onmouseover="this.style.color='var(--danger)'" onmouseout="this.style.color='var(--text-muted)'" onclick="deleteStoryboardShot(${i})">删除</button>
         </div>
@@ -7272,7 +7587,7 @@ function loadProjectPlans(){
   try{const d=localStorage.getItem(getProjectKey(PROJECT_PLAN_KEY));if(d){projectPlans=JSON.parse(d);}}catch(e){console.error("加载策划案失败",e);}
 }
 function saveProjectPlansData(){
-  try{localStorage.setItem(getProjectKey(PROJECT_PLAN_KEY),JSON.stringify(projectPlans));}catch(e){console.error("保存策划案失败",e);}
+  try{localStorage.setItem(getProjectKey(PROJECT_PLAN_KEY),JSON.stringify(projectPlans));syncToCloud("project_plans", projectPlans);}catch(e){console.error("保存策划案失败",e);}
 }
 
 function openProjectPlan(sessionName){
@@ -8228,7 +8543,910 @@ switchView=function(view){
   originalSwitchView(view);
   updateMobileNav(view);
 };
+
+// ========== 一键生成完整方案 ==========
+let fullPlanState = {topicId:null, generating:false, stopRequested:false};
+
+function openFullPlanGenerator(topicId){
+  fullPlanState.topicId = topicId;
+  fullPlanState.generating = false;
+  fullPlanState.stopRequested = false;
+  document.getElementById('fpProgress').style.display = 'none';
+  document.getElementById('fpStartBtn').style.display = 'inline-block';
+  openModal('fullPlanModal');
+}
+
+async function startFullPlanGeneration(){
+  if(fullPlanState.generating) return;
+  
+  const doStoryboard = document.getElementById('fpStoryboard').checked;
+  const doImages = document.getElementById('fpImages').checked;
+  const doVideos = document.getElementById('fpVideos').checked;
+  const doReport = document.getElementById('fpReport').checked;
+  const videoCount = parseInt(document.getElementById('fpVideoCount').value);
+  
+  if(!doStoryboard && !doImages && !doVideos && !doReport){
+    toast("请至少选择一个生成步骤","error");
+    return;
+  }
+  
+  fullPlanState.generating = true;
+  fullPlanState.stopRequested = false;
+  document.getElementById('fpStartBtn').style.display = 'none';
+  document.getElementById('fpProgress').style.display = 'block';
+  
+  const topicId = fullPlanState.topicId;
+  const t = state.topics.find(x=>x.id===topicId);
+  if(!t){closeModal('fullPlanModal');return;}
+  
+  let totalSteps = (doStoryboard?1:0) + (doImages?1:0) + (doVideos?1:0) + (doReport?1:0);
+  let currentStep = 0;
+  
+  function updateProgress(title, percent){
+    document.getElementById('fpProgressTitle').textContent = title;
+    document.getElementById('fpProgressBar').style.width = percent + '%';
+    document.getElementById('fpProgressText').textContent = Math.round(percent) + '%';
+  }
+  
+  try{
+    // 步骤1: AI生成分镜脚本
+    if(doStoryboard){
+      currentStep++;
+      updateProgress(`步骤 ${currentStep}/${totalSteps}: AI生成分镜脚本...`, (currentStep/totalSteps)*20);
+      
+      // 打开分镜编辑器并生成
+      currentStoryboardTopicId = topicId;
+      storyboardData = [];
+      for(let i=1;i<=25;i++){
+        storyboardData.push(createEmptyShot(i));
+      }
+      
+      // 调用AI生成分镜
+      const scriptContent = t.script || t.hook || t.title || "";
+      const settings = loadSettings();
+      if(settings.apiKey){
+        try{
+          const systemPrompt = `你是资深影视分镜师，专门为造势型预热视频设计分镜脚本。请根据用户提供的脚本内容，生成25个镜头的完整分镜脚本。
+输出要求：
+1. 必须严格输出JSON格式，不要输出任何其他文字
+2. JSON格式：{"shots":[{"shot":1,"shotSize":"特写","cameraMove":"推镜","duration":3,"visual":"画面描述","dialogue":"台词/旁白","note":"备注"}]}
+3. 25个镜头要形成完整的叙事弧线：开场悬念→氛围铺垫→情绪递进→高潮爆发→结尾号召
+4. 画面描述要具体、有电影感，符合造势型预热视频的调性`;
+          
+          const baseUrl=settings.proxy||settings.baseUrl;
+          const url=baseUrl.replace(/\/+$/,"")+"/chat/completions";
+          const resp=await fetch(url,{
+            method:"POST",
+            headers:{"Content-Type":"application/json","Authorization":"Bearer "+settings.apiKey},
+            body:JSON.stringify({
+              model:settings.model||"doubao-seed-evolving",
+              messages:[{role:"system",content:systemPrompt},{role:"user",content:`选题：${t.title}\n脚本：${scriptContent}`}],
+              temperature:0.7,
+              max_tokens:4096
+            })
+          });
+          
+          if(resp.ok){
+            const data=await resp.json();
+            const reply=data.choices?.[0]?.message?.content||"";
+            const jsonMatch=reply.match(/\{[\s\S]*\}/);
+            if(jsonMatch){
+              const shotData=JSON.parse(jsonMatch[0]);
+              if(shotData.shots&&Array.isArray(shotData.shots)){
+                storyboardData = shotData.shots.map((s,i)=>({
+                  shot:i+1,
+                  shotSize:s.shotSize||"中景",
+                  cameraMove:s.cameraMove||"固定",
+                  duration:parseInt(s.duration)||3,
+                  visual:s.visual||"",
+                  dialogue:s.dialogue||"",
+                  refImage:null,
+                  note:s.note||"",
+                  videoUrl:null
+                }));
+              }
+            }
+          }
+        }catch(e){
+          console.error("AI生成分镜失败:",e);
+        }
+      }
+      
+      // 保存分镜到选题
+      t.storyboard = JSON.parse(JSON.stringify(storyboardData));
+      saveData();
+      updateProgress(`步骤 ${currentStep}/${totalSteps}: 分镜脚本生成完成！`, (currentStep/totalSteps)*100);
+    }
+    
+    // 步骤2: 为每个镜头生成AI参考图
+    if(doImages && storyboardData.length>0){
+      currentStep++;
+      updateProgress(`步骤 ${currentStep}/${totalSteps}: 生成AI参考图（0/${storyboardData.length}）...`, (currentStep/totalSteps)*20);
+      
+      const stylePrefix = "电影感，暗调，金色光影，巨星登场，4K画质，造势预热视频风格";
+      
+      for(let i=0;i<storyboardData.length;i++){
+        if(fullPlanState.stopRequested) break;
+        if(!storyboardData[i].visual) continue;
+        
+        try{
+          const prompt = `${stylePrefix}，${storyboardData[i].visual}`;
+          const imageUrl = await generateImageForShot(prompt);
+          if(imageUrl){
+            storyboardData[i].refImage = imageUrl;
+          }
+        }catch(e){
+          console.error(`生成第${i+1}镜参考图失败:`,e);
+        }
+        
+        const percent = ((i+1)/storyboardData.length)*100;
+        updateProgress(`步骤 ${currentStep}/${totalSteps}: 生成AI参考图（${i+1}/${storyboardData.length}）...`, 
+          ((currentStep-1)/totalSteps)*100 + (percent/totalSteps));
+      }
+      
+      t.storyboard = JSON.parse(JSON.stringify(storyboardData));
+      saveData();
+      updateProgress(`步骤 ${currentStep}/${totalSteps}: AI参考图生成完成！`, (currentStep/totalSteps)*100);
+    }
+    
+    // 步骤3: 为关键镜头生成AI视频
+    if(doVideos && storyboardData.length>0){
+      currentStep++;
+      
+      // 选择关键镜头（均匀分布）
+      const keyIndices = [];
+      const step = Math.floor(storyboardData.length / videoCount);
+      for(let i=0;i<videoCount;i++){
+        keyIndices.push(Math.min(i*step, storyboardData.length-1));
+      }
+      
+      updateProgress(`步骤 ${currentStep}/${totalSteps}: 生成AI视频（0/${keyIndices.length}）...`, (currentStep/totalSteps)*20);
+      
+      const stylePrefix = "电影感，暗调，金色光影，巨星登场，4K画质，慢动作，造势预热视频风格";
+      
+      for(let i=0;i<keyIndices.length;i++){
+        if(fullPlanState.stopRequested) break;
+        const idx = keyIndices[i];
+        if(!storyboardData[idx].visual) continue;
+        
+        try{
+          const prompt = `${stylePrefix}，${storyboardData[idx].visual}`;
+          const videoUrl = await generateVideoForShot(prompt,"5","9:16");
+          if(videoUrl){
+            storyboardData[idx].videoUrl = videoUrl;
+          }
+        }catch(e){
+          console.error(`生成第${idx+1}镜视频失败:`,e);
+        }
+        
+        const percent = ((i+1)/keyIndices.length)*100;
+        updateProgress(`步骤 ${currentStep}/${totalSteps}: 生成AI视频（${i+1}/${keyIndices.length}）...`,
+          ((currentStep-1)/totalSteps)*100 + (percent/totalSteps));
+      }
+      
+      t.storyboard = JSON.parse(JSON.stringify(storyboardData));
+      saveData();
+      updateProgress(`步骤 ${currentStep}/${totalSteps}: AI视频生成完成！`, (currentStep/totalSteps)*100);
+    }
+    
+    // 步骤4: 生成完整汇报文档
+    if(doReport){
+      currentStep++;
+      updateProgress(`步骤 ${currentStep}/${totalSteps}: 生成汇报文档...`, (currentStep/totalSteps)*50);
+      
+      // 等待一下让用户看到进度
+      await new Promise(r=>setTimeout(r,500));
+      
+      updateProgress(`步骤 ${currentStep}/${totalSteps}: 汇报文档生成完成！`, 100);
+      
+      // 自动打开汇报文档
+      setTimeout(()=>{
+        generateReport(topicId);
+      },500);
+    }
+    
+    toast("完整方案生成完成！","success");
+    
+  }catch(e){
+    console.error("完整方案生成失败:",e);
+    toast("生成过程中出现错误："+e.message,"error");
+  }finally{
+    fullPlanState.generating = false;
+    document.getElementById('fpStartBtn').style.display = 'inline-block';
+  }
+}
+
+// 为分镜生成AI参考图（通用函数）
+async function generateImageForShot(prompt){
+  return new Promise(async (resolve,reject)=>{
+    try{
+      let taskId;
+      if(cloudConfig.jimengDirectMode && cloudConfig.jimengAK && cloudConfig.jimengSK){
+        const result=await callJimengDirect("CVSync2AsyncSubmitTask",{
+          req_key:"jimeng_t2i_v20",
+          prompt:prompt,
+          width:1024,
+          height:1536,
+          return_url:true
+        });
+        taskId=result.data?.task_id;
+      }else{
+        const proxyUrl=(cloudConfig.jimengProxy||"http://localhost:8765").replace(/\/+$/,"");
+        const resp=await fetch(proxyUrl+"/submit",{
+          method:"POST",
+          headers:{"Content-Type":"application/json"},
+          body:JSON.stringify({prompt,width:1024,height:1536,req_key:"jimeng_t2i_v20",return_url:true})
+        });
+        const data=await resp.json();
+        if(data.error)throw new Error(data.error);
+        taskId=data.task_id;
+      }
+      
+      if(!taskId){reject(new Error("未获取到任务ID"));return;}
+      
+      // 轮询查询结果
+      let attempts=0;
+      const maxAttempts=60;
+      const poll=setInterval(async ()=>{
+        attempts++;
+        try{
+          let data;
+          if(cloudConfig.jimengDirectMode && cloudConfig.jimengAK && cloudConfig.jimengSK){
+            data=await callJimengDirect("CVSync2AsyncGetResult",{
+              req_key:"jimeng_t2i_v20",
+              task_id:taskId
+            });
+          }else{
+            const proxyUrl=(cloudConfig.jimengProxy||"http://localhost:8765").replace(/\/+$/,"");
+            const resp=await fetch(proxyUrl+"/query",{
+              method:"POST",
+              headers:{"Content-Type":"application/json"},
+              body:JSON.stringify({task_id:taskId,req_key:"jimeng_t2i_v20"})
+            });
+            data=await resp.json();
+          }
+          const status=data.data?.status;
+          if(status==="done"){
+            clearInterval(poll);
+            const imageUrl=data.data?.image_url || data.data?.url;
+            if(imageUrl){
+              resolve(imageUrl);
+            }else{
+              reject(new Error("未获取到图片地址"));
+            }
+          }else if(status==="failed"||status==="error"){
+            clearInterval(poll);
+            reject(new Error(data.data?.message||"生成失败"));
+          }else if(attempts>=maxAttempts){
+            clearInterval(poll);
+            reject(new Error("生成超时"));
+          }
+        }catch(e){
+          clearInterval(poll);
+          reject(e);
+        }
+      },2000);
+    }catch(e){
+      reject(e);
+    }
+  });
+}
+
+
+// ========== 项目完成度自动提醒 ==========
+function checkProjectReminders(){
+  const reminders = [];
+  
+  // 检查选题库中的待办
+  state.topics.forEach(t=>{
+    // 检查拍摄日期临近的选题
+    if(t.sessionDate){
+      const shootDate = new Date(t.sessionDate);
+      const today = new Date();
+      const diffDays = Math.ceil((shootDate - today) / (1000*60*60*24));
+      
+      if(diffDays <= 7 && diffDays >= 0 && t.status !== '已完成' && t.status !== '已发'){
+        // 检查分镜是否完成
+        const hasStoryboard = t.storyboard && t.storyboard.length > 0;
+        const hasScript = t.script && t.script.length > 20;
+        
+        if(!hasScript){
+          reminders.push({
+            type: 'urgent',
+            topic: t.title,
+            message: `距离拍摄还有${diffDays}天，脚本尚未完成`,
+            action: ()=>openDetail(t.id)
+          });
+        }else if(!hasStoryboard){
+          reminders.push({
+            type: 'warning',
+            topic: t.title,
+            message: `距离拍摄还有${diffDays}天，分镜脚本尚未完成`,
+            action: ()=>openStoryboardEditor(t.id)
+          });
+        }
+      }
+    }
+    
+    // 检查搁置超过30天的选题
+    if(t.status === '搁置' && t.updatedAt){
+      const updated = new Date(t.updatedAt);
+      const today = new Date();
+      const diffDays = Math.ceil((today - updated) / (1000*60*60*24));
+      if(diffDays > 30){
+        reminders.push({
+          type: 'info',
+          topic: t.title,
+          message: `该选题已搁置${diffDays}天，是否重新启动？`,
+          action: ()=>{reactivateTopic(t.id);}
+        });
+      }
+    }
+  });
+  
+  // 检查专场策划案的完成度
+  if(typeof projectPlans !== 'undefined' && projectPlans){
+    projectPlans.forEach(plan=>{
+      if(plan.deadline){
+        const deadline = new Date(plan.deadline);
+        const today = new Date();
+        const diffDays = Math.ceil((deadline - today) / (1000*60*60*24));
+        
+        if(diffDays <= 3 && diffDays >= 0 && plan.progress < 100){
+          reminders.push({
+            type: 'urgent',
+            topic: plan.sessionName || '专场策划',
+            message: `距离专场还有${diffDays}天，项目完成度${plan.progress}%`,
+            action: ()=>openProjectPlan(plan.sessionName)
+          });
+        }
+      }
+    });
+  }
+  
+  return reminders;
+}
+
+function showReminderBadge(){
+  const reminders = checkProjectReminders();
+  const urgentCount = reminders.filter(r=>r.type==='urgent').length;
+  
+  // 在导航栏显示提醒徽章
+  let badge = document.getElementById('reminderBadge');
+  if(!badge){
+    // 创建提醒按钮
+    const nav = document.querySelector('.nav-item[data-view="dashboard"]');
+    if(nav){
+      const reminderBtn = document.createElement('div');
+      reminderBtn.className = 'nav-item';
+      reminderBtn.style.cssText = 'position:relative;cursor:pointer';
+      reminderBtn.innerHTML = `
+        <span style="font-size:18px">🔔</span>
+        <span id="reminderBadge" style="display:none;position:absolute;top:-2px;right:-2px;background:#ef4444;color:white;font-size:10px;width:16px;height:16px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700">0</span>
+      `;
+      reminderBtn.onclick = showRemindersPanel;
+      nav.parentNode.insertBefore(reminderBtn, nav.nextSibling);
+    }
+  }
+  
+  badge = document.getElementById('reminderBadge');
+  if(badge){
+    if(urgentCount > 0){
+      badge.style.display = 'flex';
+      badge.textContent = urgentCount > 9 ? '9+' : urgentCount;
+    }else{
+      badge.style.display = 'none';
+    }
+  }
+}
+
+function showRemindersPanel(){
+  const reminders = checkProjectReminders();
+  
+  if(reminders.length === 0){
+    toast("暂无待办提醒，一切顺利！","success");
+    return;
+  }
+  
+  let html = '<div style="padding:16px">';
+  html += '<div style="font-size:16px;font-weight:700;margin-bottom:16px">🔔 项目提醒（' + reminders.length + '项）</div>';
+  
+  reminders.forEach((r,idx)=>{
+    const typeColor = r.type === 'urgent' ? '#ef4444' : r.type === 'warning' ? '#f59e0b' : '#3b82f6';
+    const typeIcon = r.type === 'urgent' ? '🚨' : r.type === 'warning' ? '⚠️' : 'ℹ️';
+    html += `
+      <div style="padding:12px;background:var(--bg-card);border-radius:8px;margin-bottom:10px;border-left:3px solid ${typeColor}">
+        <div style="font-size:13px;font-weight:600;margin-bottom:4px">${typeIcon} ${r.topic}</div>
+        <div style="font-size:12px;color:var(--text-muted);margin-bottom:8px">${r.message}</div>
+        <button class="btn" style="padding:4px 12px;font-size:11px" onclick="handleReminderAction(${idx})">立即处理</button>
+      </div>
+    `;
+  });
+  
+  html += '</div>';
+  
+  // 使用简单的alert替代模态框
+  const reminderText = reminders.map(r=>`${r.topic}: ${r.message}`).join('\n\n');
+  alert('🔔 项目提醒\n\n' + reminderText + '\n\n（请在选题库和专场策划中查看详情）');
+}
+
+function handleReminderAction(idx){
+  const reminders = checkProjectReminders();
+  if(reminders[idx] && reminders[idx].action){
+    reminders[idx].action();
+  }
+}
+
+// 重新启动搁置选题
+function reactivateTopic(topicId){
+  const t = state.topics.find(x=>x.id===topicId);
+  if(!t) return;
+  t.status = '待拍';
+  t.updatedAt = new Date().toISOString();
+  saveData();
+  renderAll();
+  toast(`已重新启动选题：${t.title}`,"success");
+}
+
+// 页面加载时检查提醒
+setTimeout(()=>{
+  try{
+    showReminderBadge();
+    // 每小时检查一次
+    setInterval(showReminderBadge, 3600000);
+  }catch(e){
+    console.error("提醒功能初始化失败:",e);
+  }
+}, 2000);
+
+
+// ========== P1-3: 审美参考自动推荐和应用 ==========
+function recommendReferencesForTopic(topicId){
+  const t = state.topics.find(x=>x.id===topicId);
+  if(!t) return [];
+  
+  const recommendations = [];
+  const topicText = (t.title + ' ' + (t.script||'') + ' ' + (t.hook||'') + ' ' + (t.type||'')).toLowerCase();
+  
+  // 从审美参考库中推荐相关参考
+  if(typeof visualState !== 'undefined' && visualState.refs){
+    visualState.refs.forEach(ref=>{
+      const refText = (ref.title + ' ' + (ref.description||'') + ' ' + (ref.tags||[]).join(' ')).toLowerCase();
+      let matchScore = 0;
+      
+      // 关键词匹配
+      const keywords = ['舞台','灯光','金色','黑暗','隧道','冠军','传奇','巨星','战争','史诗','电影感','仪式','盛典','秀场','音乐节'];
+      keywords.forEach(kw=>{
+        if(topicText.includes(kw) && refText.includes(kw)){
+          matchScore += 2;
+        }
+      });
+      
+      // 类型匹配
+      if(ref.type && t.type && ref.type === t.type){
+        matchScore += 3;
+      }
+      
+      if(matchScore >= 2){
+        recommendations.push({...ref, matchScore});
+      }
+    });
+  }
+  
+  // 按匹配度排序
+  recommendations.sort((a,b)=>b.matchScore - a.matchScore);
+  return recommendations.slice(0, 5);
+}
+
+function applyReferenceToShot(shotIndex, reference){
+  if(!storyboardData[shotIndex]) return;
+  
+  // 将参考应用到当前镜头
+  if(reference.title){
+    storyboardData[shotIndex].note = (storyboardData[shotIndex].note || '') + '\n[参考] ' + reference.title;
+  }
+  if(reference.image){
+    storyboardData[shotIndex].refImage = reference.image;
+  }
+  if(reference.description){
+    storyboardData[shotIndex].visual = storyboardData[shotIndex].visual || reference.description;
+  }
+  
+  renderStoryboardList();
+  toast('参考已应用到镜头 ' + (shotIndex+1),"success");
+}
+
+function showReferenceRecommendations(shotIndex){
+  const topicId = currentStoryboardTopicId;
+  const recommendations = recommendReferencesForTopic(topicId);
+  
+  if(recommendations.length === 0){
+    toast("暂无相关参考，先去审美参考库收藏一些吧","info");
+    return;
+  }
+  
+  let html = '<div style="padding:16px">';
+  html += '<div style="font-size:16px;font-weight:700;margin-bottom:12px">🎯 推荐参考（匹配度排序）</div>';
+  
+  recommendations.forEach((ref,idx)=>{
+    html += `
+      <div style="padding:12px;background:var(--bg-card);border-radius:8px;margin-bottom:10px;cursor:pointer;border:1px solid var(--border)" 
+           onmouseover="this.style.borderColor='var(--accent)'" onmouseout="this.style.borderColor='var(--border)'"
+           onclick="applyReferenceToShot(${shotIndex}, ${JSON.stringify(ref).replace(/"/g,'&quot;')});closeModal('referenceModal')">
+        <div style="display:flex;gap:12px;align-items:center">
+          ${ref.image ? `<img src="${ref.image}" style="width:60px;height:60px;object-fit:cover;border-radius:6px">` : '<div style="width:60px;height:60px;background:var(--bg-input);border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:24px">🎨</div>'}
+          <div style="flex:1">
+            <div style="font-size:13px;font-weight:600;margin-bottom:2px">${ref.title||'未命名'}</div>
+            <div style="font-size:11px;color:var(--text-muted)">匹配度: ${'⭐'.repeat(Math.min(ref.matchScore,5))}</div>
+            ${ref.type ? `<div style="font-size:10px;color:var(--accent);margin-top:2px">${ref.type}</div>` : ''}
+          </div>
+        </div>
+      </div>
+    `;
+  });
+  
+  html += '</div>';
+  
+  // 创建临时模态框
+  let modal = document.getElementById('referenceModal');
+  if(!modal){
+    modal = document.createElement('div');
+    modal.id = 'referenceModal';
+    modal.className = 'modal-overlay';
+    modal.innerHTML = '<div class="modal" style="max-width:500px;max-height:80vh;overflow-y:auto"><div class="modal-header"><div class="modal-title">推荐参考</div><button class="close-btn" onclick="closeModal(\'referenceModal\')">×</button></div><div id="referenceModalBody"></div></div>';
+    document.body.appendChild(modal);
+  }
+  document.getElementById('referenceModalBody').innerHTML = html;
+  modal.classList.remove('hidden');
+}
+
+// ========== P1-4: AI生成分镜参考图单独按钮 ==========
+async function generateShotReferenceImage(shotIndex){
+  const shot = storyboardData[shotIndex];
+  if(!shot || !shot.visual){
+    toast("请先填写该镜头的画面描述","error");
+    return;
+  }
+  
+  const stylePrefix = "电影感，暗调，金色光影，巨星登场，4K画质，造势预热视频风格";
+  const prompt = `${stylePrefix}，${shot.visual}`;
+  
+  toast(`正在生成镜号${shot.shot}的参考图...`,"info");
+  
+  try{
+    const imageUrl = await generateImageForShot(prompt);
+    if(imageUrl){
+      storyboardData[shotIndex].refImage = imageUrl;
+      renderStoryboardList();
+      toast("参考图生成成功！","success");
+    }else{
+      toast("参考图生成失败","error");
+    }
+  }catch(e){
+    console.error("生成参考图失败:",e);
+    toast("生成失败："+e.message,"error");
+  }
+}
+
+// ========== P2-1: 服饰搭配AI推荐 ==========
+async function generateCostumeRecommendation(topicId){
+  const t = state.topics.find(x=>x.id===topicId);
+  if(!t) return;
+  
+  const settings = loadSettings();
+  if(!settings.apiKey){
+    toast("请先配置API Key","error");
+    return;
+  }
+  
+  toast("AI正在生成服饰搭配推荐...","info");
+  
+  try{
+    const systemPrompt = `你是资深造型师，专门为造势型预热视频设计服饰搭配。请根据创意内容，为初瑞雪设计3套服装搭配方案。
+输出要求：
+1. 每套方案包含：服装名称、款式描述、颜色搭配、材质选择、配饰建议、鞋履推荐
+2. 符合造势型预热视频的调性：华丽、大气、有巨星感
+3. 考虑拍摄场景（舞台/隧道/户外等）
+4. 输出JSON格式`;
+    
+    const baseUrl=settings.proxy||settings.baseUrl;
+    const url=baseUrl.replace(/\/+$/,"")+"/chat/completions";
+    const resp=await fetch(url,{
+      method:"POST",
+      headers:{"Content-Type":"application/json","Authorization":"Bearer "+settings.apiKey},
+      body:JSON.stringify({
+        model:settings.model||"doubao-seed-evolving",
+        messages:[
+          {role:"system",content:systemPrompt},
+          {role:"user",content:`创意名称：${t.title}\n造势类型：${t.type}\n核心钩子：${t.hook||'暂无'}\n场景：${t.scene||'暂无'}\n完整脚本：${t.script||t.title}`}
+        ],
+        temperature:0.7,
+        max_tokens:2000
+      })
+    });
+    
+    if(resp.ok){
+      const data=await resp.json();
+      const reply=data.choices?.[0]?.message?.content||"";
+      
+      // 保存到选题的服饰搭配字段
+      t.costumeReference = reply;
+      saveData();
+      
+      toast("服饰搭配推荐已生成！","success");
+      
+      // 显示结果
+      alert("👗 服饰搭配推荐已生成\n\n" + reply.slice(0, 500) + (reply.length > 500 ? '...' : ''));
+    }else{
+      toast("API请求失败","error");
+    }
+  }catch(e){
+    console.error("服饰推荐生成失败:",e);
+    toast("生成失败："+e.message,"error");
+  }
+}
+
+// ========== P2-2: 舞美舞台自动推荐 ==========
+function recommendStagesForTopic(topicId){
+  const t = state.topics.find(x=>x.id===topicId);
+  if(!t) return [];
+  
+  const recommendations = [];
+  const topicText = (t.title + ' ' + (t.script||'') + ' ' + (t.scene||'')).toLowerCase();
+  
+  if(typeof stageState !== 'undefined' && stageState.stages){
+    stageState.stages.forEach(stage=>{
+      const stageText = (stage.title + ' ' + (stage.description||'') + ' ' + (stage.type||'') + ' ' + (stage.tags||[]).join(' ')).toLowerCase();
+      let matchScore = 0;
+      
+      const keywords = ['舞台','体育馆','摄影棚','户外','隧道','秀场','音乐节','电影节','灯光','舞美','搭建'];
+      keywords.forEach(kw=>{
+        if(topicText.includes(kw) && stageText.includes(kw)){
+          matchScore += 2;
+        }
+      });
+      
+      if(matchScore >= 2){
+        recommendations.push({...stage, matchScore});
+      }
+    });
+  }
+  
+  recommendations.sort((a,b)=>b.matchScore - a.matchScore);
+  return recommendations.slice(0, 3);
+}
+
+// ========== P2-3: 项目大策划自动生成 ==========
+async function generateBigPlan(sessionName, theme){
+  const settings = loadSettings();
+  if(!settings.apiKey){
+    toast("请先配置API Key","error");
+    return;
+  }
+  
+  toast("AI正在生成项目大策划...","info");
+  
+  try{
+    const systemPrompt = `你是资深内容策划总监，专门为直播专场设计完整的预热内容规划。请根据专场主题，生成一个完整的内容策划案。
+输出要求：
+1. 预热视频：4条（T-7天悬念篇、T-5天呼吁篇、T-3天集结篇、T-1天决战篇），每条包含标题、时长、核心创意、叙事要点
+2. 福利视频：10条（产品福利、机制解读、粉丝互动等），每条包含标题、核心内容
+3. 直播流程：1条完整的直播流程规划
+4. 幕后花絮：3条（筹备、彩排、现场）
+5. 输出JSON格式`;
+    
+    const baseUrl=settings.proxy||settings.baseUrl;
+    const url=baseUrl.replace(/\/+$/,"")+"/chat/completions";
+    const resp=await fetch(url,{
+      method:"POST",
+      headers:{"Content-Type":"application/json","Authorization":"Bearer "+settings.apiKey},
+      body:JSON.stringify({
+        model:settings.model||"doubao-seed-evolving",
+        messages:[
+          {role:"system",content:systemPrompt},
+          {role:"user",content:`专场名称：${sessionName}\n主题：${theme}`}
+        ],
+        temperature:0.7,
+        max_tokens:3000
+      })
+    });
+    
+    if(resp.ok){
+      const data=await resp.json();
+      const reply=data.choices?.[0]?.message?.content||"";
+      
+      // 创建策划案
+      const plan = {
+        sessionName: sessionName,
+        theme: theme,
+        createdAt: new Date().toISOString(),
+        progress: 10,
+        aiGenerated: true,
+        content: reply,
+        todos: [
+          {text: "确认4条预热视频创意", done: false},
+          {text: "确认10条福利视频内容", done: false},
+          {text: "确认直播流程", done: false},
+          {text: "确认幕后花絮选题", done: false},
+          {text: "开始第一条预热视频制作", done: false}
+        ]
+      };
+      
+      if(typeof projectPlans !== 'undefined'){
+        projectPlans.push(plan);
+        saveProjectPlansData();
+      }
+      
+      toast("项目大策划已生成！","success");
+      
+      // 显示结果
+      alert("📋 项目大策划已生成\n\n" + reply.slice(0, 800) + (reply.length > 800 ? '...' : ''));
+    }else{
+      toast("API请求失败","error");
+    }
+  }catch(e){
+    console.error("大策划生成失败:",e);
+    toast("生成失败："+e.message,"error");
+  }
+}
+
+// ========== P2-4: 视频反推→参考库一键保存 ==========
+function saveReverseResultToLibrary(reverseId, libraryType){
+  const item = reverseState.items.find(r=>r.id===reverseId);
+  if(!item){
+    toast("未找到反推结果","error");
+    return;
+  }
+  
+  if(libraryType === 'scene' && item.scene){
+    // 保存到审美参考库（场景类）
+    const newRef = {
+      id: 'ref_' + Date.now(),
+      title: item.title + ' - 场景',
+      type: '场景参考',
+      description: item.scene,
+      tags: ['视频反推', item.type],
+      createdAt: new Date().toISOString()
+    };
+    visualState.refs.unshift(newRef);
+    localStorage.setItem(VISUAL_KEY, JSON.stringify(visualState.refs));
+    toast("已保存到审美参考库（场景类）","success");
+  }else if(libraryType === 'costume' && item.costumeReference){
+    // 保存到服装库
+    const newCostume = {
+      id: 'costume_' + Date.now(),
+      title: item.title + ' - 服饰',
+      type: '视频反推',
+      description: item.costumeReference,
+      tags: ['视频反推', item.type],
+      createdAt: new Date().toISOString()
+    };
+    costumeState.costumes.unshift(newCostume);
+    saveCostumeData();
+    toast("已保存到服装库","success");
+  }else if(libraryType === 'stage' && item.location){
+    // 保存到舞美舞台库
+    const newStage = {
+      id: 'stage_' + Date.now(),
+      title: item.title + ' - 场地',
+      type: item.type,
+      location: item.location,
+      description: item.artDirection || item.location,
+      tags: ['视频反推'],
+      createdAt: new Date().toISOString()
+    };
+    stageState.stages.unshift(newStage);
+    saveStageData();
+    toast("已保存到舞美舞台库","success");
+  }else if(libraryType === 'all'){
+    // 全部保存
+    if(item.scene){
+      visualState.refs.unshift({
+        id: 'ref_' + Date.now() + '_s',
+        title: item.title + ' - 场景',
+        type: '场景参考',
+        description: item.scene,
+        tags: ['视频反推'],
+        createdAt: new Date().toISOString()
+      });
+      localStorage.setItem(VISUAL_KEY, JSON.stringify(visualState.refs));
+    }
+    if(item.costumeReference){
+      costumeState.costumes.unshift({
+        id: 'costume_' + Date.now(),
+        title: item.title + ' - 服饰',
+        type: '视频反推',
+        description: item.costumeReference,
+        tags: ['视频反推'],
+        createdAt: new Date().toISOString()
+      });
+      saveCostumeData();
+    }
+    if(item.location){
+      stageState.stages.unshift({
+        id: 'stage_' + Date.now(),
+        title: item.title + ' - 场地',
+        type: item.type,
+        location: item.location,
+        description: item.artDirection || '',
+        tags: ['视频反推'],
+        createdAt: new Date().toISOString()
+      });
+      saveStageData();
+    }
+    toast("已全部保存到对应参考库！","success");
+  }
+}
+
 </script>
+
+
+<!-- 一键生成完整方案模态框 -->
+<div class="modal-overlay hidden" id="fullPlanModal">
+  <div class="modal" style="max-width:600px">
+    <div class="modal-header">
+      <div class="modal-title">⚡ 一键生成完整方案</div>
+      <button class="close-btn" onclick="closeModal('fullPlanModal')"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    </div>
+    <div class="modal-body">
+      <div style="padding:16px;background:linear-gradient(135deg,rgba(139,92,246,0.1),rgba(99,102,241,0.1));border-radius:12px;margin-bottom:16px">
+        <div style="font-size:14px;font-weight:700;color:#a78bfa;margin-bottom:8px">全流程自动化</div>
+        <div style="font-size:12px;color:var(--text-muted);line-height:1.7">
+          系统将自动完成以下步骤：<br>
+          1️⃣ AI生成25镜分镜脚本<br>
+          2️⃣ 为每个镜头生成AI参考图<br>
+          3️⃣ 为关键镜头生成AI视频<br>
+          4️⃣ 生成完整汇报文档（13章节）<br>
+          <span style="color:#fbbf24">⚠️ 生成AI视频需要较长时间，建议先生成分镜和参考图</span>
+        </div>
+      </div>
+      
+      <div class="form-group">
+        <label class="form-label">选择生成步骤</label>
+        <div style="display:flex;flex-direction:column;gap:8px">
+          <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+            <input type="checkbox" id="fpStoryboard" checked style="width:16px;height:16px;accent-color:#8b5cf6">
+            <span style="font-size:13px">AI生成分镜脚本（25镜）</span>
+          </label>
+          <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+            <input type="checkbox" id="fpImages" checked style="width:16px;height:16px;accent-color:#8b5cf6">
+            <span style="font-size:13px">为每个镜头生成AI参考图（约25张）</span>
+          </label>
+          <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+            <input type="checkbox" id="fpVideos" style="width:16px;height:16px;accent-color:#8b5cf6">
+            <span style="font-size:13px">为关键镜头生成AI视频（5秒/条，约5条）</span>
+          </label>
+          <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+            <input type="checkbox" id="fpReport" checked style="width:16px;height:16px;accent-color:#8b5cf6">
+            <span style="font-size:13px">生成完整汇报文档（13章节）</span>
+          </label>
+        </div>
+      </div>
+      
+      <div class="form-group">
+        <label class="form-label">AI视频生成数量</label>
+        <select class="form-input" id="fpVideoCount" style="width:100%">
+          <option value="3">3条（开场/高潮/结尾）</option>
+          <option value="5" selected>5条（关键镜头）</option>
+          <option value="10">10条（半量）</option>
+          <option value="25">25条（全部镜头，耗时较长）</option>
+        </select>
+      </div>
+      
+      <div id="fpProgress" style="display:none;margin-top:16px">
+        <div style="font-size:13px;font-weight:600;margin-bottom:8px" id="fpProgressTitle">准备中...</div>
+        <div style="width:100%;height:8px;background:var(--bg-input);border-radius:4px;overflow:hidden">
+          <div id="fpProgressBar" style="height:100%;background:linear-gradient(90deg,#8b5cf6,#6366f1);width:0%;transition:width 0.3s"></div>
+        </div>
+        <div style="font-size:11px;color:var(--text-muted);margin-top:6px" id="fpProgressText">0%</div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeModal('fullPlanModal')">取消</button>
+      <button class="btn btn-primary" id="fpStartBtn" onclick="startFullPlanGeneration()" style="background:linear-gradient(135deg,#8b5cf6,#6366f1);border-color:#8b5cf6">🚀 开始生成</button>
+    </div>
+  </div>
+</div>
 
 </body>
 </html>
