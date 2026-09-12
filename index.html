@@ -1072,6 +1072,10 @@ input,textarea,select{font-family:inherit;outline:none;border:none;background:no
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>
             AI生成视频
           </button>
+          <button class="btn" id="aiImageBtn" onclick="openAiImageModal('visual')" style="border-color:var(--accent);color:var(--accent)">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+            AI生成图片
+          </button>
           <button class="btn btn-primary" id="addVisualBtn">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
             添加参考
@@ -1117,6 +1121,10 @@ input,textarea,select{font-family:inherit;outline:none;border:none;background:no
           <button class="btn" id="costumeSearchBtn">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
             搜索
+          </button>
+          <button class="btn" id="costumeAIGenerateBtn" onclick="openAiImageModal('costume')" style="border-color:var(--accent);color:var(--accent)">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+            AI生成服装
           </button>
           <button class="btn btn-primary" id="addCostumeBtn" onclick="openAddCostume()">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
@@ -4449,6 +4457,169 @@ function saveAiVideoToLibrary(){
   toast("视频已保存到参考库","success");
 }
 
+
+// ========== AI图片生成（即梦） ==========
+let aiImageState={prompt:"",resultUrl:"",generating:false,pollTimer:null,targetLibrary:"visual"};
+
+function openAiImageModal(target="visual"){
+  aiImageState={prompt:"",resultUrl:"",generating:false,pollTimer:null,targetLibrary:target};
+  const p=$("#aiImagePrompt");if(p)p.value="";
+  const s=$("#aiImageSize");if(s)s.value="1024x1536";
+  const g=$("#aiImageGenerating");if(g)g.classList.add("hidden");
+  const res=$("#aiImageResult");if(res)res.classList.add("hidden");
+  const gb=$("#aiImageGenerateBtn");if(gb)gb.classList.remove("hidden");
+  const sb=$("#aiImageSaveBtn");if(sb)sb.classList.add("hidden");
+  const t=$("#aiImageTitle");if(t)t.value="";
+  $("#aiImageModalTitle").textContent = target==="costume" ? "AI生成服装参考" : "AI生成图片参考";
+  openModal("aiImageModal");
+}
+
+async function generateAiImage(){
+  const prompt=$("#aiImagePrompt").value.trim();
+  if(!prompt){toast("请输入图片描述","error");return;}
+  const size=$("#aiImageSize").value || "1024x1536";
+  const [width,height]=size.split("x").map(Number);
+  
+  aiImageState.generating=true;
+  $("#aiImageGenerateBtn").classList.add("hidden");
+  $("#aiImageGenerating").classList.remove("hidden");
+  $("#aiImageStatus").textContent="正在提交图片生成任务...";
+  
+  try{
+    let taskId;
+    if(cloudConfig.jimengDirectMode && cloudConfig.jimengAK && cloudConfig.jimengSK){
+      // 直接调用模式
+      const result=await callJimengDirect("CVSync2AsyncSubmitTask",{
+        req_key:"jimeng_t2i_v20",
+        prompt:prompt,
+        width:width,
+        height:height,
+        return_url:true
+      });
+      taskId=result.data?.task_id;
+    }else{
+      // 本地代理模式
+      const proxyUrl=(cloudConfig.jimengProxy||"http://localhost:8765").replace(/\/+$/,"");
+      const resp=await fetch(proxyUrl+"/submit",{
+        method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({prompt,width,height,req_key:"jimeng_t2i_v20",return_url:true})
+      });
+      const data=await resp.json();
+      if(data.error)throw new Error(data.error);
+      taskId=data.task_id;
+    }
+    
+    if(!taskId)throw new Error("未获取到任务ID");
+    
+    $("#aiImageStatus").textContent="图片生成中... (0s)";
+    let attempts=0;
+    
+    aiImageState.pollTimer=setInterval(async ()=>{
+      attempts++;
+      try{
+        let data;
+        if(cloudConfig.jimengDirectMode && cloudConfig.jimengAK && cloudConfig.jimengSK){
+          data=await callJimengDirect("CVSync2AsyncGetResult",{
+            req_key:"jimeng_t2i_v20",
+            task_id:taskId
+          });
+        }else{
+          const proxyUrl=(cloudConfig.jimengProxy||"http://localhost:8765").replace(/\/+$/,"");
+          const resp=await fetch(proxyUrl+"/query",{
+            method:"POST",
+            headers:{"Content-Type":"application/json"},
+            body:JSON.stringify({task_id:taskId,req_key:"jimeng_t2i_v20"})
+          });
+          data=await resp.json();
+          if(data.error)throw new Error(data.error);
+        }
+        const status=data.data?.status;
+        if(status==="done"){
+          clearInterval(aiImageState.pollTimer);
+          const imageUrl=data.data?.image_url || data.data?.url;
+          if(imageUrl){
+            aiImageState.resultUrl=imageUrl;
+            $("#aiImageResultImg").src=imageUrl;
+            $("#aiImageTitle").value="AI生成 - "+prompt.slice(0,20);
+            $("#aiImageGenerating").classList.add("hidden");
+            $("#aiImageResult").classList.remove("hidden");
+            $("#aiImageSaveBtn").classList.remove("hidden");
+            aiImageState.generating=false;
+            toast("图片生成成功！","success");
+          }else{
+            throw new Error("未获取到图片地址");
+          }
+        }else if(status==="failed"||status==="error"){
+          clearInterval(aiImageState.pollTimer);
+          throw new Error(data.data?.message||"生成失败");
+        }else{
+          $("#aiImageStatus").textContent=`图片生成中... (${attempts*2}s)`;
+        }
+      }catch(e){
+        clearInterval(aiImageState.pollTimer);
+        $("#aiImageStatus").textContent="查询失败："+e.message;
+        $("#aiImageGenerateBtn").classList.remove("hidden");
+        $("#aiImageGenerating").classList.add("hidden");
+        aiImageState.generating=false;
+      }
+    },2000);
+  }catch(e){
+    $("#aiImageStatus").textContent="提交失败："+e.message;
+    $("#aiImageGenerateBtn").classList.remove("hidden");
+    $("#aiImageGenerating").classList.add("hidden");
+    aiImageState.generating=false;
+  }
+}
+
+function saveAiImageToLibrary(){
+  if(!aiImageState.resultUrl){toast("没有可保存的图片","error");return;}
+  const title=$("#aiImageTitle").value.trim()||"AI生成图片参考";
+  
+  if(aiImageState.targetLibrary==="costume"){
+    // 保存到服装库
+    const costume={
+      id:uid(),
+      name:title,
+      type:"其他",
+      style:"华丽巨星",
+      color:"多色",
+      brand:"AI生成",
+      desc:$("#aiImagePrompt").value.slice(0,200),
+      tags:["AI生成"],
+      image:aiImageState.resultUrl,
+      createdAt:today()
+    };
+    costumeState.costumes.unshift(costume);
+    saveCostumeData();
+    renderCostumeFilters();
+    renderCostumeGrid();
+    closeModal("aiImageModal");
+    toast("图片已保存到服装库","success");
+  }else{
+    // 保存到审美参考库
+    const ref={
+      id:genVid(),
+      title:title,
+      type:"AI生成",
+      tags:["AI生成"],
+      note:$("#aiImagePrompt").value.slice(0,200),
+      url:null,
+      image:aiImageState.resultUrl,
+      topicId:null,
+      createdAt:new Date().toISOString(),
+      updatedAt:new Date().toISOString()
+    };
+    visualState.refs.unshift(ref);
+    saveVisual();
+    renderVisualGrid();
+    renderVisualFilters();
+    closeModal("aiImageModal");
+    toast("图片已保存到参考库","success");
+  }
+}
+
+
 // ========== 事件绑定 ==========
 function initEvents(){
   // 视图切换
@@ -6302,6 +6473,63 @@ init();
   </div>
 </div>
 <style>@keyframes spin{to{transform:rotate(360deg)}}</style>
+
+<!-- ========== AI图片生成模态框 ========== -->
+<div class="modal-overlay hidden" id="aiImageModal">
+  <div class="modal-content" style="max-width:680px">
+    <div class="modal-header">
+      <div class="modal-title" id="aiImageModalTitle">AI生成图片参考</div>
+      <button class="modal-close" onclick="closeModal('aiImageModal')">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label">图片描述（Prompt）</label>
+        <textarea class="form-textarea" id="aiImagePrompt" style="min-height:100px" placeholder="描述你想要的图片画面，例如：华丽金色礼服，电影感光影，巨星登场，深色背景，时尚摄影，高清细节"></textarea>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">尺寸</label>
+          <select class="form-select" id="aiImageSize">
+            <option value="1024x1536">1024x1536 竖屏（9:16）</option>
+            <option value="1536x1024">1536x1024 横屏（16:9）</option>
+            <option value="1024x1024">1024x1024 方形（1:1）</option>
+            <option value="1024x768">1024x768 横屏（4:3）</option>
+            <option value="768x1024">768x1024 竖屏（3:4）</option>
+          </select>
+        </div>
+      </div>
+      <!-- 生成中状态 -->
+      <div id="aiImageGenerating" class="hidden" style="text-align:center;padding:30px 0">
+        <div style="width:48px;height:48px;border:3px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin 1s linear infinite;margin:0 auto 16px"></div>
+        <p style="font-size:14px;color:var(--text-secondary)" id="aiImageStatus">正在生成图片，预计10-30秒...</p>
+        <p style="font-size:11px;color:var(--text-muted);margin-top:6px">请勿关闭此窗口</p>
+      </div>
+      <!-- 生成结果 -->
+      <div id="aiImageResult" class="hidden">
+        <div style="background:#000;border-radius:8px;overflow:hidden;margin-bottom:14px">
+          <img id="aiImageResultImg" src="" alt="AI生成图片" style="width:100%;max-height:400px;object-fit:contain;display:block">
+        </div>
+        <div class="form-group">
+          <label class="form-label">标题</label>
+          <input type="text" class="form-input" id="aiImageTitle" placeholder="给这个图片参考起个名字">
+        </div>
+      </div>
+      <div style="padding:10px;background:var(--bg-input);border-radius:8px;font-size:11px;color:var(--text-muted);line-height:1.6">
+        <strong style="color:var(--text-secondary)">说明：</strong>使用即梦AI图片生成（火山引擎）。首次使用请先运行 <code style="background:var(--bg-card);padding:1px 4px;border-radius:3px">python3 jimeng_proxy.py</code> 启动本地代理，或在设置中开启直接调用模式。生成的图片可保存到审美参考库或服装库。
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeModal('aiImageModal')">关闭</button>
+      <button class="btn btn-primary hidden" id="aiImageSaveBtn" onclick="saveAiImageToLibrary()">保存到库</button>
+      <button class="btn btn-primary" id="aiImageGenerateBtn" onclick="generateAiImage()">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+        生成图片
+      </button>
+    </div>
+  </div>
+</div>
 
 <!-- ========== 添加舞台设计方案模态框 ========== -->
 <div class="modal-overlay hidden" id="addStageModal">
