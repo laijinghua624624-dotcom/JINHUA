@@ -437,6 +437,404 @@ input,textarea,select{font-family:inherit;outline:none;border:none;background:no
 }
 @media(max-width:400px){
   .visual-grid{grid-template-columns:1fr!important}
+
+
+/* ========== 手机端完整优化 ========== */
+@media(max-width:768px){
+  /* 全局调整 */
+  *{-webkit-tap-highlight-color:transparent}
+  body{font-size:14px;overflow-x:hidden}
+  
+  /* 顶部Header优化 */
+  .header{
+    padding:10px 12px !important;
+    height:auto !important;
+    min-height:56px;
+    flex-wrap:wrap;
+    gap:8px;
+  }
+  .header-left{gap:8px !important}
+  .logo{width:36px !important;height:36px !important;font-size:16px !important}
+  .app-title{font-size:15px !important}
+  .app-subtitle{display:none !important}
+  .project-switcher{
+    padding:6px 10px !important;
+    font-size:12px !important;
+  }
+  .header-right{gap:6px !important}
+  .header-btn{
+    width:36px !important;
+    height:36px !important;
+    padding:0 !important;
+  }
+  .header-btn span{display:none !important}
+  
+  /* 主内容区优化 */
+  .main-content{
+    margin-left:0 !important;
+    padding:12px !important;
+    padding-bottom:80px !important; /* 给底部导航留空间 */
+  }
+  
+  /* 页面头部优化 */
+  .view-header{
+    flex-direction:column;
+    align-items:flex-start !important;
+    gap:10px;
+    margin-bottom:14px !important;
+  }
+  .view-title{font-size:18px !important}
+  .view-actions{
+    width:100%;
+    display:flex;
+    flex-wrap:wrap;
+    gap:6px;
+  }
+  .view-actions .btn{
+    flex:1;
+    min-width:calc(50% - 3px);
+    padding:8px 10px !important;
+    font-size:12px !important;
+    justify-content:center;
+  }
+  
+  /* 按钮优化 - 增大点击区域 */
+  .btn{
+    min-height:40px;
+    padding:8px 14px !important;
+    font-size:13px !important;
+  }
+  .btn-sm{
+    min-height:32px;
+    padding:4px 10px !important;
+    font-size:11px !important;
+  }
+  
+  /* 卡片网格优化 */
+  .card-grid{grid-template-columns:1fr !important;gap:10px !important}
+  .visual-grid{grid-template-columns:repeat(2,1fr) !important;gap:8px !important}
+  .visual-card .visual-info{padding:8px !important}
+  .visual-card .visual-title{font-size:12px !important}
+  .visual-card .visual-desc{font-size:10px !important}
+  
+  /* 数据看板优化 */
+  .dashboard-grid{grid-template-columns:repeat(2,1fr) !important;gap:10px !important}
+  .dashboard-card{padding:12px !important}
+  .dashboard-card .number{font-size:24px !important}
+  .dashboard-card .label{font-size:11px !important}
+  .chart-row{grid-template-columns:1fr !important;gap:10px !important}
+  
+  /* 表单优化 */
+  .form-row{grid-template-columns:1fr !important;gap:10px !important}
+  .form-group{margin-bottom:12px !important}
+  .form-label{font-size:12px !important;margin-bottom:4px !important}
+  .form-input,.form-select,.form-textarea{
+    padding:10px 12px !important;
+    font-size:14px !important;
+    min-height:44px;
+  }
+  .form-textarea{min-height:80px}
+  
+  /* 模态框优化 - 全屏 */
+  .modal-overlay{
+    padding:0 !important;
+    align-items:flex-end !important;
+  }
+  .modal-content{
+    width:100% !important;
+    max-width:100% !important;
+    max-height:92vh !important;
+    margin:0 !important;
+    border-radius:16px 16px 0 0 !important;
+    animation:slideUp 0.3s ease !important;
+  }
+  .modal-header{
+    padding:14px 16px !important;
+    min-height:50px;
+  }
+  .modal-title{font-size:16px !important}
+  .modal-body{padding:14px 16px !important}
+  .modal-footer{
+    padding:12px 16px !important;
+    gap:8px !important;
+    flex-wrap:wrap;
+  }
+  .modal-footer .btn{
+    flex:1;
+    min-width:calc(50% - 4px);
+    justify-content:center;
+  }
+  
+  @keyframes slideUp{
+    from{transform:translateY(100%)}
+    to{transform:translateY(0)}
+  }
+  
+  /* 筛选栏优化 */
+  .filter-bar{
+    gap:6px !important;
+    padding:8px 0 !important;
+    overflow-x:auto;
+    -webkit-overflow-scrolling:touch;
+    flex-wrap:nowrap !important;
+  }
+  .filter-chip{
+    padding:6px 12px !important;
+    font-size:12px !important;
+    white-space:nowrap;
+    flex-shrink:0;
+  }
+  
+  /* 标签优化 */
+  .tag{
+    padding:3px 8px !important;
+    font-size:10px !important;
+  }
+  
+  /* 选题卡片优化 */
+  .topic-card{padding:14px !important}
+  .topic-card .topic-title{font-size:15px !important}
+  .topic-card .topic-meta{font-size:11px !important}
+  .topic-card .topic-actions{
+    flex-wrap:wrap;
+    gap:6px;
+  }
+  .topic-card .topic-actions .btn{
+    flex:1;
+    min-width:calc(50% - 3px);
+    font-size:11px !important;
+    padding:6px 8px !important;
+  }
+  
+  /* 分镜编辑器优化 - 手机端卡片式布局 */
+  #storyboardList{gap:12px !important}
+  #storyboardList > div{
+    padding:12px !important;
+  }
+  #storyboardList > div > div:first-child{
+    flex-wrap:wrap;
+    gap:6px !important;
+  }
+  #storyboardList > div > div:first-child > div:first-child{
+    width:32px !important;
+    height:32px !important;
+    font-size:13px !important;
+  }
+  #storyboardList select,
+  #storyboardList input[type="number"]{
+    padding:6px 8px !important;
+    font-size:11px !important;
+    min-height:36px;
+  }
+  #storyboardList > div > div:nth-child(2){
+    grid-template-columns:1fr !important;
+    gap:10px !important;
+  }
+  #storyboardList textarea{
+    font-size:13px !important;
+    padding:8px !important;
+  }
+  #storyboardList .visual-thumb,
+  #storyboardList [style*="aspect-ratio"]{
+    aspect-ratio:16/9 !important;
+  }
+  
+  /* 分镜编辑器顶部按钮优化 */
+  #storyboardModal .view-actions,
+  #storyboardModal [style*="display:flex"][style*="gap:8px"]{
+    flex-wrap:wrap;
+  }
+  #storyboardModal .btn{
+    flex:1;
+    min-width:calc(50% - 4px);
+    font-size:11px !important;
+    padding:8px 10px !important;
+  }
+  
+  /* 批量生成模态框优化 */
+  #batchVideoModal [style*="grid-template-columns"]{
+    grid-template-columns:1fr !important;
+  }
+  #batchShotList{
+    grid-template-columns:repeat(2,1fr) !important;
+    gap:8px !important;
+  }
+  
+  /* 视频反推详情优化 */
+  #reverseDetailModal [style*="grid-template-columns:1fr 1fr"],
+  #reverseDetailModal [style*="grid-template-columns:1fr 1fr 1fr"]{
+    grid-template-columns:1fr !important;
+    gap:10px !important;
+  }
+  
+  /* AI助手面板优化 */
+  .ai-panel{
+    position:fixed !important;
+    top:0 !important;
+    right:0 !important;
+    width:100% !important;
+    max-width:100% !important;
+    height:100vh !important;
+    max-height:100vh !important;
+    border-radius:0 !important;
+    z-index:1000 !important;
+  }
+  .ai-panel-header{
+    padding:12px 16px !important;
+    min-height:50px;
+  }
+  .ai-panel-body{padding:12px !important}
+  .ai-input-area{padding:12px !important}
+  .ai-input{
+    min-height:44px !important;
+    font-size:14px !important;
+  }
+  .ai-send-btn{
+    width:44px !important;
+    height:44px !important;
+  }
+  
+  /* 快捷提示优化 */
+  .quick-prompts{
+    gap:6px !important;
+    overflow-x:auto;
+    flex-wrap:nowrap !important;
+  }
+  .quick-prompt{
+    padding:6px 10px !important;
+    font-size:11px !important;
+    white-space:nowrap;
+    flex-shrink:0;
+  }
+  
+  /* 空状态优化 */
+  .empty-state{padding:40px 20px !important}
+  .empty-state svg{width:48px !important;height:48px !important}
+  .empty-state p{font-size:14px !important}
+  .empty-state .sub{font-size:12px !important}
+  
+  /* 进度条优化 */
+  [style*="height:8px"],
+  [style*="height:6px"]{
+    height:10px !important;
+  }
+  
+  /* 表格优化 - 横向滚动 */
+  table{
+    display:block;
+    overflow-x:auto;
+    -webkit-overflow-scrolling:touch;
+    white-space:nowrap;
+  }
+  
+  /* 版本对比优化 */
+  .version-compare-grid{grid-template-columns:1fr !important}
+  
+  /* 灵感速记优化 */
+  .inspiration-card{padding:14px !important}
+  .inspiration-card .inspiration-content{font-size:13px !important}
+  
+  /* 舞美舞台库优化 */
+  .stage-card{padding:14px !important}
+  .stage-card .stage-title{font-size:14px !important}
+  
+  /* 服装库优化 */
+  .costume-card{padding:12px !important}
+  
+  /* 底部导航栏 - 手机端显示 */
+  .mobile-bottom-nav{
+    display:flex !important;
+    position:fixed;
+    bottom:0;
+    left:0;
+    right:0;
+    background:var(--bg-card);
+    border-top:1px solid var(--border);
+    padding:6px 0;
+    padding-bottom:calc(6px + env(safe-area-inset-bottom));
+    z-index:100;
+    justify-content:space-around;
+    align-items:center;
+  }
+  .mobile-nav-item{
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    gap:2px;
+    padding:4px 8px;
+    color:var(--text-muted);
+    font-size:10px;
+    cursor:pointer;
+    transition:color 0.2s;
+    min-width:44px;
+    min-height:44px;
+    justify-content:center;
+  }
+  .mobile-nav-item.active{color:var(--accent)}
+  .mobile-nav-item svg{width:20px;height:20px}
+  
+  /* 隐藏桌面端元素 */
+  .desktop-only{display:none !important}
+  
+  /* 搜索框优化 */
+  .search-box{
+    width:100% !important;
+    margin-bottom:10px;
+  }
+  .search-box input{
+    min-height:44px;
+    font-size:14px;
+  }
+  
+  /* 标签输入优化 */
+  .tag-input-wrap{
+    min-height:44px;
+    padding:6px 8px;
+  }
+  .tag-input{
+    font-size:14px;
+    min-height:32px;
+  }
+  
+  /* 上传区域优化 */
+  .upload-zone{
+    padding:24px 16px !important;
+    min-height:100px;
+  }
+  .upload-zone svg{width:32px !important;height:32px !important}
+  .upload-zone p{font-size:12px !important}
+  
+  /* 视频播放器优化 */
+  video{
+    max-width:100%;
+    height:auto;
+  }
+  
+  /* 图片优化 */
+  img{
+    max-width:100%;
+    height:auto;
+  }
+  
+  /* 滚动条优化 */
+  ::-webkit-scrollbar{
+    width:4px;
+    height:4px;
+  }
+  ::-webkit-scrollbar-thumb{
+    background:var(--border);
+    border-radius:2px;
+  }
+}
+
+/* 超小屏幕优化 */
+@media(max-width:380px){
+  .visual-grid{grid-template-columns:1fr !important}
+  .dashboard-grid{grid-template-columns:1fr !important}
+  .view-actions .btn{min-width:100% !important}
+  .modal-footer .btn{min-width:100% !important}
+}
+
   .ai-header{padding:10px 12px}
   .ai-header-title{font-size:12px}
   .agent-tabs{padding:8px}
@@ -7789,6 +8187,48 @@ init();
     <button style="background:var(--accent);color:#fff" onclick="useVideo()">使用视频</button>
   </div>
 </div>
+
+<!-- 手机端底部导航栏 -->
+<nav class="mobile-bottom-nav" style="display:none">
+  <div class="mobile-nav-item active" data-view="library" onclick="switchView('library')">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+    <span>选题</span>
+  </div>
+  <div class="mobile-nav-item" data-view="inspiration" onclick="switchView('inspiration')">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
+    <span>灵感</span>
+  </div>
+  <div class="mobile-nav-item" data-view="visual" onclick="switchView('visual')">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+    <span>参考</span>
+  </div>
+  <div class="mobile-nav-item" data-view="reverse" onclick="switchView('reverse')">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
+    <span>反推</span>
+  </div>
+  <div class="mobile-nav-item" onclick="openSettings()">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+    <span>我的</span>
+  </div>
+</nav>
+
+<script>
+// 手机端底部导航栏激活状态同步
+function updateMobileNav(view){
+  document.querySelectorAll('.mobile-nav-item').forEach(item=>{
+    const itemView=item.dataset.view;
+    if(itemView){
+      item.classList.toggle('active',itemView===view);
+    }
+  });
+}
+// 监听视图切换
+const originalSwitchView=switchView;
+switchView=function(view){
+  originalSwitchView(view);
+  updateMobileNav(view);
+};
+</script>
 
 </body>
 </html>
