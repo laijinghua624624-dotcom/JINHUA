@@ -1494,6 +1494,96 @@ const AGENTS = {
   }
 };
 
+// ========== My（个人项目）AI智能体配置（不包含直播相关内容） ==========
+const AGENTS_MY = {
+  planner: {
+    name:"创意策划顾问",
+    icon:"💡",
+    desc:"把你脑子里的零散想法、录音转文字内容发过来，我帮你整理成结构化创意方案+完整可执行脚本。",
+    quickPrompts:["帮我想一个商业广告的创意方案","我有个纪录片的想法，帮我整理成脚本","这个电影短片的创意怎么落地？","帮我策划一个个人博主的视频选题"],
+    system:`你是资深广告导演/电影创作者，思维跳跃但极度注重落地。你专门帮创作者把零散想法整理成可执行的创意方案和视频脚本。
+
+用户会给你一段想法描述（可能是口语化的、零散的、录音转文字的），你需要输出以下结构化内容：
+
+## 1. 创意名称
+简洁有冲击力，不超过15字
+
+## 2. 创意类型
+从以下类型中选择最匹配的一种：商业广告、纪录片、电影长片、电影短片、个人博主、品牌宣传片、音乐MV、艺术实验
+
+## 3. 核心钩子
+开头怎么抓人，具体到画面和文案
+
+## 4. 完整脚本
+旁白/台词 + 字幕文案，要具体可执行
+
+## 5. 分镜表
+每个镜头：序号、景别、运镜、画面描述、时长、台词/旁白
+
+## 6. 影像风格建议
+色调、光影、镜头语言、参考导演/作品
+
+## 7. 声音设计建议
+BGM风格、音效、环境音、参考类型
+
+## 8. 制作清单
+场景、道具、出镜人员、服装、特殊设备
+
+## 9. 变体方向
+给出2个同一个创意的不同拍法变体
+
+回复要结构化，用markdown格式。脚本要具体、有电影感、符合专业影像创作的调性，不要空泛的套话。`
+  },
+  searcher: {
+    name:"参考案例搜索官",
+    icon:"🔍",
+    desc:"给我一个创意方向或类型，我给你经典案例拆解+搜索关键词，你去平台搜真实作品参考。",
+    quickPrompts:["商业广告有哪些经典创意手法","纪录片的叙事结构有哪些","电影短片的获奖案例分析","个人博主怎么做出差异化"],
+    system:`你是资深影评人/广告创意总监，阅片无数，专门帮创作者找参考案例。
+
+用户会给你一个创意方向或类型，你需要：
+
+1. 给出2-3个类似方向的经典作品案例描述，每个包括：
+   - 作品名称/导演/品牌
+   - 核心创意和手法
+   - 为什么经典/有效
+   - 可以借鉴的具体点
+
+2. 给出3-5个搜索关键词建议，方便用户去B站/YouTube/Vimeo/新片场搜索真实作品
+
+3. 分析这类作品的通用成功要素和创作要点
+
+注意：你基于专业知识给出案例方向和搜索建议，用户会用关键词去平台搜索真实作品。
+回复要结构化，每个案例分开说，语言要专业但不晦涩。`
+  },
+  manager: {
+    name:"项目管理助手",
+    icon:"📚",
+    desc:"帮你管理创意项目库：归类、状态提醒、进度查询、排期建议。",
+    quickPrompts:["我现在有多少待拍的项目？","帮我看看哪类创意最多","这个项目还缺什么环节？","这个想法该归到哪类？"],
+    system:`你是严谨的制片主任/项目经理，专门管理创意项目库。
+
+你的职责：
+- 帮用户把想法归类到创意类型中
+- 生成规范的项目编号建议
+- 提醒用户哪些项目该排期了、哪些状态需要更新
+- 回答关于项目库数据的问题（某类有多少、某项目进度如何等）
+- 帮用户整理项目的状态和优先级
+
+创意类型：商业广告、纪录片、电影长片、电影短片、个人博主、品牌宣传片、音乐MV、艺术实验
+
+回复要简洁、结构化，不要废话。给出明确的建议和判断。`
+  }
+};
+
+// 根据当前项目获取对应的AI智能体配置
+function getAgents(){
+  if(projectState && projectState.currentProject === "personal"){
+    return AGENTS_MY;
+  }
+  return AGENTS;
+}
+
 // ========== 状态管理 ==========
 let state = {
   topics: [],
@@ -1505,6 +1595,85 @@ let state = {
   chatHistory: {planner:[], searcher:[], manager:[]},
   apiSettings: {baseUrl:"", apiKey:"", model:"", proxy:""}
 };
+
+// ========== 全局错误处理（防止闪退） ==========
+window.addEventListener('error', function(e){
+  console.error('全局错误:', e.error);
+  // 不阻止默认行为，但是记录错误，防止某些未捕获的异常导致页面崩溃
+});
+window.addEventListener('unhandledrejection', function(e){
+  console.error('未处理的Promise拒绝:', e.reason);
+});
+
+// ========== AI对话框自动保存（防止内容丢失） ==========
+const AI_INPUT_KEY = "xuan_ti_ku_ai_input";
+const AI_CHAT_KEY = "xuan_ti_ku_ai_chat";
+
+// 保存AI输入框内容
+function saveAiInput(){
+  try{
+    const input = document.getElementById('aiInput');
+    if(input){
+      localStorage.setItem(AI_INPUT_KEY, input.value);
+    }
+  }catch(e){console.error('保存AI输入失败',e);}
+}
+
+// 恢复AI输入框内容
+function restoreAiInput(){
+  try{
+    const saved = localStorage.getItem(AI_INPUT_KEY);
+    const input = document.getElementById('aiInput');
+    if(saved && input){
+      input.value = saved;
+      // 调整输入框高度
+      autoResizeInput();
+    }
+  }catch(e){console.error('恢复AI输入失败',e);}
+}
+
+// 自动调整输入框高度（支持多字自适应）
+function autoResizeInput(){
+  try{
+    const input = document.getElementById('aiInput');
+    if(input){
+      input.style.height = "auto";
+      // 最大高度200px，支持更多文字
+      input.style.height = Math.min(input.scrollHeight, 200) + "px";
+    }
+  }catch(e){console.error('调整输入框高度失败',e);}
+}
+
+// 保存chatHistory
+function saveChatHistory(){
+  try{
+    // 限制每个智能体的历史记录最多50条，防止内存溢出
+    const limited = {};
+    for(const agent in state.chatHistory){
+      limited[agent] = state.chatHistory[agent].slice(-50);
+    }
+    localStorage.setItem(AI_CHAT_KEY, JSON.stringify(limited));
+  }catch(e){console.error('保存聊天记录失败',e);}
+}
+
+// 恢复chatHistory
+function restoreChatHistory(){
+  try{
+    const saved = localStorage.getItem(AI_CHAT_KEY);
+    if(saved){
+      const parsed = JSON.parse(saved);
+      if(parsed && typeof parsed === 'object'){
+        state.chatHistory = {...state.chatHistory, ...parsed};
+      }
+    }
+  }catch(e){console.error('恢复聊天记录失败',e);}
+}
+
+// 页面卸载前自动保存
+window.addEventListener('beforeunload', function(){
+  saveAiInput();
+  saveChatHistory();
+});
 
 // ========== 工具函数 ==========
 function $(sel){return document.querySelector(sel)}
@@ -2856,17 +3025,17 @@ function exportData(){
 function switchAgent(agent){
   state.currentAgent=agent;
   $$(".agent-tab").forEach(el=>el.classList.toggle("active",el.dataset.agent===agent));
-  const a=AGENTS[agent];
+  const a=getAgents()[agent];
   $("#agentDesc").textContent=a.desc;
   renderQuickPrompts();
   renderMessages();
 }
 
 function renderQuickPrompts(){
-  const a=AGENTS[state.currentAgent];
+  const a=getAgents()[state.currentAgent];
   $("#quickPrompts").innerHTML=a.quickPrompts.map(q=>`<span class="quick-prompt">${q}</span>`).join("");
   $$(".quick-prompt").forEach(el=>{
-    el.addEventListener("click",()=>{$("#aiInput").value=el.textContent;$("#aiInput").focus();});
+    el.addEventListener("click",()=>{$("#aiInput").value=el.textContent;$("#aiInput").focus();autoResizeInput();});
   });
 }
 
@@ -2875,8 +3044,8 @@ function renderMessages(){
   const msgs=state.chatHistory[state.currentAgent]||[];
   if(msgs.length===0){
     container.innerHTML=`<div style="text-align:center;color:var(--text-muted);padding:30px 10px">
-      <div style="font-size:32px;margin-bottom:10px">${AGENTS[state.currentAgent].icon}</div>
-      <p style="font-size:13px;margin-bottom:4px">${AGENTS[state.currentAgent].name} 已就绪</p>
+      <div style="font-size:32px;margin-bottom:10px">${getAgents()[state.currentAgent].icon}</div>
+      <p style="font-size:13px;margin-bottom:4px">${getAgents()[state.currentAgent].name} 已就绪</p>
       <p style="font-size:11px">描述你的想法，或点击下方快捷提示</p>
     </div>`;
     return;
@@ -3215,8 +3384,10 @@ async function sendMessage(){
   }
   // 添加用户消息
   state.chatHistory[state.currentAgent].push({role:"user",content:content});
+  saveChatHistory(); // 自动保存聊天记录，防止闪退丢失
   input.value="";
-  input.style.height="auto";
+  autoResizeInput(); // 重置输入框高度
+  saveAiInput(); // 保存空内容，防止闪退恢复后还有旧内容
   // 清空附件
   attachments=[];
   renderAttachments();
@@ -3230,7 +3401,7 @@ async function sendMessage(){
   container.scrollTop=container.scrollHeight;
 
   try{
-    const agent=AGENTS[state.currentAgent];
+    const agent=getAgents()[state.currentAgent];
     const messages=[
       {role:"system",content:agent.system},
       ...state.chatHistory[state.currentAgent].map(m=>({role:m.role,content:m.content}))
@@ -3827,8 +3998,8 @@ function initEvents(){
     if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();sendMessage();}
   });
   $("#aiInput").addEventListener("input",(e)=>{
-    e.target.style.height="auto";
-    e.target.style.height=Math.min(e.target.scrollHeight,100)+"px";
+    autoResizeInput();
+    saveAiInput(); // 自动保存输入内容，防止闪退丢失
   });
   // 状态筛选
   initStatusFilters();
@@ -4358,6 +4529,26 @@ function switchProject(projectId){
   if(state.currentView==="stage") renderStageGrid();
   if(state.currentView==="personal") renderPersonal();
   if(state.currentView==="dashboard") renderDashboard();
+
+  // 重新渲染AI智能体（根据项目切换提示词和快捷提示）
+  try{
+    const agents = getAgents();
+    // 更新智能体标签名称和图标
+    $$(".agent-tab").forEach(el=>{
+      const agentId = el.dataset.agent;
+      if(agents[agentId]){
+        el.innerHTML = `${agents[agentId].icon} ${agents[agentId].name}`;
+      }
+    });
+    // 更新智能体描述
+    const agentDesc = document.getElementById('agentDesc');
+    if(agentDesc && agents[state.currentAgent]){
+      agentDesc.textContent = agents[state.currentAgent].desc;
+    }
+    // 重新渲染快捷提示和消息
+    renderQuickPrompts();
+    renderMessages();
+  }catch(e){console.error('切换项目时更新AI智能体失败',e);}
 
   $("#projectMenu").classList.add("hidden");
   updatePersonalProjectCount();
@@ -5194,6 +5385,9 @@ function init(){
   loadCloudConfig();
   loadData();
   loadSettings();
+  // 恢复AI对话框内容（防止闪退/刷新后丢失）
+  restoreChatHistory();
+  restoreAiInput();
   initEvents();
   renderAll();
   renderQuickPrompts();
