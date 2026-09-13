@@ -119,8 +119,8 @@
 
   <!-- 即梦API -->
   <div class="api-card" id="jimeng">
-    <h2>🎬 即梦API（AI视频生成） <span class="api-status status-configured">已配置</span></h2>
-    <p class="api-desc">用于审美参考库中的AI视频生成功能，支持文生视频和图生视频。你已有API Key并已配置本地代理。</p>
+    <h2>🎬 即梦API（AI视频生成） <span class="api-status status-required">需本地配置</span></h2>
+    <p class="api-desc">用于审美参考库中的AI视频生成功能，支持文生视频和图生视频。凭据通过环境变量传给本地代理，不保存在代码库中。</p>
 
     <h3 style="font-size:16px;color:#e5e5e5;margin:20px 0 12px">📋 配置字段</h3>
     <div class="field">
@@ -130,19 +130,19 @@
     </div>
     <div class="field">
       <label>Access Key ID（AK）</label>
-      <div class="value">AKLTOGY0ODAwYWI4MGZiNDFlZTkxMzI1OTVhY2MwZWQxZDM</div>
-      <div class="hint">已内置在代理脚本中，无需重复填写</div>
+      <div class="value">在火山引擎控制台获取，通过 VOLC_ACCESS_KEY_ID 传入</div>
+      <div class="hint">请勿写入HTML、Python脚本、文档或Git提交</div>
     </div>
     <div class="field">
       <label>Secret Access Key（SK）</label>
-      <div class="value">TldFMU16TXdaV0ZpTmpZMk5HTTJaRGcyWTJJd01URTBZbUV4TWpRMVpqVQ==</div>
-      <div class="hint">已内置在代理脚本中，无需重复填写</div>
+      <div class="value">在火山引擎控制台获取，通过 VOLC_SECRET_ACCESS_KEY 传入</div>
+      <div class="hint">不要与任何人分享，发现泄露后应立即轮换</div>
     </div>
 
     <h3 style="font-size:16px;color:#e5e5e5;margin:20px 0 12px">🚀 使用步骤</h3>
     <div class="step">
       <h4>启动本地代理服务器</h4>
-      <p>在终端中运行：<code>cd /Users/lancelai/Doubao/chats/2026-09-12/new-chat/xuan-ti-ku && python3 jimeng_proxy.py</code></p>
+      <p>进入仓库目录，先设置两个凭据环境变量，再运行 <code>python3 jimeng_proxy.py</code>。完整命令见下方“本地代理服务器配置”。</p>
     </div>
     <div class="step">
       <h4>确认代理运行</h4>
@@ -186,9 +186,9 @@ Pro版：jimeng_ti2v_v30_pro（更高质量）
       <div class="hint">创建项目后在项目设置中获取</div>
     </div>
     <div class="field">
-      <label>Supabase anon public key</label>
-      <div class="value">eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...</div>
-      <div class="hint">公开密钥，可以安全放在前端</div>
+      <label>Supabase publishable key</label>
+      <div class="value">sb_publishable_...</div>
+      <div class="hint">只使用publishable key（或旧版anon public key）；绝不要使用service_role secret key</div>
     </div>
 
     <h3 style="font-size:16px;color:#e5e5e5;margin:20px 0 12px">🔑 获取步骤</h3>
@@ -201,8 +201,8 @@ Pro版：jimeng_ti2v_v30_pro（更高质量）
       <p>点击"New Project" → 填写项目名称 → 设置数据库密码 → 选择区域（推荐新加坡/东京，离中国近）→ 创建。</p>
     </div>
     <div class="step">
-      <h4>获取Project URL和anon key</h4>
-      <p>项目创建完成后 → 进入Project Settings → API → 复制Project URL和anon public key。</p>
+      <h4>获取Project URL和publishable key</h4>
+      <p>项目创建完成后 → 进入Project Settings → API → 复制Project URL和publishable key（旧项目可能显示anon public key）。不要复制service_role secret key。</p>
     </div>
     <div class="step">
       <h4>创建数据表</h4>
@@ -239,7 +239,7 @@ CREATE POLICY "Allow all" ON visuals FOR ALL USING (true) WITH CHECK (true);</pr
 
     <div class="step">
       <h4>在系统中配置</h4>
-      <p>打开Lance智能裤 → 设置 → 云端同步 → 填入Project URL和anon key → 勾选"启用云端同步" → 保存。</p>
+      <p>打开Lance智能裤 → 设置 → 云端同步 → 填入Project URL和publishable key → 勾选"启用云端同步" → 保存。</p>
     </div>
 
     <div class="tip">
@@ -249,13 +249,13 @@ CREATE POLICY "Allow all" ON visuals FOR ALL USING (true) WITH CHECK (true);</pr
 
   <!-- 本地代理 -->
   <div class="api-card" id="proxy">
-    <h2>🖥️ 本地代理服务器配置 <span class="api-status status-configured">已配置</span></h2>
-    <p class="api-desc">用于转发即梦API请求，解决浏览器CORS限制。代理脚本已创建并内置AK/SK。</p>
+    <h2>🖥️ 本地代理服务器配置 <span class="api-status status-required">需启动</span></h2>
+    <p class="api-desc">用于转发即梦API请求，解决浏览器CORS限制。代理只监听本机，AK/SK从环境变量读取。</p>
 
     <h3 style="font-size:16px;color:#e5e5e5;margin:20px 0 12px">📁 文件位置</h3>
     <div class="field">
       <label>代理脚本路径</label>
-      <div class="value">/Users/lancelai/Doubao/chats/2026-09-12/new-chat/xuan-ti-ku/jimeng_proxy.py</div>
+      <div class="value">JINHUA/jimeng_proxy.py</div>
     </div>
     <div class="field">
       <label>监听端口</label>
@@ -264,7 +264,10 @@ CREATE POLICY "Allow all" ON visuals FOR ALL USING (true) WITH CHECK (true);</pr
 
     <h3 style="font-size:16px;color:#e5e5e5;margin:20px 0 12px">🚀 启动命令</h3>
     <div class="code-block">
-      <pre>cd /Users/lancelai/Doubao/chats/2026-09-12/new-chat/xuan-ti-ku
+      <pre>cd /path/to/JINHUA
+export VOLC_ACCESS_KEY_ID='your-access-key-id'
+export VOLC_SECRET_ACCESS_KEY='your-secret-access-key'
+export JIMENG_ALLOWED_ORIGINS='https://laijinghua624624-dotcom.github.io'
 python3 jimeng_proxy.py</pre>
     </div>
 
@@ -298,7 +301,7 @@ Body: {"task_id":"任务ID"}
     <p style="font-size:14px;color:#999;margin-bottom:20px">A：系统采用"云端优先"策略，启用同步后会先从云端拉取数据，如果云端没有数据则上传本地数据。建议先在一台设备上配置好同步，确认数据上传成功后，再在其他设备上启用同步。</p>
 
     <h3 style="font-size:16px;color:#e5e5e5;margin:20px 0 10px">Q4：API Key安全吗？会上传到服务器吗？</h3>
-    <p style="font-size:14px;color:#999;margin-bottom:20px">A：API Key仅保存在你本地浏览器的localStorage中，不会上传到任何第三方服务器。即梦API的AK/SK内置在本地代理脚本中，也只在你电脑上运行。</p>
+    <p style="font-size:14px;color:#999;margin-bottom:20px">A：豆包API Key默认保存在本地浏览器中；只有主动启用配置云同步时才会加密上传到你的Supabase。即梦AK/SK仅从本机环境变量读取，备份文件也不包含API密钥。</p>
 
     <h3 style="font-size:16px;color:#e5e5e5;margin:20px 0 10px">Q5：换电脑了怎么迁移数据？</h3>
     <p style="font-size:14px;color:#999;margin-bottom:20px">A：有两种方式：① 使用"导出"功能把数据导出为JSON文件，在新电脑上"导入"；② 配置Supabase云端同步，新电脑上启用同步后自动拉取数据。</p>

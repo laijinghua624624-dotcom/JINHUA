@@ -300,7 +300,7 @@
     </div>
     <div class="step">
       <span class="step-num">→</span><h4>AI视频生成</h4>
-      <p>点击"AI生成视频"按钮，输入画面描述，调用即梦API生成5-10秒视频，自动保存到审美参考库。需要本地代理运行（<code>python3 jimeng_proxy.py</code>）。</p>
+      <p>点击"AI生成视频"按钮，输入画面描述，调用即梦API生成5-10秒视频，自动保存到审美参考库。运行本地代理前，需先设置 <code>VOLC_ACCESS_KEY_ID</code> 和 <code>VOLC_SECRET_ACCESS_KEY</code> 环境变量。</p>
     </div>
 
     <h3>5.3 专场策划案</h3>
@@ -366,7 +366,7 @@
     </div>
     <div class="step">
       <span class="step-num">3</span><h4>配置即梦AI视频</h4>
-      <p>在"AI视频生成（即梦API·火山引擎）"部分，填写代理地址（默认 <code>http://localhost:8765</code>），点击"测试连接"确认可用。</p>
+      <p>先按API指南通过环境变量启动即梦本地代理，然后在"AI视频生成"部分填写代理地址（默认 <code>http://localhost:8765</code>）。</p>
     </div>
 
     <h3>6.2 上传附件给AI</h3>
@@ -404,11 +404,11 @@
     </div>
     <div class="step">
       <span class="step-num">2</span><h4>导出/导入备份</h4>
-      <p>点击"导出"按钮，把所有数据导出为JSON文件。在另一台设备上点击"导入"，恢复数据。适合定期备份。</p>
+      <p>点击"导出"按钮，把当前项目数据导出为JSON文件。备份不包含API密钥；在另一台设备上导入后，需重新填写密钥。</p>
     </div>
     <div class="step">
       <span class="step-num">3</span><h4>云端同步（Supabase）</h4>
-      <p>在设置中配置Supabase项目URL和anon public key，启用后选题、视图和视觉参考数据会自动同步到云端数据库。iPhone/iPad/Mac打开同一个网址即可看到相同数据，免费注册Supabase即可使用。</p>
+      <p>在设置中配置你自己的Supabase项目URL和publishable key，并先为 <code>app_data</code> 表设置RLS策略。不要在前端填写service_role secret key。启用后，选题等数据按项目隔离同步，审美参考库仍在所有项目之间共用。</p>
     </div>
 
     <h3>7.4 部署方式</h3>

@@ -1,2 +1,9 @@
+.DS_Store
+.env
+__pycache__/
+*.py[cod]
 通宵修复报告.md
 shot_*.jpg
+node_modules/
+.lance-data/
+test-output/
