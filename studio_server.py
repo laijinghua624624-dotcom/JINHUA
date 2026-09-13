@@ -20,6 +20,8 @@ import urllib.error
 import urllib.parse
 import urllib.request
 import uuid
+import zipfile
+import xml.etree.ElementTree as ET
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 ROOT = Path(__file__).resolve().parent
@@ -39,8 +41,18 @@ def load_env():
             if match:
                 os.environ.setdefault(match[1], match[2].strip().strip('\"\''))
 
+def server_binding():
+    host=os.environ.get('LANCE_BIND_HOST','127.0.0.1')
+    origin=os.environ.get('LANCE_PUBLIC_ORIGIN','').rstrip('/')
+    parsed=urllib.parse.urlparse(origin)
+    if origin and (parsed.scheme!='https' or not parsed.hostname or parsed.username or parsed.password or parsed.path or parsed.query or parsed.fragment):
+        raise ValueError('LANCE_PUBLIC_ORIGIN 必须为不含路径的 HTTPS 来源地址')
+    if host not in {'127.0.0.1','localhost','::1'} and (not origin or os.environ.get('LANCE_BEHIND_AUTH_PROXY')!='1'):
+        raise ValueError('非本机监听必须配置 HTTPS 来源及带认证的反向代理；不可直接开放端口')
+    return host,int(os.environ.get('LANCE_PORT',8000))
+
 def media_path(name):
-    if not re.fullmatch(r'[a-f0-9]{32}\.(?:mp4|mov|webm|jpg|jpeg|png|webp|pdf|mp3|wav|m4a)', name or ''):
+    if not re.fullmatch(r'[a-f0-9]{32}\.(?:mp4|mov|webm|jpg|jpeg|png|webp|pdf|mp3|wav|m4a|docx|txt|md)', name or ''):
         raise ValueError('媒体标识无效')
     path = MEDIA / name
     if not path.is_file():
@@ -57,6 +69,14 @@ def ffprobe(path):
 
 def describe(path, source='upload'):
     ext = path.suffix.lower()
+    if ext in {'.txt','.md'}:
+        if path.stat().st_size>1024*1024:raise ValueError('文字资料最多1MB')
+        path.read_text(encoding='utf-8-sig')
+        return dict(localId=path.name,kind='text',verified=True,source=source)
+    if ext=='.docx':
+        with zipfile.ZipFile(path) as archive:
+            if 'word/document.xml' not in archive.namelist():raise ValueError('无效DOCX文档')
+        return dict(localId=path.name,kind='document',verified=True,source=source)
     if ext == '.pdf':
         if not path.read_bytes().startswith(b'%PDF-'):
             raise ValueError('无效的PDF文件')
@@ -73,6 +93,25 @@ def describe(path, source='upload'):
     if kind != 'image' and duration <= 0:
         raise ValueError('无法读取素材时长')
     return dict(localId=path.name,kind=kind,verified=True,source=source,duration=duration,width=(video or {}).get('width',0),height=(video or {}).get('height',0),hasAudio=any(s.get('codec_type')=='audio' for s in probe.get('streams',[])))
+
+def document_text(name):
+    path=media_path(name);ext=path.suffix.lower()
+    if ext in {'.txt','.md'}:text=path.read_text(encoding='utf-8-sig')
+    elif ext=='.docx':
+        with zipfile.ZipFile(path) as archive:
+            info=archive.getinfo('word/document.xml')
+            if info.file_size>10*1024*1024:raise ValueError('DOCX正文超过10MB，请拆分资料')
+            root=ET.fromstring(archive.read(info))
+        ns='{http://schemas.openxmlformats.org/wordprocessingml/2006/main}'
+        text='\n'.join(''.join(p.itertext()) for p in root.iter(ns+'p'))
+    elif ext=='.pdf':
+        if not shutil.which('pdftotext'):raise ValueError('本机缺少pdftotext，原文件已归档；请安装后重试或上传TXT/DOCX')
+        result=subprocess.run(['pdftotext','-f','1','-l','100','-layout',str(path),'-'],capture_output=True,timeout=60)
+        if result.returncode:raise ValueError('PDF无法提取文字，可能加密或损坏，请上传可读文件')
+        text=result.stdout.decode('utf-8','replace')
+    else:raise ValueError('此文件只归档；支持TXT、Markdown、DOCX和文本PDF提取')
+    if not text.strip():raise ValueError('未提取到文字；扫描件需要另行OCR或手动填写')
+    return {'text':text.strip()[:60000],'notice':'最多前100页/60000字，请核对是否完整' if ext=='.pdf' or len(text)>60000 else ''}
 
 def data_url(name):
     path=media_path(name)
@@ -195,6 +234,10 @@ class Handler(BaseHTTPRequestHandler):
         origin=self.headers.get('Origin')
         permitted={f'http://127.0.0.1:{self.server.server_port}',f'http://localhost:{self.server.server_port}'}
         permitted.update(filter(None,os.environ.get('LANCE_ALLOWED_ORIGINS','').split(',')))
+        public_origin=os.environ.get('LANCE_PUBLIC_ORIGIN','').rstrip('/')
+        if public_origin:
+            # Public deployment is same-origin behind an authenticated proxy.
+            permitted={public_origin}
         return host in {f'127.0.0.1:{self.server.server_port}',f'localhost:{self.server.server_port}'} and (not origin or origin in permitted)
 
     def send_json(self,value,status=200):
@@ -213,12 +256,16 @@ class Handler(BaseHTTPRequestHandler):
         path=urllib.parse.unquote(urllib.parse.urlparse(self.path).path)
         try:
             if path=='/api/health': return self.send_json({'ok':True,'keyConfigured':bool(os.environ.get('ARK_API_KEY')),'models':{k:os.environ.get('ARK_'+k.upper()+'_MODEL','') for k in ('text','image','video')},'ffmpeg':bool(shutil.which('ffmpeg') and shutil.which('ffprobe'))})
+            if path=='/api/profile-seed':
+                seed=DATA/'profile-seed.json'
+                selected_scope=urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query).get('scope',[''])[0]
+                return self.send_json({'fields':json.loads(seed.read_text()).get(selected_scope,{}) if seed.is_file() and selected_scope in ('personal','xinxuan') else {}})
             if path.startswith('/api/jobs/'):
                 return self.send_json(JOBS.get(path.split('/')[-1],{'status':'failed','error':'任务不存在或服务已重启，请重试'}))
             if path.startswith('/media/'): target=media_path(path[7:])
             else:
                 name='index.html' if path=='/' else path.lstrip('/')
-                if name not in {'index.html','legacy.html','studio.js','studio.css','studio-core.js','studio-ppt.js','vendor/presentation.js','lance_qrcode_public.png','lance_qrcode.png','lance_intro.mp4','api-guide.html','tutorial.html'}:
+                if name not in {'index.html','legacy.html','studio.js','studio.css','studio-core.js','studio-reverse.js','studio-aesthetic.js','studio-aesthetic-ui.js','studio-aesthetic.css','studio-profile.js','studio-inspiration.js','studio-ppt.js','vendor/presentation.js','lance_qrcode_public.png','lance_qrcode.png','lance_intro.mp4','api-guide.html','tutorial.html'}:
                     return self.send_json({'error':'文件不存在'},404)
                 target=ROOT/name
             if not target.is_file(): return self.send_json({'error':'文件不存在'},404)
@@ -252,7 +299,7 @@ class Handler(BaseHTTPRequestHandler):
             if self.path=='/api/upload':
                 name=urllib.parse.unquote(self.headers.get('X-File-Name',''))
                 ext=Path(name).suffix.lower()
-                if ext not in {'.mp4','.mov','.webm','.jpg','.jpeg','.png','.webp','.pdf','.mp3','.wav','.m4a'}:raise ValueError('支持图片、PDF、MP4/MOV/WebM视频和MP3/WAV音频')
+                if ext not in {'.mp4','.mov','.webm','.jpg','.jpeg','.png','.webp','.pdf','.mp3','.wav','.m4a','.docx','.txt','.md'}:raise ValueError('支持图片、PDF/DOCX/TXT/MD、MP4/MOV/WebM视频和音频')
                 target=MEDIA/(uuid.uuid4().hex+ext)
                 target.write_bytes(self.rfile.read(length))
                 meta=describe(target)
@@ -266,7 +313,10 @@ class Handler(BaseHTTPRequestHandler):
             if length>20*1024*1024:raise ValueError('生成请求超过20MB')
             body=json.loads(self.rfile.read(length))
             if not isinstance(body,dict):raise ValueError('请求格式错误')
-            token=self.headers.get('Authorization','').removeprefix('Bearer ').strip() or os.environ.get('ARK_API_KEY','')
+            if self.path=='/api/document/text':return self.send_json(document_text(body.get('localId')))
+            authorization=self.headers.get('Authorization','')
+            token=authorization[7:].strip() if authorization.startswith('Bearer ') else ''
+            token=token or os.environ.get('ARK_API_KEY','')
             if self.path=='/api/chat':
                 model=body.get('model') or os.environ.get('ARK_TEXT_MODEL')
                 if not model:raise ValueError('请填写支持图片理解的文本模型ID')
@@ -320,7 +370,7 @@ class Handler(BaseHTTPRequestHandler):
 
 if __name__=='__main__':
     load_env();MEDIA.mkdir(parents=True,exist_ok=True)
-    port=int(os.environ.get('LANCE_PORT',8000))
+    host,port=server_binding()
     print(f'Lance内容工作台：http://127.0.0.1:{port}')
     print('文本、图片和视频模型未配置时仍可编辑和保存，生成会明确报错。')
-    ThreadingHTTPServer(('127.0.0.1',port),Handler).serve_forever()
+    ThreadingHTTPServer((host,port),Handler).serve_forever()

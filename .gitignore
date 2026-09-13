@@ -1,5 +1,6 @@
 .DS_Store
 .env
+deploy.env
 __pycache__/
 *.py[cod]
 通宵修复报告.md

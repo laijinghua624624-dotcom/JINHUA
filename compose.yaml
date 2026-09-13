@@ -1,0 +1,37 @@
+name: lance-studio
+services:
+  studio:
+    build: .
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      LANCE_PUBLIC_ORIGIN: https://${LANCE_DOMAIN:?Set LANCE_DOMAIN in deploy.env}
+    volumes:
+      - studio_data:/data
+    # No host port: every public request must pass Caddy authentication.
+    security_opt:
+      - no-new-privileges:true
+    cap_drop: [ALL]
+    read_only: true
+    tmpfs:
+      - /tmp:size=2G,mode=1777
+    mem_limit: 4g
+    cpus: 2
+  gateway:
+    image: caddy:2.11-alpine
+    restart: unless-stopped
+    environment:
+      LANCE_DOMAIN: ${LANCE_DOMAIN:?Set LANCE_DOMAIN in deploy.env}
+      LANCE_PASSWORD_HASH: ${LANCE_PASSWORD_HASH:?Set a bcrypt hash in deploy.env}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./deployment/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on: [studio]
+volumes:
+  studio_data:
+  caddy_data:
+  caddy_config:
