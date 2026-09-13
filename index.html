@@ -2978,17 +2978,21 @@ function renderPlanReport(plan){
           ['08','摄影调性',r.cinematography],
           ['09','配乐参考',r.music],
           ['10','服饰搭配',r.costume],
-          ['11','AI视频参考',r.aiVideos?(r.aiVideos.length+'段'):'未生成'],
-          ['12','选题矩阵',(plan.topicIds||[]).length+'条选题'],
-          ['13','分镜总览',(state.topics.filter(t=>plan.topicIds.includes(t.id)).reduce((sum,t)=>sum+(t.storyboard||[]).length,0))+'个镜头']
+          ['11','AI视频参考',Array.isArray(r.aiVideos)?r.aiVideos.map((v,i)=>`${i+1}. ${typeof v==='string'?v:v.desc||''}`).join('<br>'):r.aiVideos||''],
+          ['12','选题矩阵',r.topicMatrix||`共${(plan.topicIds||[]).length}条选题`],
+          ['13','分镜总览',r.storyboardOverview||`共${state.topics.filter(t=>plan.topicIds.includes(t.id)).reduce((sum,t)=>sum+(t.storyboard||[]).length,0)}个镜头`]
         ].map(([num,title,content])=>`
           <div style="padding:12px;background:var(--bg-input);border-radius:8px">
             <div style="font-size:11px;color:var(--accent);font-weight:700;margin-bottom:4px">${num}</div>
             <div style="font-size:13px;font-weight:600;margin-bottom:6px">${title}</div>
-            <div style="font-size:12px;color:var(--text-secondary);line-height:1.6">${content?escapeHtml(content.substring(0,100))+(content.length>100?'...':''):'<span style="color:var(--text-muted)">待补充</span>'}</div>
+            <div style="font-size:12px;color:var(--text-secondary);line-height:1.6">${content?escapeHtml(String(content).substring(0,150))+(String(content).length>150?'...':''):'<span style="color:var(--text-muted)">待补充</span>'}</div>
           </div>
         `).join('')}
       </div>
+      ${r.rawText?`<div style="margin-top:16px;padding:12px;background:var(--bg-input);border-radius:8px">
+        <div style="font-size:12px;font-weight:600;margin-bottom:8px;color:var(--text-muted)">📝 AI原始输出（点击展开）</div>
+        <details style="font-size:11px;color:var(--text-secondary);line-height:1.8;white-space:pre-wrap;max-height:300px;overflow-y:auto">${escapeHtml(r.rawText)}</details>
+      </div>`:''}
     </div>
   `;
 }
@@ -3100,42 +3104,183 @@ function markPlanReported(){
 }
 
 // 生成项目整体汇报（占位，后续完善）
-function generatePlanReport(planId){
+async function generatePlanReport(planId){
   const plan = state.projectPlans.find(p=>p.id===(planId||state.currentPlanId));
   if(!plan){toast('项目不存在','error');return;}
   
-  toast('正在生成整体汇报...（功能开发中）','info');
+  const settings = loadSettings();
+  if(!settings.apiKey){
+    toast('请先在设置中配置豆包API Key','error');
+    return;
+  }
   
-  // 临时：生成基础汇报结构
-  plan.report = {
-    outline: plan.shootTheme || plan.title,
-    description: plan.description || '',
-    meaning: '',
-    narration: '',
-    artDesign: '',
-    props: '',
-    visualAtmosphere: '',
-    cinematography: '',
-    music: '',
-    costume: '',
-    aiVideos: [],
-    generatedAt: new Date().toISOString()
-  };
-  plan.reportGenerated = true;
-  plan.updatedAt = new Date().toISOString();
-  plan.history = plan.history || [];
-  plan.history.push({time:new Date().toISOString(), action:'生成整体汇报'});
+  toast('AI正在生成13章节整体汇报...','info');
   
-  saveData();
-  renderPlanReport(plan);
-  renderPlanStatusBar(plan);
-  renderPlanList();
-  toast('整体汇报生成成功！','success');
+  try{
+    // 收集项目下所有选题的信息
+    const topics = state.topics.filter(t=>plan.topicIds.includes(t.id));
+    const topicsInfo = topics.map(t=>`- ${t.title}（${t.type||'未分类'}，${(t.storyboard||[]).length}个分镜）：${t.hook||t.script||''}`).join('\n');
+    
+    const systemPrompt = `你是资深内容策划总监，专门为直播专场设计完整的预热内容汇报方案。请根据项目信息，生成13个章节的完整汇报内容。
+
+13个章节：
+01 创意大纲 - 整体创意的核心概念和故事线
+02 创意描述 - 详细描述创意内容和执行方式
+03 创意寓意 - 创意背后的深层含义和情感价值
+04 旁白台词 - 视频中的旁白和台词文案
+05 美术制景 - 场景美术设计和制景要求
+06 道具参考 - 需要的道具清单和参考方向
+07 影像氛围 - 整体影像风格和氛围营造
+08 摄影调性 - 摄影风格、镜头语言、光影设计
+09 配乐参考 - 音乐风格、节奏、情绪参考
+10 服饰搭配 - 人物服装造型和搭配建议
+11 AI视频参考 - 建议生成的AI参考视频片段描述
+12 选题矩阵 - 所有选题的整体规划和排期
+13 分镜总览 - 所有分镜的整体统计和关键镜头
+
+输出要求：
+- 每个章节内容要具体、可执行，不要空泛
+- 结合直播预热的造势型风格，要有气势、有张力
+- 输出JSON格式，key为章节英文标识（outline,description,meaning,narration,artDesign,props,visualAtmosphere,cinematography,music,costume,aiVideos,topicMatrix,storyboardOverview）`;
+    
+    const baseUrl=settings.proxy||settings.baseUrl;
+    const url=baseUrl.replace(/\/+$/,"")+"/chat/completions";
+    const resp=await fetch(url,{
+      method:"POST",
+      headers:{"Content-Type":"application/json","Authorization":"Bearer "+settings.apiKey},
+      body:JSON.stringify({
+        model:settings.model||"doubao-seed-evolving",
+        messages:[
+          {role:"system",content:systemPrompt},
+          {role:"user",content:`项目名称：${plan.title}
+拍摄主题：${plan.shootTheme||'未设定'}
+拍摄场地：${plan.shootLocation||'未设定'}
+直播日期：${plan.liveDate||'未设定'}
+项目描述：${plan.description||''}
+
+项目下的选题：
+${topicsInfo||'（暂无选题）'}`}
+        ],
+        temperature:0.7,
+        max_tokens:4000
+      })
+    });
+    
+    if(resp.ok){
+      const data=await resp.json();
+      const reply=data.choices?.[0]?.message?.content||"";
+      
+      // 尝试解析JSON
+      let reportData = {};
+      try{
+        const jsonMatch = reply.match(/\{[\s\S]*\}/);
+        if(jsonMatch){
+          reportData = JSON.parse(jsonMatch[0]);
+        }
+      }catch(e){
+        console.error("解析AI返回JSON失败，使用原始文本",e);
+      }
+      
+      // 生成汇报数据
+      plan.report = {
+        outline: reportData.outline || plan.shootTheme || plan.title,
+        description: reportData.description || plan.description || '',
+        meaning: reportData.meaning || '',
+        narration: reportData.narration || '',
+        artDesign: reportData.artDesign || '',
+        props: reportData.props || '',
+        visualAtmosphere: reportData.visualAtmosphere || '',
+        cinematography: reportData.cinematography || '',
+        music: reportData.music || '',
+        costume: reportData.costume || '',
+        aiVideos: reportData.aiVideos || [],
+        topicMatrix: reportData.topicMatrix || '',
+        storyboardOverview: reportData.storyboardOverview || '',
+        rawText: reply,
+        generatedAt: new Date().toISOString()
+      };
+      plan.reportGenerated = true;
+      plan.updatedAt = new Date().toISOString();
+      plan.history = plan.history || [];
+      plan.history.push({time:new Date().toISOString(), action:'AI生成13章节整体汇报'});
+      
+      saveData();
+      renderPlanReport(plan);
+      renderPlanStatusBar(plan);
+      renderPlanList();
+      toast('13章节整体汇报生成成功！','success');
+    }else{
+      const errText = await resp.text();
+      console.error("API请求失败:",resp.status,errText);
+      toast('API请求失败：'+resp.status,'error');
+    }
+  }catch(e){
+    console.error("整体汇报生成失败:",e);
+    toast('生成失败：'+e.message,'error');
+  }
 }
 
-// 导出项目汇报（占位）
+// 导出项目汇报
 function exportPlanReport(planId){
-  toast('导出PPT功能开发中...','info');
+  const plan = state.projectPlans.find(p=>p.id===(planId||state.currentPlanId));
+  if(!plan || !plan.report){toast('请先生成整体汇报','error');return;}
+  
+  // 生成Markdown格式的汇报文档
+  const r = plan.report;
+  const md = `# ${plan.title} - 整体汇报方案
+
+## 01 创意大纲
+${r.outline||''}
+
+## 02 创意描述
+${r.description||''}
+
+## 03 创意寓意
+${r.meaning||''}
+
+## 04 旁白台词
+${r.narration||''}
+
+## 05 美术制景
+${r.artDesign||''}
+
+## 06 道具参考
+${r.props||''}
+
+## 07 影像氛围
+${r.visualAtmosphere||''}
+
+## 08 摄影调性
+${r.cinematography||''}
+
+## 09 配乐参考
+${r.music||''}
+
+## 10 服饰搭配
+${r.costume||''}
+
+## 11 AI视频参考
+${Array.isArray(r.aiVideos)?r.aiVideos.map((v,i)=>`${i+1}. ${v}`).join('\n'):r.aiVideos||''}
+
+## 12 选题矩阵
+${r.topicMatrix||''}
+
+## 13 分镜总览
+${r.storyboardOverview||''}
+
+---
+*生成时间：${new Date(r.generatedAt).toLocaleString()}*
+`;
+  
+  // 下载文件
+  const blob = new Blob([md], {type:'text/markdown;charset=utf-8'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `${plan.title}_整体汇报方案.md`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+  
+  toast('汇报文档已导出！','success');
 }
 
 // 打开添加已有选题到项目的模态框（占位）
