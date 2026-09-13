@@ -2281,9 +2281,43 @@ function persistSettings(){
 function loadSettings(){
   try{
     const raw=localStorage.getItem(SETTINGS_KEY);
-    if(raw){state.apiSettings=JSON.parse(raw);}
-  }catch(e){}
+    if(raw){
+      const parsed=JSON.parse(raw);
+      state.apiSettings={...state.apiSettings,...parsed};
+      console.log("API设置加载成功:",{hasKey:!!state.apiSettings.apiKey,model:state.apiSettings.model});
+    }else{
+      console.log("API设置为空（首次使用或未保存）");
+    }
+  }catch(e){
+    console.error("加载API设置失败:",e);
+  }
   return state.apiSettings || {};
+}
+function loadCloudConfig(){
+  try{
+    const raw=localStorage.getItem(CLOUD_KEY);
+    if(raw){
+      const parsed=JSON.parse(raw);
+      cloudConfig={...cloudConfig,...parsed};
+      console.log("云端配置加载成功:",{enabled:cloudConfig.enabled,hasUrl:!!cloudConfig.url,directMode:cloudConfig.jimengDirectMode,hasAK:!!cloudConfig.jimengAK});
+    }else{
+      console.log("云端配置为空（首次使用或未保存）");
+    }
+  }catch(e){
+    console.error("加载云端配置失败:",e);
+  }
+}
+// 检测localStorage是否可用
+function checkLocalStorage(){
+  try{
+    const testKey="__lance_test__";
+    localStorage.setItem(testKey,"1");
+    localStorage.removeItem(testKey);
+    return true;
+  }catch(e){
+    console.error("localStorage不可用:",e);
+    return false;
+  }
 }
 
 // ========== 示例数据 ==========
@@ -4717,34 +4751,57 @@ function openSettings(){
   $("#settingsModal").classList.remove("hidden");
 }
 function saveSettings(){
-  state.apiSettings={
-    baseUrl:$("#apiBase").value.trim()||"https://ark.cn-beijing.volces.com/api/v3",
-    apiKey:$("#apiKey").value.trim(),
-    model:$("#apiModel").value.trim(),
-    proxy:$("#apiProxy").value.trim()
-  };
-  localStorage.setItem(SETTINGS_KEY, JSON.stringify(state.apiSettings));
-  // 保存云端配置
-  const wasEnabled=cloudConfig.enabled;
-  cloudConfig.enabled=$("#cloudEnabled").checked;
-  cloudConfig.url=$("#cloudUrl").value.trim();
-  cloudConfig.key=$("#cloudKey").value.trim();
-  saveCloudConfig();
-  if(cloudConfig.enabled&&cloudConfig.url&&cloudConfig.key&&window.supabase){
-    try{supabaseClient=window.supabase.createClient(cloudConfig.url,cloudConfig.key);}catch(e){console.error(e);}
-    if(!wasEnabled){syncFromCloud();}
-  }else{
-    supabaseClient=null;
+  try{
+    // 1. 先保存豆包API配置
+    state.apiSettings={
+      baseUrl:$("#apiBase").value.trim()||"https://ark.cn-beijing.volces.com/api/v3",
+      apiKey:$("#apiKey").value.trim(),
+      model:$("#apiModel").value.trim(),
+      proxy:$("#apiProxy").value.trim()
+    };
+    try{localStorage.setItem(SETTINGS_KEY, JSON.stringify(state.apiSettings));}catch(e){console.error("保存API设置失败:",e);}
+    
+    // 2. 保存云端配置和即梦API配置（先更新内存，再统一保存）
+    const wasEnabled=cloudConfig.enabled;
+    cloudConfig.enabled=$("#cloudEnabled").checked;
+    cloudConfig.url=$("#cloudUrl").value.trim();
+    cloudConfig.key=$("#cloudKey").value.trim();
+    cloudConfig.jimengProxy=$("#jimengProxy").value.trim()||"http://localhost:8765";
+    cloudConfig.jimengDirectMode=$("#jimengDirectMode").checked;
+    cloudConfig.jimengAK=$("#jimengAK").value.trim();
+    cloudConfig.jimengSK=$("#jimengSK").value.trim();
+    try{saveCloudConfig();}catch(e){console.error("保存云端配置失败:",e);}
+    
+    // 3. 初始化Supabase客户端（即使失败也不影响配置保存）
+    try{
+      if(cloudConfig.enabled&&cloudConfig.url&&cloudConfig.key&&window.supabase){
+        supabaseClient=window.supabase.createClient(cloudConfig.url,cloudConfig.key);
+        if(!wasEnabled){try{syncFromCloud();}catch(e){console.error("从云端同步失败:",e);}}
+      }else{
+        supabaseClient=null;
+      }
+    }catch(e){console.error("Supabase初始化失败:",e);}
+    
+    try{updateSyncIndicator();}catch(e){}
+    
+    // 4. 验证保存是否成功
+    let saveOk=true;
+    try{
+      const verify1=localStorage.getItem(SETTINGS_KEY);
+      const verify2=localStorage.getItem(CLOUD_KEY);
+      if(!verify1||!verify2){saveOk=false;}
+    }catch(e){saveOk=false;}
+    
+    $("#settingsModal").classList.add("hidden");
+    if(saveOk){
+      toast("设置已保存","success");
+    }else{
+      toast("保存失败：浏览器可能限制了本地存储，请检查隐私设置","error");
+    }
+  }catch(e){
+    console.error("saveSettings全局错误:",e);
+    toast("保存出错："+e.message,"error");
   }
-  updateSyncIndicator();
-  // 保存即梦代理配置
-  cloudConfig.jimengProxy=$("#jimengProxy").value.trim()||"http://localhost:8765";
-  cloudConfig.jimengDirectMode=$("#jimengDirectMode").checked;
-  cloudConfig.jimengAK=$("#jimengAK").value.trim();
-  cloudConfig.jimengSK=$("#jimengSK").value.trim();
-  saveCloudConfig();
-  $("#settingsModal").classList.add("hidden");
-  toast("设置已保存","success");
 }
 async function testApi(){
   if(!$("#apiKey").value.trim()){toast("请先填写API Key","error");return;}
@@ -7730,6 +7787,12 @@ function closeModal(modalId){
 }
 
 function init(){
+  // 检测localStorage是否可用
+  if(!checkLocalStorage()){
+    setTimeout(function(){
+      toast("警告：浏览器本地存储不可用，配置将无法保存！请关闭隐私/无痕模式或更换浏览器","error");
+    },1000);
+  }
   loadCloudConfig();
   loadData();
   loadSettings();
