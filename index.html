@@ -4134,7 +4134,9 @@ function getFieldValue(t, curData, fieldName){
 // 生成选题汇报文档（完全按照PPT汇报模板，支持视觉参考和舞台参考）
 function generateReport(id){
   const t=state.topics.find(x=>x.id===id);
-  if(!t) return;
+  if(!t){toast("选题不存在","error");return;}
+  toast("正在生成汇报文档...","info");
+  try{
   migrateTopicData(t);
   const curData=getCurrentVersionData(t);
 
@@ -4406,10 +4408,33 @@ function generateReport(id){
 </body>
 </html>`;
 
-  const win=window.open("", "_blank");
-  win.document.write(reportHtml);
-  win.document.close();
-  toast("汇报文档已生成，在新窗口中打开","success");
+  // 打开汇报文档（新窗口）
+  try{
+    const blob=new Blob([reportHtml],{type:'text/html;charset=utf-8'});
+    const url=URL.createObjectURL(blob);
+    const win=window.open(url,'_blank');
+    if(!win){
+      // 弹窗被拦截，自动下载
+      const a=document.createElement('a');
+      a.href=url;
+      a.download=t.title+'_创意汇报方案.html';
+      a.click();
+      toast('弹窗被拦截，汇报文档已自动下载','success');
+    }else{
+      toast('汇报文档已在新窗口打开','success');
+    }
+    // 标记已生成汇报
+    t.hasReport=true;
+    t.reportGenerated=true;
+    saveData();
+  }catch(e){
+    console.error('打开汇报文档失败:',e);
+    toast('打开失败：'+e.message,'error');
+  }
+  }catch(e){
+    console.error('生成汇报文档失败:',e);
+    toast('生成失败：'+e.message,'error');
+  }
 }
 
 // ========== 版本管理系统 ==========
