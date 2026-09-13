@@ -1864,6 +1864,21 @@ input,textarea,select{font-family:inherit;outline:none;border:none;background:no
         <strong>直接调用模式：</strong>填写AK/SK，通过CORS代理直接调用，手机/iPad/Mac都可用
       </div>
       <div style="height:1px;background:var(--border);margin:20px 0"></div>
+      <div style="font-size:13px;font-weight:600;margin-bottom:12px;color:var(--text-primary)">🔐 配置云同步（密码锁定 · 一次设置永久生效）</div>
+      <div style="padding:12px;background:rgba(196,169,107,0.08);border:1px solid rgba(196,169,107,0.3);border-radius:8px;margin-bottom:12px">
+        <div style="font-size:12px;color:var(--text-secondary);line-height:1.6;margin-bottom:10px">
+          设置一个配置密码，所有API配置将加密存储到云端。<strong style="color:var(--accent)">换设备只需输入密码即可自动加载所有配置</strong>，无需重复填写。
+        </div>
+        <div id="cloudConfigStatus" style="font-size:12px;color:var(--text-muted);margin-bottom:10px">正在检查云端配置...</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+          <input class="form-input" id="configPassword" type="password" placeholder="设置/输入配置密码" style="width:100%">
+          <button class="btn btn-primary" id="cloudConfigBtn" style="width:100%" onclick="handleCloudConfig()">设置密码并同步</button>
+        </div>
+        <div style="font-size:11px;color:var(--text-muted);margin-top:8px;line-height:1.5">
+          ⚠️ 请牢记密码，忘记密码无法恢复配置。配置使用AES-256加密存储，仅你本人可解密。
+        </div>
+      </div>
+      <div style="height:1px;background:var(--border);margin:20px 0"></div>
       <div style="font-size:13px;font-weight:600;margin-bottom:12px;color:var(--text-primary)">💾 数据管理（备份/恢复/换设备迁移）</div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
         <button class="btn" style="width:100%" onclick="exportData()">📤 导出完整备份</button>
@@ -2178,9 +2193,14 @@ function toast(msg, type="info"){
 
 // ========== 云端同步（Supabase） ==========
 const CLOUD_KEY="xuan_ti_ku_cloud";
-let cloudConfig={enabled:false,url:"",key:"",lastSync:null,jimengProxy:"http://localhost:8765",jimengDirectMode:false,jimengAK:"",jimengSK:""};
+// 硬编码默认Supabase配置（用户自己的项目，安全）
+const DEFAULT_SUPABASE_URL="https://wjvxhhqujkzoxglzqokr.supabase.co";
+const DEFAULT_SUPABASE_KEY="sb_publishable_OZRZaIAtsqZn1XHt3W_Cnw_jec7lzlE";
+let cloudConfig={enabled:true,url:DEFAULT_SUPABASE_URL,key:DEFAULT_SUPABASE_KEY,lastSync:null,jimengProxy:"http://localhost:8765",jimengDirectMode:false,jimengAK:"",jimengSK:""};
 let supabaseClient=null;
 let syncStatus="idle"; // idle / syncing / error
+let cloudConfigLoaded=false; // 云端配置是否已加载
+let configPassword=""; // 当前会话的配置密码（内存中，不持久化）
 
 function loadCloudConfig(){
   try{const raw=localStorage.getItem(CLOUD_KEY);if(raw)cloudConfig={...cloudConfig,...JSON.parse(raw)};}catch(e){}
@@ -2189,6 +2209,154 @@ function loadCloudConfig(){
   }
 }
 function saveCloudConfig(){localStorage.setItem(CLOUD_KEY,JSON.stringify(cloudConfig));}
+
+// ========== 配置云同步（密码锁定 · AES-256加密） ==========
+const CONFIG_CLOUD_KEY="lance_encrypted_config";
+
+// 密码派生密钥（PBKDF2）
+async function deriveKey(password, salt){
+  const enc=new TextEncoder();
+  const keyMaterial=await crypto.subtle.importKey("raw",enc.encode(password),"PBKDF2",false,["deriveKey"]);
+  return crypto.subtle.deriveKey({name:"PBKDF2",salt:salt,iterations:100000,hash:"SHA-256"},keyMaterial,{name:"AES-GCM",length:256},false,["encrypt","decrypt"]);
+}
+
+// AES-GCM加密
+async function encryptData(password, data){
+  const salt=crypto.getRandomValues(new Uint8Array(16));
+  const iv=crypto.getRandomValues(new Uint8Array(12));
+  const key=await deriveKey(password,salt);
+  const enc=new TextEncoder();
+  const encrypted=await crypto.subtle.encrypt({name:"AES-GCM",iv:iv},key,enc.encode(JSON.stringify(data)));
+  return {salt:btoa(String.fromCharCode(...salt)),iv:btoa(String.fromCharCode(...iv)),data:btoa(String.fromCharCode(...new Uint8Array(encrypted)))};
+}
+
+// AES-GCM解密
+async function decryptData(password, encrypted){
+  try{
+    const salt=Uint8Array.from(atob(encrypted.salt),c=>c.charCodeAt(0));
+    const iv=Uint8Array.from(atob(encrypted.iv),c=>c.charCodeAt(0));
+    const data=Uint8Array.from(atob(encrypted.data),c=>c.charCodeAt(0));
+    const key=await deriveKey(password,salt);
+    const decrypted=await crypto.subtle.decrypt({name:"AES-GCM",iv:iv},key,data);
+    return JSON.parse(new TextDecoder().decode(decrypted));
+  }catch(e){
+    console.error("解密失败:",e);
+    return null;
+  }
+}
+
+// 检查云端是否有配置
+async function checkCloudConfig(){
+  if(!supabaseClient){
+    updateCloudConfigStatus("云端未连接","error");
+    return false;
+  }
+  try{
+    const data=await cloudRead(CONFIG_CLOUD_KEY);
+    if(data&&data.salt&&data.iv&&data.data){
+      updateCloudConfigStatus("云端已有配置，请输入密码加载","info");
+      document.getElementById("cloudConfigBtn").textContent="输入密码加载";
+      return true;
+    }else{
+      updateCloudConfigStatus("云端暂无配置，设置密码后将自动同步","info");
+      document.getElementById("cloudConfigBtn").textContent="设置密码并同步";
+      return false;
+    }
+  }catch(e){
+    updateCloudConfigStatus("检查云端配置失败: "+e.message,"error");
+    return false;
+  }
+}
+
+// 更新配置状态显示
+function updateCloudConfigStatus(msg,type="info"){
+  const el=document.getElementById("cloudConfigStatus");
+  if(el){
+    const colors={info:"var(--text-muted)",success:"#22c55e",error:"#ef4444"};
+    el.style.color=colors[type]||colors.info;
+    el.textContent=msg;
+  }
+}
+
+// 处理配置云同步按钮
+async function handleCloudConfig(){
+  const password=document.getElementById("configPassword").value.trim();
+  if(!password){toast("请输入配置密码","error");return;}
+  if(password.length<4){toast("密码至少4位","error");return;}
+  
+  const btn=document.getElementById("cloudConfigBtn");
+  btn.disabled=true;btn.textContent="处理中...";
+  
+  try{
+    // 检查云端是否有配置
+    const hasConfig=await checkCloudConfig();
+    
+    if(hasConfig){
+      // 加载并解密配置
+      const encrypted=await cloudRead(CONFIG_CLOUD_KEY);
+      const decrypted=await decryptData(password,encrypted);
+      if(!decrypted){
+        toast("密码错误或配置已损坏","error");
+        btn.disabled=false;btn.textContent="输入密码加载";
+        return;
+      }
+      // 应用配置
+      if(decrypted.apiSettings){state.apiSettings={...state.apiSettings,...decrypted.apiSettings};localStorage.setItem(SETTINGS_KEY,JSON.stringify(state.apiSettings));}
+      if(decrypted.cloudConfig){
+        cloudConfig={...cloudConfig,...decrypted.cloudConfig};
+        cloudConfig.enabled=true;cloudConfig.url=DEFAULT_SUPABASE_URL;cloudConfig.key=DEFAULT_SUPABASE_KEY;
+        saveCloudConfig();
+      }
+      configPassword=password;
+      cloudConfigLoaded=true;
+      toast("配置加载成功！所有API配置已自动填充","success");
+      // 重新打开设置弹窗以刷新显示
+      $("#settingsModal").classList.add("hidden");
+      setTimeout(()=>openSettings(),300);
+    }else{
+      // 加密并保存配置到云端
+      const configData={
+        apiSettings:state.apiSettings,
+        cloudConfig:{...cloudConfig,url:DEFAULT_SUPABASE_URL,key:DEFAULT_SUPABASE_KEY},
+        createdAt:new Date().toISOString(),
+        version:"1.0"
+      };
+      const encrypted=await encryptData(password,configData);
+      const ok=await cloudWrite(CONFIG_CLOUD_KEY,encrypted);
+      if(ok){
+        configPassword=password;
+        cloudConfigLoaded=true;
+        toast("配置已加密同步到云端！换设备输入密码即可加载","success");
+        btn.textContent="✓ 已同步";
+      }else{
+        toast("同步失败，请检查网络","error");
+        btn.disabled=false;btn.textContent="设置密码并同步";
+      }
+    }
+  }catch(e){
+    console.error("handleCloudConfig error:",e);
+    toast("处理失败: "+e.message,"error");
+    btn.disabled=false;btn.textContent="设置密码并同步";
+  }
+}
+
+// 自动同步配置到云端（配置修改后调用）
+async function autoSyncConfig(){
+  if(!configPassword||!cloudConfigLoaded||!supabaseClient)return;
+  try{
+    const configData={
+      apiSettings:state.apiSettings,
+      cloudConfig:{...cloudConfig,url:DEFAULT_SUPABASE_URL,key:DEFAULT_SUPABASE_KEY},
+      updatedAt:new Date().toISOString(),
+      version:"1.0"
+    };
+    const encrypted=await encryptData(configPassword,configData);
+    await cloudWrite(CONFIG_CLOUD_KEY,encrypted);
+    console.log("配置已自动同步到云端");
+  }catch(e){
+    console.error("自动同步配置失败:",e);
+  }
+}
 
 async function cloudRead(key){
   if(!supabaseClient)return null;
@@ -4749,6 +4917,8 @@ function openSettings(){
   if(cloudConfig.jimengDirectMode){directConfig.style.display="block";proxyGroup.style.display="none";}
   else{directConfig.style.display="none";proxyGroup.style.display="block";}
   $("#settingsModal").classList.remove("hidden");
+  // 检查云端配置状态
+  setTimeout(()=>{checkCloudConfig();},300);
 }
 function saveSettings(){
   try{
@@ -4795,6 +4965,10 @@ function saveSettings(){
     $("#settingsModal").classList.add("hidden");
     if(saveOk){
       toast("设置已保存","success");
+      // 如果已设置配置密码，自动同步到云端
+      if(configPassword&&cloudConfigLoaded){
+        setTimeout(()=>{autoSyncConfig();},500);
+      }
     }else{
       toast("保存失败：浏览器可能限制了本地存储，请检查隐私设置","error");
     }
@@ -7794,6 +7968,10 @@ function init(){
     },1000);
   }
   loadCloudConfig();
+  // 确保Supabase客户端初始化（硬编码默认配置）
+  if(!supabaseClient&&window.supabase&&cloudConfig.url&&cloudConfig.key){
+    try{supabaseClient=window.supabase.createClient(cloudConfig.url,cloudConfig.key);console.log("Supabase客户端初始化成功");}catch(e){console.error("Supabase初始化失败:",e);}
+  }
   loadData();
   loadSettings();
   // 恢复AI对话框内容（防止闪退/刷新后丢失）
