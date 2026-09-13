@@ -2203,9 +2203,25 @@ let cloudConfigLoaded=false; // 云端配置是否已加载
 let configPassword=""; // 当前会话的配置密码（内存中，不持久化）
 
 function loadCloudConfig(){
-  try{const raw=localStorage.getItem(CLOUD_KEY);if(raw)cloudConfig={...cloudConfig,...JSON.parse(raw)};}catch(e){}
-  if(cloudConfig.enabled&&cloudConfig.url&&cloudConfig.key&&window.supabase){
-    try{supabaseClient=window.supabase.createClient(cloudConfig.url,cloudConfig.key);}catch(e){console.error("Supabase init failed",e);}
+  try{
+    const raw=localStorage.getItem(CLOUD_KEY);
+    if(raw){
+      const parsed=JSON.parse(raw);
+      cloudConfig={...cloudConfig,...parsed};
+    }
+  }catch(e){console.error("加载云端配置失败:",e);}
+  // 确保Supabase配置总是使用默认值（硬编码，用户无需手动填写）
+  cloudConfig.enabled=true;
+  cloudConfig.url=DEFAULT_SUPABASE_URL;
+  cloudConfig.key=DEFAULT_SUPABASE_KEY;
+  // 初始化Supabase客户端
+  if(window.supabase&&cloudConfig.url&&cloudConfig.key){
+    try{
+      supabaseClient=window.supabase.createClient(cloudConfig.url,cloudConfig.key);
+      console.log("Supabase客户端初始化成功:",cloudConfig.url);
+    }catch(e){console.error("Supabase初始化失败:",e);}
+  }else{
+    console.error("Supabase初始化条件不满足:",{hasSupabase:!!window.supabase,url:cloudConfig.url,key:!!cloudConfig.key});
   }
 }
 function saveCloudConfig(){localStorage.setItem(CLOUD_KEY,JSON.stringify(cloudConfig));}
@@ -2288,12 +2304,30 @@ async function handleCloudConfig(){
   btn.disabled=true;btn.textContent="处理中...";
   
   try{
+    // 确保Supabase客户端已初始化
+    if(!supabaseClient&&window.supabase){
+      try{
+        supabaseClient=window.supabase.createClient(DEFAULT_SUPABASE_URL,DEFAULT_SUPABASE_KEY);
+        console.log("handleCloudConfig中初始化Supabase成功");
+      }catch(e){console.error("handleCloudConfig中初始化Supabase失败:",e);}
+    }
+    if(!supabaseClient){
+      toast("Supabase未连接，请刷新页面重试","error");
+      btn.disabled=false;btn.textContent="设置密码并同步";
+      return;
+    }
+    
     // 检查云端是否有配置
     const hasConfig=await checkCloudConfig();
     
     if(hasConfig){
       // 加载并解密配置
       const encrypted=await cloudRead(CONFIG_CLOUD_KEY);
+      if(!encrypted){
+        toast("读取云端配置失败，请检查网络","error");
+        btn.disabled=false;btn.textContent="输入密码加载";
+        return;
+      }
       const decrypted=await decryptData(password,encrypted);
       if(!decrypted){
         toast("密码错误或配置已损坏","error");
@@ -2314,6 +2348,22 @@ async function handleCloudConfig(){
       $("#settingsModal").classList.add("hidden");
       setTimeout(()=>openSettings(),300);
     }else{
+      // 先确保本地配置已保存
+      try{
+        state.apiSettings={
+          baseUrl:$("#apiBase").value.trim()||"https://ark.cn-beijing.volces.com/api/v3",
+          apiKey:$("#apiKey").value.trim(),
+          model:$("#apiModel").value.trim(),
+          proxy:$("#apiProxy").value.trim()
+        };
+        localStorage.setItem(SETTINGS_KEY,JSON.stringify(state.apiSettings));
+        cloudConfig.jimengProxy=$("#jimengProxy").value.trim()||"http://localhost:8765";
+        cloudConfig.jimengDirectMode=$("#jimengDirectMode").checked;
+        cloudConfig.jimengAK=$("#jimengAK").value.trim();
+        cloudConfig.jimengSK=$("#jimengSK").value.trim();
+        saveCloudConfig();
+      }catch(e){console.error("保存本地配置失败:",e);}
+      
       // 加密并保存配置到云端
       const configData={
         apiSettings:state.apiSettings,
@@ -2321,6 +2371,7 @@ async function handleCloudConfig(){
         createdAt:new Date().toISOString(),
         version:"1.0"
       };
+      console.log("准备同步配置:",{hasApiKey:!!configData.apiSettings.apiKey,hasJimengAK:!!configData.cloudConfig.jimengAK});
       const encrypted=await encryptData(password,configData);
       const ok=await cloudWrite(CONFIG_CLOUD_KEY,encrypted);
       if(ok){
@@ -2329,7 +2380,7 @@ async function handleCloudConfig(){
         toast("配置已加密同步到云端！换设备输入密码即可加载","success");
         btn.textContent="✓ 已同步";
       }else{
-        toast("同步失败，请检查网络","error");
+        toast("同步失败：写入云端数据库失败，请检查网络或表结构","error");
         btn.disabled=false;btn.textContent="设置密码并同步";
       }
     }
