@@ -1,0 +1,8 @@
+(function(root,factory){if(typeof module==='object')module.exports=factory(require('./studio-core'));else root.StudioFragments=factory(root.StudioCore);})(globalThis,function(C){
+  const FIELDS=[['essence','想法的核心'],['hook','最值得保留的切入'],['usable','可以发展成什么'],['connections','可结合的元素与方式'],['questions','还需补充或核实什么']];
+  function create(rawText='',type='text'){return {id:C.uid(),title:rawText.replace(/\s+/g,' ').slice(0,28)||'语音灵感',rawText,type,tags:[],createdAt:new Date().toISOString(),audioKey:null,audioMime:'',analyses:[]};}
+  function migrate(data,old,sourceKey=''){if(!Array.isArray(old))throw Error('旧灵感格式异常，原数据保留');if(!Array.isArray(data.fragments))data.fragments=[];for(const o of old){if(!o||o.id==null||data.fragments.some(n=>n.legacyId===String(o.id)))continue;const n={...create(o.rawText||'',o.type||'text'),title:o.title||'旧版灵感',legacyId:String(o.id),legacy:C.clone(o),createdAt:o.createdAtFull||o.createdAt||new Date().toISOString(),tags:Array.isArray(o.tags)?o.tags:[]};if(/^data:audio\/[a-zA-Z0-9.+-]+(?:;codecs=[a-zA-Z0-9.-]+)?;base64,[A-Za-z0-9+/=\s]+$/.test(o.audioData||''))n.legacyAudioKey=sourceKey;delete n.legacy.audioData;data.fragments.push(n);}return data;}
+  function validate(raw){if(!C.text(raw?.title)||FIELDS.some(([k])=>!C.text(raw[k])))throw Error('AI提炼不完整，原始灵感与旧版结果已保留');return {title:raw.title,...Object.fromEntries(FIELDS.map(([k])=>[k,raw[k]])),tags:Array.isArray(raw.tags)?raw.tags.filter(C.text).slice(0,8):[]};}
+  function topicFrom(plan,notes){const t=C.topic(plan.title);t.idea=FIELDS.map(([k,label])=>label+'：'+plan[k]).join('\n');t.sourceFragments=notes.map(n=>({id:n.id,title:n.title,rawText:n.rawText,createdAt:n.createdAt}));return t;}
+  return {FIELDS,create,migrate,validate,topicFrom};
+});
