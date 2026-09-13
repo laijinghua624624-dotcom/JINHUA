@@ -301,18 +301,20 @@ input,textarea,select{font-family:inherit;outline:none;border:none;background:no
 @keyframes typing{0%,60%,100%{transform:translateY(0);opacity:.4}30%{transform:translateY(-6px);opacity:1}}
 .ai-input-area{padding:12px;border-top:1px solid var(--border)}
 .ai-input-wrap{
-  display:flex;align-items:flex-end;gap:8px;background:var(--bg-input);
-  border:1px solid var(--border);border-radius:var(--radius-sm);padding:8px 10px;
+  display:flex;align-items:flex-end;gap:6px;background:var(--bg-input);
+  border:1px solid var(--border);border-radius:var(--radius-sm);padding:8px;
   transition:border-color .2s;
+  width:100%;box-sizing:border-box;
 }
 .ai-input-wrap:focus-within{border-color:var(--accent)}
 .ai-input-wrap textarea{
   flex:1;resize:none;font-size:13px;line-height:1.5;max-height:100px;min-height:20px;
-  background:transparent;
+  background:transparent;min-width:0;
 }
 .send-btn{
-  width:32px;height:32px;border-radius:6px;display:flex;align-items:center;justify-content:center;
+  width:36px;height:36px;border-radius:8px;display:flex;align-items:center;justify-content:center;
   background:var(--accent);color:#fff;flex-shrink:0;transition:background .2s;
+  box-shadow:0 2px 8px rgba(239,68,68,0.3);
 }
 .media-btn{
   width:30px;height:30px;border-radius:6px;display:flex;align-items:center;justify-content:center;
@@ -860,10 +862,10 @@ input,textarea,select{font-family:inherit;outline:none;border:none;background:no
   .ai-messages{padding:10px;gap:8px}
   .msg{font-size:12px;padding:8px 10px}
   .ai-input-area{padding:8px}
-  .ai-input-wrap{padding:6px 8px;gap:6px}
-  .ai-input-wrap textarea{font-size:12px;max-height:80px}
-  .media-btn{padding:6px}
-  .send-btn{width:32px;height:32px}
+  .ai-input-wrap{padding:6px;gap:4px;width:100%;box-sizing:border-box}
+  .ai-input-wrap textarea{font-size:12px;max-height:80px;min-width:0}
+  .media-btn{padding:6px;width:28px;height:28px}
+  .send-btn{width:34px;height:34px;flex-shrink:0}
   .ai-hint{font-size:9px}
   .logo{width:30px;height:30px}
   .header-title{font-size:13px}
