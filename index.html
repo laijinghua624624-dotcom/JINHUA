@@ -155,6 +155,22 @@ input,textarea,select{font-family:inherit;outline:none;border:none;background:no
 
 /* 选题卡片网格 */
 .card-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:14px}
+
+/* Tab切换栏 */
+.tab-bar{display:flex;gap:4px;background:var(--bg-card);padding:6px;border-radius:10px;margin-bottom:16px;overflow-x:auto}
+.tab-item{padding:10px 18px;border-radius:8px;font-size:13px;font-weight:600;color:var(--text-muted);cursor:pointer;transition:all .2s;white-space:nowrap}
+.tab-item:hover{background:var(--bg-input);color:var(--text-primary)}
+.tab-item.active{background:linear-gradient(135deg,#6366f1,#8b5cf6);color:white}
+
+/* 表单行 */
+.form-row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+
+/* 状态徽章 */
+.status-badge{padding:4px 10px;border-radius:12px;font-size:11px;font-weight:600}
+
+/* 卡片元信息 */
+.card-meta{font-size:12px;color:var(--text-muted);line-height:1.8;margin-top:8px}
+.card-meta div{display:flex;align-items:center;gap:6px}
 .topic-card{
   background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);
   padding:16px;cursor:pointer;transition:all .2s;position:relative;overflow:hidden;
@@ -1267,6 +1283,10 @@ input,textarea,select{font-family:inherit;outline:none;border:none;background:no
   <aside class="sidebar">
     <div class="nav-section">
       <div class="nav-label">视图</div>
+      <div class="nav-item" data-view="plans">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+        项目策划<span class="count" id="navCountPlans">0</span>
+      </div>
       <div class="nav-item active" data-view="library">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
         选题库<span class="count" id="navCountAll">0</span>
@@ -1330,6 +1350,62 @@ input,textarea,select{font-family:inherit;outline:none;border:none;background:no
 
   <!-- ========== 主内容区 ========== -->
   <main class="main-content">
+    <!-- 项目策划列表视图 -->
+    <section id="view-plans" class="hidden">
+      <div class="view-header">
+        <div class="view-title">项目策划 <span id="planSubtitle">整场直播预热整体规划</span></div>
+        <div class="view-actions">
+          <button class="btn btn-primary" onclick="openNewPlanModal()">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            新建项目
+          </button>
+        </div>
+      </div>
+      <div class="card-grid" id="planCardGrid"></div>
+      <div class="empty-state hidden" id="planEmptyState">
+        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+        <p>还没有项目策划</p>
+        <p class="sub">点击"新建项目"创建你的第一个整场直播预热规划</p>
+      </div>
+    </section>
+
+    <!-- 项目策划详情视图 -->
+    <section id="view-plan-detail" class="hidden">
+      <div class="view-header">
+        <div class="view-title">
+          <button class="btn" onclick="switchView('plans')" style="margin-right:12px">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
+            返回
+          </button>
+          <span id="planDetailTitle">项目详情</span>
+        </div>
+        <div class="view-actions">
+          <button class="btn" onclick="markPlanReported()">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+            标记已汇报
+          </button>
+          <button class="btn btn-primary" onclick="generatePlanReport()">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+            生成整体汇报
+          </button>
+        </div>
+      </div>
+      <!-- 项目状态条 -->
+      <div id="planStatusBar" style="padding:16px 20px;background:var(--bg-card);border-radius:12px;margin-bottom:16px;display:flex;flex-wrap:wrap;gap:16px;align-items:center"></div>
+      <!-- Tab切换 -->
+      <div class="tab-bar" id="planDetailTabs">
+        <div class="tab-item active" data-tab="overview" onclick="switchPlanTab('overview')">📋 项目概览</div>
+        <div class="tab-item" data-tab="topics" onclick="switchPlanTab('topics')">🎬 选题管理</div>
+        <div class="tab-item" data-tab="report" onclick="switchPlanTab('report')">📊 整体汇报</div>
+        <div class="tab-item" data-tab="history" onclick="switchPlanTab('history')">📝 项目历史</div>
+      </div>
+      <!-- Tab内容 -->
+      <div id="planTabOverview"></div>
+      <div id="planTabTopics" class="hidden"></div>
+      <div id="planTabReport" class="hidden"></div>
+      <div id="planTabHistory" class="hidden"></div>
+    </section>
+
     <!-- 选题库视图 -->
     <section id="view-library">
       <div class="view-header">
@@ -1775,6 +1851,44 @@ input,textarea,select{font-family:inherit;outline:none;border:none;background:no
   </aside>
 </div>
 
+<!-- ========== 新建项目策划模态框 ========== -->
+<div class="modal-overlay hidden" id="newPlanModal">
+  <div class="modal" style="max-width:600px">
+    <div class="modal-header">
+      <div class="modal-title">📋 新建项目策划</div>
+      <button class="close-btn" onclick="closeModal('newPlanModal')"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label">项目名称 *</label>
+        <input type="text" class="form-input" id="newPlanTitle" placeholder="例如：2024双十一预热项目">
+      </div>
+      <div class="form-group">
+        <label class="form-label">拍摄主题</label>
+        <input type="text" class="form-input" id="newPlanTheme" placeholder="例如：冠军归来·决战双十一">
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">拍摄场地</label>
+          <input type="text" class="form-input" id="newPlanLocation" placeholder="例如：广州体育馆+摄影棚">
+        </div>
+        <div class="form-group">
+          <label class="form-label">直播日期</label>
+          <input type="date" class="form-input" id="newPlanLiveDate">
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">项目描述</label>
+        <textarea class="form-input" id="newPlanDesc" rows="3" placeholder="简述这个项目的整体创意方向、视频矩阵规划..."></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeModal('newPlanModal')">取消</button>
+      <button class="btn btn-primary" onclick="createNewPlan()">创建项目</button>
+    </div>
+  </div>
+</div>
+
 <!-- ========== 选题详情/编辑弹窗 ========== -->
 <div class="modal-overlay hidden" id="detailModal">
   <div class="modal">
@@ -2088,6 +2202,9 @@ function getAgents(){
 // ========== 状态管理 ==========
 let state = {
   topics: [],
+  projectPlans: [], // 项目策划（整场直播预热整体规划）
+  currentPlanId: null, // 当前查看的项目策划ID
+  currentPlanTab: 'overview', // 项目详情当前Tab
   currentView: "library",
   filterType: "all",
   filterStatus: "all",
@@ -2486,6 +2603,11 @@ function updateSyncIndicator(){
 function saveData(){
   localStorage.setItem(getProjectKey(STORAGE_KEY), JSON.stringify(state.topics));
   syncToCloud("topics", state.topics);
+  // 保存项目策划
+  try{
+    localStorage.setItem(getProjectKey("project_plans"), JSON.stringify(state.projectPlans));
+    syncToCloud("projectPlans", state.projectPlans);
+  }catch(e){console.error("保存项目策划失败",e);}
 }
 function loadData(){
   try{
@@ -2493,7 +2615,563 @@ function loadData(){
     if(raw){state.topics=JSON.parse(raw);}
     else{state.topics=[];}
   }catch(e){state.topics=[];}
+  // 加载项目策划
+  try{
+    const raw=localStorage.getItem(getProjectKey("project_plans"));
+    if(raw){state.projectPlans=JSON.parse(raw);}
+    else{state.projectPlans=[];}
+  }catch(e){state.projectPlans=[];}
 }
+
+// ========== 项目策划功能 ==========
+
+// 计算项目完成度
+function calculatePlanProgress(plan){
+  if(!plan || !plan.topicIds || plan.topicIds.length===0){
+    return {totalTopics:0, completedTopics:0, totalStoryboards:0, completedStoryboards:0, 
+            totalRefImages:0, completedRefImages:0, totalVideos:0, completedVideos:0,
+            overallPercent:0, reportGenerated:false, reportCount:0};
+  }
+  const topics = state.topics.filter(t=>plan.topicIds.includes(t.id));
+  let totalStoryboards=0, completedStoryboards=0, totalRefImages=0, completedRefImages=0;
+  let totalVideos=0, completedVideos=0, completedTopics=0;
+  
+  topics.forEach(t=>{
+    const sb = t.storyboard || [];
+    totalStoryboards += sb.length;
+    completedStoryboards += sb.filter(s=>s.visual && s.visual.length>0).length;
+    totalRefImages += sb.length;
+    completedRefImages += sb.filter(s=>s.refImage).length;
+    totalVideos += 3; // 每条选题3段视频
+    completedVideos += (t.aiVideos || []).filter(v=>v).length;
+    if(sb.length>0 && sb.every(s=>s.visual && s.refImage)){completedTopics++;}
+  });
+  
+  const overallPercent = totalStoryboards>0 ? Math.round((completedStoryboards/totalStoryboards)*100) : 0;
+  
+  return {
+    totalTopics: topics.length,
+    completedTopics,
+    totalStoryboards,
+    completedStoryboards,
+    totalRefImages,
+    completedRefImages,
+    totalVideos,
+    completedVideos,
+    overallPercent,
+    reportGenerated: !!plan.reportGenerated,
+    reportCount: plan.reportCount || 0
+  };
+}
+
+// 渲染项目策划列表
+function renderPlanList(){
+  const grid = document.getElementById('planCardGrid');
+  const empty = document.getElementById('planEmptyState');
+  const countEl = document.getElementById('navCountPlans');
+  
+  if(countEl){countEl.textContent = state.projectPlans.length;}
+  
+  if(!grid || !empty){return;}
+  
+  if(state.projectPlans.length===0){
+    grid.innerHTML='';
+    empty.classList.remove('hidden');
+    return;
+  }
+  empty.classList.add('hidden');
+  
+  grid.innerHTML = state.projectPlans.map(plan=>{
+    const progress = calculatePlanProgress(plan);
+    const statusColor = plan.status==='已完成'?'#10b981':plan.status==='已汇报'?'#f59e0b':'#6366f1';
+    return `
+    <div class="card" style="cursor:pointer" onclick="openPlanDetail('${plan.id}')">
+      <div class="card-header">
+        <div class="card-title">
+          <span style="font-size:18px">🎯</span>
+          ${escapeHtml(plan.title)}
+        </div>
+        <span class="status-badge" style="background:${statusColor}20;color:${statusColor}">${plan.status||'进行中'}</span>
+      </div>
+      <div class="card-meta">
+        ${plan.shootTheme?`<div>📌 ${escapeHtml(plan.shootTheme)}</div>`:''}
+        ${plan.shootLocation?`<div>📍 ${escapeHtml(plan.shootLocation)}</div>`:''}
+        ${plan.liveDate?`<div>📅 直播：${plan.liveDate}</div>`:''}
+      </div>
+      <div style="margin-top:12px;padding:12px;background:var(--bg-input);border-radius:8px">
+        <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:6px">
+          <span>整体完成度</span>
+          <span style="font-weight:700">${progress.overallPercent}%</span>
+        </div>
+        <div style="width:100%;height:6px;background:var(--bg-card);border-radius:3px;overflow:hidden">
+          <div style="height:100%;width:${progress.overallPercent}%;background:linear-gradient(90deg,#6366f1,#8b5cf6);transition:width .3s"></div>
+        </div>
+        <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:10px;font-size:11px;color:var(--text-muted)">
+          <span>🎬 ${progress.completedTopics}/${progress.totalTopics}条完成</span>
+          <span>🎬 分镜${progress.completedStoryboards}/${progress.totalStoryboards}</span>
+          <span>🖼️ 图${progress.completedRefImages}/${progress.totalRefImages}</span>
+          <span>🎥 视频${progress.completedVideos}/${progress.totalVideos}</span>
+          ${progress.reportCount>0?`<span style="color:#f59e0b">📊 已汇报${progress.reportCount}次</span>`:''}
+        </div>
+      </div>
+      <div class="card-actions" style="margin-top:12px" onclick="event.stopPropagation()">
+        <button class="btn btn-sm" onclick="openPlanDetail('${plan.id}')">📂 打开项目</button>
+        <button class="btn btn-sm btn-primary" onclick="generatePlanReport('${plan.id}')">📊 生成汇报</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// 打开新建项目模态框
+function openNewPlanModal(){
+  document.getElementById('newPlanTitle').value='';
+  document.getElementById('newPlanTheme').value='';
+  document.getElementById('newPlanLocation').value='';
+  document.getElementById('newPlanLiveDate').value='';
+  document.getElementById('newPlanDesc').value='';
+  openModal('newPlanModal');
+}
+
+// 创建新项目
+function createNewPlan(){
+  const title = document.getElementById('newPlanTitle').value.trim();
+  if(!title){toast('请输入项目名称','error');return;}
+  
+  const plan = {
+    id: 'plan_' + Date.now() + '_' + Math.random().toString(36).substr(2,9),
+    title,
+    shootTheme: document.getElementById('newPlanTheme').value.trim(),
+    shootLocation: document.getElementById('newPlanLocation').value.trim(),
+    liveDate: document.getElementById('newPlanLiveDate').value,
+    description: document.getElementById('newPlanDesc').value.trim(),
+    status: '进行中',
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    topicIds: [],
+    report: null,
+    reportGenerated: false,
+    reportCount: 0,
+    lastReportAt: null,
+    history: []
+  };
+  
+  state.projectPlans.unshift(plan);
+  saveData();
+  renderPlanList();
+  closeModal('newPlanModal');
+  toast('项目创建成功！','success');
+  
+  // 自动打开项目详情
+  setTimeout(()=>openPlanDetail(plan.id),300);
+}
+
+// 打开项目详情
+function openPlanDetail(planId){
+  const plan = state.projectPlans.find(p=>p.id===planId);
+  if(!plan){toast('项目不存在','error');return;}
+  
+  state.currentPlanId = planId;
+  state.currentPlanTab = 'overview';
+  
+  document.getElementById('planDetailTitle').textContent = plan.title;
+  
+  // 渲染状态条
+  renderPlanStatusBar(plan);
+  
+  // 渲染各Tab
+  renderPlanOverview(plan);
+  renderPlanTopics(plan);
+  renderPlanReport(plan);
+  renderPlanHistory(plan);
+  
+  // 切换Tab
+  switchPlanTab('overview');
+  
+  // 切换视图
+  switchView('plan-detail');
+}
+
+// 渲染项目状态条
+function renderPlanStatusBar(plan){
+  const bar = document.getElementById('planStatusBar');
+  if(!bar){return;}
+  
+  const progress = calculatePlanProgress(plan);
+  
+  bar.innerHTML = `
+    <div style="flex:1;min-width:200px">
+      <div style="font-size:12px;color:var(--text-muted);margin-bottom:4px">整体完成度</div>
+      <div style="display:flex;align-items:center;gap:12px">
+        <div style="flex:1;height:8px;background:var(--bg-input);border-radius:4px;overflow:hidden">
+          <div style="height:100%;width:${progress.overallPercent}%;background:linear-gradient(90deg,#6366f1,#8b5cf6)"></div>
+        </div>
+        <span style="font-size:18px;font-weight:700">${progress.overallPercent}%</span>
+      </div>
+    </div>
+    <div style="text-align:center;padding:0 16px;border-left:1px solid var(--border-color)">
+      <div style="font-size:20px;font-weight:700">${progress.completedTopics}/${progress.totalTopics}</div>
+      <div style="font-size:11px;color:var(--text-muted)">选题完成</div>
+    </div>
+    <div style="text-align:center;padding:0 16px;border-left:1px solid var(--border-color)">
+      <div style="font-size:20px;font-weight:700">${progress.completedStoryboards}/${progress.totalStoryboards}</div>
+      <div style="font-size:11px;color:var(--text-muted)">分镜完成</div>
+    </div>
+    <div style="text-align:center;padding:0 16px;border-left:1px solid var(--border-color)">
+      <div style="font-size:20px;font-weight:700">${progress.completedRefImages}/${progress.totalRefImages}</div>
+      <div style="font-size:11px;color:var(--text-muted)">参考图</div>
+    </div>
+    <div style="text-align:center;padding:0 16px;border-left:1px solid var(--border-color)">
+      <div style="font-size:20px;font-weight:700">${progress.completedVideos}/${progress.totalVideos}</div>
+      <div style="font-size:11px;color:var(--text-muted)">AI视频</div>
+    </div>
+    ${progress.reportCount>0?`
+    <div style="text-align:center;padding:0 16px;border-left:1px solid var(--border-color)">
+      <div style="font-size:20px;font-weight:700;color:#f59e0b">${progress.reportCount}</div>
+      <div style="font-size:11px;color:var(--text-muted)">汇报次数</div>
+    </div>`:''}
+  `;
+}
+
+// 切换项目详情Tab
+function switchPlanTab(tab){
+  state.currentPlanTab = tab;
+  
+  // 更新Tab激活状态
+  document.querySelectorAll('#planDetailTabs .tab-item').forEach(el=>{
+    el.classList.toggle('active', el.dataset.tab===tab);
+  });
+  
+  // 显示对应内容
+  document.getElementById('planTabOverview').classList.toggle('hidden', tab!=='overview');
+  document.getElementById('planTabTopics').classList.toggle('hidden', tab!=='topics');
+  document.getElementById('planTabReport').classList.toggle('hidden', tab!=='report');
+  document.getElementById('planTabHistory').classList.toggle('hidden', tab!=='history');
+}
+
+// 渲染项目概览Tab
+function renderPlanOverview(plan){
+  const container = document.getElementById('planTabOverview');
+  if(!container){return;}
+  
+  const progress = calculatePlanProgress(plan);
+  const topics = state.topics.filter(t=>plan.topicIds.includes(t.id));
+  
+  container.innerHTML = `
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px">
+      <div style="padding:20px;background:var(--bg-card);border-radius:12px">
+        <div style="font-size:14px;font-weight:700;margin-bottom:12px">📋 项目基本信息</div>
+        <div style="font-size:13px;line-height:2;color:var(--text-secondary)">
+          ${plan.shootTheme?`<div><span style="color:var(--text-muted)">拍摄主题：</span>${escapeHtml(plan.shootTheme)}</div>`:''}
+          ${plan.shootLocation?`<div><span style="color:var(--text-muted)">拍摄场地：</span>${escapeHtml(plan.shootLocation)}</div>`:''}
+          ${plan.liveDate?`<div><span style="color:var(--text-muted)">直播日期：</span>${plan.liveDate}</div>`:''}
+          ${plan.description?`<div><span style="color:var(--text-muted)">项目描述：</span>${escapeHtml(plan.description)}</div>`:''}
+        </div>
+      </div>
+      <div style="padding:20px;background:var(--bg-card);border-radius:12px">
+        <div style="font-size:14px;font-weight:700;margin-bottom:12px">📊 完成度统计</div>
+        <div style="font-size:13px;line-height:2.2">
+          <div style="display:flex;justify-content:space-between"><span>选题总数</span><span style="font-weight:700">${progress.totalTopics}条</span></div>
+          <div style="display:flex;justify-content:space-between"><span>已完成选题</span><span style="font-weight:700;color:#10b981">${progress.completedTopics}条</span></div>
+          <div style="display:flex;justify-content:space-between"><span>分镜完成率</span><span style="font-weight:700">${progress.totalStoryboards>0?Math.round(progress.completedStoryboards/progress.totalStoryboards*100):0}%</span></div>
+          <div style="display:flex;justify-content:space-between"><span>参考图完成率</span><span style="font-weight:700">${progress.totalRefImages>0?Math.round(progress.completedRefImages/progress.totalRefImages*100):0}%</span></div>
+          <div style="display:flex;justify-content:space-between"><span>AI视频完成率</span><span style="font-weight:700">${progress.totalVideos>0?Math.round(progress.completedVideos/progress.totalVideos*100):0}%</span></div>
+          ${progress.reportCount>0?`<div style="display:flex;justify-content:space-between"><span>汇报次数</span><span style="font-weight:700;color:#f59e0b">${progress.reportCount}次</span></div>`:''}
+        </div>
+      </div>
+    </div>
+    <div style="padding:20px;background:var(--bg-card);border-radius:12px">
+      <div style="font-size:14px;font-weight:700;margin-bottom:12px">🎬 选题矩阵（${topics.length}条）</div>
+      ${topics.length===0?'<div style="text-align:center;padding:30px;color:var(--text-muted)">还没有选题，点击"选题管理"Tab添加</div>':
+        `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px">
+          ${topics.map(t=>`
+            <div style="padding:12px;background:var(--bg-input);border-radius:8px;cursor:pointer" onclick="openTopicFromPlan('${t.id}')">
+              <div style="font-size:13px;font-weight:600;margin-bottom:4px">${escapeHtml(t.title)}</div>
+              <div style="font-size:11px;color:var(--text-muted)">${t.type||''} · ${(t.storyboard||[]).length}镜</div>
+            </div>
+          `).join('')}
+        </div>`}
+    </div>
+  `;
+}
+
+// 渲染选题管理Tab
+function renderPlanTopics(plan){
+  const container = document.getElementById('planTabTopics');
+  if(!container){return;}
+  
+  const topics = state.topics.filter(t=>plan.topicIds.includes(t.id));
+  const availableTopics = state.topics.filter(t=>!plan.topicIds.includes(t.id));
+  
+  container.innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+      <div style="font-size:14px;font-weight:700">🎬 项目选题列表（${topics.length}条）</div>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-sm" onclick="openAddTopicToPlanModal('${plan.id}')">+ 添加已有选题</button>
+        <button class="btn btn-sm btn-primary" onclick="createTopicInPlan('${plan.id}')">+ 新建选题</button>
+      </div>
+    </div>
+    ${topics.length===0?'<div style="text-align:center;padding:40px;color:var(--text-muted);background:var(--bg-card);border-radius:12px">还没有选题，点击上方按钮添加或新建</div>':
+      `<div style="display:grid;gap:12px">
+        ${topics.map((t,idx)=>{
+          const sb = t.storyboard || [];
+          const imgCount = sb.filter(s=>s.refImage).length;
+          const videoCount = (t.aiVideos||[]).filter(v=>v).length;
+          return `
+          <div style="padding:16px;background:var(--bg-card);border-radius:12px;display:flex;align-items:center;gap:16px">
+            <div style="width:40px;height:40px;background:linear-gradient(135deg,#6366f1,#8b5cf6);border-radius:8px;display:flex;align-items:center;justify-content:center;font-weight:700;color:white;font-size:16px">${idx+1}</div>
+            <div style="flex:1">
+              <div style="font-size:14px;font-weight:600;margin-bottom:4px">${escapeHtml(t.title)}</div>
+              <div style="font-size:12px;color:var(--text-muted);display:flex;gap:12px">
+                <span>${t.type||'未分类'}</span>
+                <span>🎬 ${sb.length}镜</span>
+                <span>🖼️ ${imgCount}图</span>
+                <span>🎥 ${videoCount}视频</span>
+                ${t.reportCount?`<span style="color:#f59e0b">📊 汇报${t.reportCount}次</span>`:''}
+              </div>
+            </div>
+            <div style="display:flex;gap:8px">
+              <button class="btn btn-sm" onclick="openTopicFromPlan('${t.id}')">打开</button>
+              <button class="btn btn-sm" onclick="removeTopicFromPlan('${plan.id}','${t.id}')">移除</button>
+            </div>
+          </div>`;
+        }).join('')}
+      </div>`}
+  `;
+}
+
+// 渲染整体汇报Tab
+function renderPlanReport(plan){
+  const container = document.getElementById('planTabReport');
+  if(!container){return;}
+  
+  if(!plan.report || !plan.reportGenerated){
+    container.innerHTML = `
+      <div style="text-align:center;padding:60px;background:var(--bg-card);border-radius:12px">
+        <div style="font-size:48px;margin-bottom:16px">📊</div>
+        <div style="font-size:16px;font-weight:600;margin-bottom:8px">还没有生成整体汇报</div>
+        <div style="font-size:13px;color:var(--text-muted);margin-bottom:20px">点击下方按钮，AI将根据项目信息和所有选题生成13章节完整汇报</div>
+        <button class="btn btn-primary" onclick="generatePlanReport('${plan.id}')">⚡ 生成整体汇报</button>
+      </div>
+    `;
+    return;
+  }
+  
+  const r = plan.report;
+  container.innerHTML = `
+    <div style="padding:20px;background:var(--bg-card);border-radius:12px;margin-bottom:16px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+        <div style="font-size:16px;font-weight:700">📋 13章节完整汇报</div>
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-sm" onclick="generatePlanReport('${plan.id}')">🔄 重新生成</button>
+          <button class="btn btn-sm btn-primary" onclick="exportPlanReport('${plan.id}')">📥 导出PPT</button>
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+        ${[
+          ['01','创意大纲',r.outline],
+          ['02','创意描述',r.description],
+          ['03','创意寓意',r.meaning],
+          ['04','旁白台词',r.narration],
+          ['05','美术制景',r.artDesign],
+          ['06','道具参考',r.props],
+          ['07','影像氛围',r.visualAtmosphere],
+          ['08','摄影调性',r.cinematography],
+          ['09','配乐参考',r.music],
+          ['10','服饰搭配',r.costume],
+          ['11','AI视频参考',r.aiVideos?(r.aiVideos.length+'段'):'未生成'],
+          ['12','选题矩阵',(plan.topicIds||[]).length+'条选题'],
+          ['13','分镜总览',(state.topics.filter(t=>plan.topicIds.includes(t.id)).reduce((sum,t)=>sum+(t.storyboard||[]).length,0))+'个镜头']
+        ].map(([num,title,content])=>`
+          <div style="padding:12px;background:var(--bg-input);border-radius:8px">
+            <div style="font-size:11px;color:var(--accent);font-weight:700;margin-bottom:4px">${num}</div>
+            <div style="font-size:13px;font-weight:600;margin-bottom:6px">${title}</div>
+            <div style="font-size:12px;color:var(--text-secondary);line-height:1.6">${content?escapeHtml(content.substring(0,100))+(content.length>100?'...':''):'<span style="color:var(--text-muted)">待补充</span>'}</div>
+          </div>
+        `).join('')}
+      </div>
+    </div>
+  `;
+}
+
+// 渲染项目历史Tab
+function renderPlanHistory(plan){
+  const container = document.getElementById('planTabHistory');
+  if(!container){return;}
+  
+  const history = plan.history || [];
+  
+  container.innerHTML = `
+    <div style="padding:20px;background:var(--bg-card);border-radius:12px">
+      <div style="font-size:14px;font-weight:700;margin-bottom:16px">📝 项目历史记录</div>
+      ${history.length===0?'<div style="text-align:center;padding:30px;color:var(--text-muted)">暂无历史记录</div>':
+        `<div style="position:relative;padding-left:24px">
+          <div style="position:absolute;left:8px;top:0;bottom:0;width:2px;background:var(--border-color)"></div>
+          ${history.slice().reverse().map(h=>`
+            <div style="position:relative;margin-bottom:20px">
+              <div style="position:absolute;left:-20px;top:4px;width:10px;height:10px;border-radius:50%;background:var(--accent)"></div>
+              <div style="font-size:12px;color:var(--text-muted);margin-bottom:4px">${new Date(h.time).toLocaleString()}</div>
+              <div style="font-size:13px">${escapeHtml(h.action)}</div>
+            </div>
+          `).join('')}
+        </div>`}
+    </div>
+  `;
+}
+
+// 从项目中打开选题
+function openTopicFromPlan(topicId){
+  // 切换到选题库并打开选题详情
+  switchView('library');
+  setTimeout(()=>{
+    const topic = state.topics.find(t=>t.id===topicId);
+    if(topic){openDetail(topicId);}
+  },300);
+}
+
+// 从项目中移除选题
+function removeTopicFromPlan(planId, topicId){
+  const plan = state.projectPlans.find(p=>p.id===planId);
+  if(!plan){return;}
+  
+  if(!confirm('确定要从项目中移除这个选题吗？')){return;}
+  
+  plan.topicIds = plan.topicIds.filter(id=>id!==topicId);
+  plan.updatedAt = new Date().toISOString();
+  plan.history = plan.history || [];
+  plan.history.push({time:new Date().toISOString(), action:`移除选题：${state.topics.find(t=>t.id===topicId)?.title||topicId}`});
+  
+  saveData();
+  renderPlanTopics(plan);
+  renderPlanStatusBar(plan);
+  renderPlanOverview(plan);
+  toast('已从项目中移除选题','success');
+}
+
+// 在项目中新建选题
+function createTopicInPlan(planId){
+  const title = prompt('请输入选题名称：');
+  if(!title){return;}
+  
+  const topic = {
+    id: 'topic_' + Date.now() + '_' + Math.random().toString(36).substr(2,9),
+    title,
+    type: '造势预热',
+    status: '进行中',
+    hook: '',
+    script: '',
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    storyboard: [],
+    planId: planId
+  };
+  
+  state.topics.unshift(topic);
+  
+  const plan = state.projectPlans.find(p=>p.id===planId);
+  if(plan){
+    plan.topicIds.unshift(topic.id);
+    plan.updatedAt = new Date().toISOString();
+    plan.history = plan.history || [];
+    plan.history.push({time:new Date().toISOString(), action:`新建选题：${title}`});
+  }
+  
+  saveData();
+  renderPlanTopics(plan);
+  renderPlanStatusBar(plan);
+  renderPlanOverview(plan);
+  toast('选题创建成功！','success');
+}
+
+// 标记项目已汇报
+function markPlanReported(){
+  const plan = state.projectPlans.find(p=>p.id===state.currentPlanId);
+  if(!plan){return;}
+  
+  plan.reportCount = (plan.reportCount||0) + 1;
+  plan.lastReportAt = new Date().toISOString();
+  plan.status = '已汇报';
+  plan.history = plan.history || [];
+  plan.history.push({time:new Date().toISOString(), action:`第${plan.reportCount}次汇报`});
+  
+  saveData();
+  renderPlanStatusBar(plan);
+  renderPlanList();
+  toast(`已记录第${plan.reportCount}次汇报！`,'success');
+}
+
+// 生成项目整体汇报（占位，后续完善）
+function generatePlanReport(planId){
+  const plan = state.projectPlans.find(p=>p.id===(planId||state.currentPlanId));
+  if(!plan){toast('项目不存在','error');return;}
+  
+  toast('正在生成整体汇报...（功能开发中）','info');
+  
+  // 临时：生成基础汇报结构
+  plan.report = {
+    outline: plan.shootTheme || plan.title,
+    description: plan.description || '',
+    meaning: '',
+    narration: '',
+    artDesign: '',
+    props: '',
+    visualAtmosphere: '',
+    cinematography: '',
+    music: '',
+    costume: '',
+    aiVideos: [],
+    generatedAt: new Date().toISOString()
+  };
+  plan.reportGenerated = true;
+  plan.updatedAt = new Date().toISOString();
+  plan.history = plan.history || [];
+  plan.history.push({time:new Date().toISOString(), action:'生成整体汇报'});
+  
+  saveData();
+  renderPlanReport(plan);
+  renderPlanStatusBar(plan);
+  renderPlanList();
+  toast('整体汇报生成成功！','success');
+}
+
+// 导出项目汇报（占位）
+function exportPlanReport(planId){
+  toast('导出PPT功能开发中...','info');
+}
+
+// 打开添加已有选题到项目的模态框（占位）
+function openAddTopicToPlanModal(planId){
+  const availableTopics = state.topics.filter(t=>!state.projectPlans.find(p=>p.id===planId)?.topicIds.includes(t.id));
+  if(availableTopics.length===0){
+    toast('没有可添加的选题，请先在选题库创建','info');
+    return;
+  }
+  
+  const topicNames = availableTopics.map((t,i)=>`${i+1}. ${t.title}`).join('\n');
+  const input = prompt(`请输入要添加的选题编号（多个用逗号分隔）：\n\n${topicNames}`);
+  if(!input){return;}
+  
+  const indices = input.split(/[,，]/).map(s=>parseInt(s.trim())-1).filter(i=>i>=0 && i<availableTopics.length);
+  const plan = state.projectPlans.find(p=>p.id===planId);
+  
+  indices.forEach(i=>{
+    const topic = availableTopics[i];
+    if(topic && !plan.topicIds.includes(topic.id)){
+      plan.topicIds.push(topic.id);
+      topic.planId = planId;
+    }
+  });
+  
+  plan.updatedAt = new Date().toISOString();
+  plan.history = plan.history || [];
+  plan.history.push({time:new Date().toISOString(), action:`添加${indices.length}个选题到项目`});
+  
+  saveData();
+  renderPlanTopics(plan);
+  renderPlanStatusBar(plan);
+  renderPlanOverview(plan);
+  toast(`已添加${indices.length}个选题到项目`,'success');
+}
+
 function persistSettings(){
   localStorage.setItem(SETTINGS_KEY, JSON.stringify(state.apiSettings));
 }
@@ -2779,6 +3457,8 @@ function renderDashboard(){
 function switchView(view){
   state.currentView=view;
   $$(".nav-item[data-view]").forEach(el=>el.classList.toggle("active",el.dataset.view===view));
+  $("#view-plans").classList.toggle("hidden",view!=="plans");
+  $("#view-plan-detail").classList.toggle("hidden",view!=="plan-detail");
   $("#view-library").classList.toggle("hidden",view!=="library");
   $("#view-inspiration").classList.toggle("hidden",view!=="inspiration");
   $("#view-sessions").classList.toggle("hidden",view!=="sessions");
@@ -2789,6 +3469,7 @@ function switchView(view){
   $("#view-reverse").classList.toggle("hidden",view!=="reverse");
   $("#view-xinxuan").classList.toggle("hidden",view!=="xinxuan");
   $("#view-personal").classList.toggle("hidden",view!=="personal");
+  if(view==="plans") renderPlanList();
   if(view==="sessions") renderSessions();
   if(view==="dashboard") renderDashboard();
   if(view==="visual") renderVisualGrid();
@@ -8030,6 +8711,7 @@ function init(){
   restoreAiInput();
   initEvents();
   renderAll();
+  try{renderPlanList();}catch(e){console.error("渲染项目策划列表失败",e);}
   renderQuickPrompts();
   renderMessages();
   initVisualLib();
