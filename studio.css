@@ -10,6 +10,7 @@
 .inline-input{display:flex;gap:10px;align-items:stretch;margin-top:7px}.inline-input input{flex:1;min-width:0}.inline-input button{white-space:nowrap}@media(max-width:620px){.inline-input{flex-direction:column}.inline-input button{width:100%}}
 .cover-grid{grid-template-columns:repeat(3,minmax(290px,1fr));align-items:start}
 .cover-option{margin:0}.cover-option>.media-card{margin-top:14px}
+.report-tools{border-color:#647444}.report-tools details{margin-top:12px}.report-outline{max-height:340px;overflow:auto;line-height:1.9;padding-left:28px}.report-missing{color:var(--bad)}
 .cover-preview{position:relative;width:min(100%,390px);max-height:560px;margin:0 auto 12px;overflow:hidden;border-radius:10px;background:#0b0d09}
 .cover-preview>img{width:100%;height:100%;object-fit:cover;display:block;margin:0}
 .cover-preview>.empty-media{width:100%;height:100%;aspect-ratio:auto;margin:0;border:0;border-radius:0}
