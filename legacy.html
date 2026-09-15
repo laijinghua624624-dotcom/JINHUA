@@ -2,10 +2,12 @@
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
+<meta http-equiv="Content-Security-Policy" content="connect-src 'none'; form-action 'none'; object-src 'none'; base-uri 'none'">
+<script src="studio-security.js"></script>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Lance 智能裤 · 旧版存档</title>
 <link rel="stylesheet" href="https://miaoda.feishu.cn/fonts/css2?family=Noto+Sans+SC:wght@300;400;500;700;900&display=swap">
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<!-- Legacy archive is local-only: cloud sync and direct credential-based calls are disabled. -->
 <style>
 /* ========== 全局变量与重置 ========== */
 :root{

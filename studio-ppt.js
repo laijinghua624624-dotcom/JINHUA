@@ -31,10 +31,7 @@
     }
     const full=kind==='project'?C.sessionStatus(item,topics):C.quickStatus(item);
     if(mode==='full')return full;
-    const f=kind==='project'?item.fields:item.quick.fields,r=item.report||{},missing=[];
-    if(!C.text(r.recommendation)&&!C.text(f.outline))missing.push('一句话主推方向或创意大纲');
-    if(!C.text(r.reason)&&!C.text(f.meaning))missing.push('推荐理由或创意寓意');
-    return {ready:missing.length===0,missing,draft:!full.ready,deliveryMissing:full.missing};
+    return {...C.directionStatus(item,kind,topics),draft:!full.ready,deliveryMissing:full.missing};
   }
   function planDeck(source,kind,topics=[],mode){
     mode=modeFor(kind,mode);
@@ -56,7 +53,7 @@
     overview('创意概念与寓意',[{label:'创意大纲',body:f.outline},{label:'创意描述',body:f.description},{label:'创意寓意',body:f.meaning}]);
     if(kind==='project'){
       for(const [i,group]of chunks(list,6).entries())slides.push({type:'matrix',title:'故事脚本分工'+(i?'（续）':''),rows:group.map((t,j)=>[String(i*6+j+1).padStart(2,'0'),t.title,t.report?.role||t.idea||t.quick.fields.outline||'内容任务待补充'])});
-      if(!list.length)overview('故事脚本分工',[{label:'待规划',body:'本专场尚未关联故事脚本，完整策划需要6条。'}]);
+      if(!list.length)overview('故事脚本分工',[{label:'待规划',body:`本专场尚未关联故事脚本，计划${C.sessionTarget(item)}条。`}]);
       overview('场景搭建与美术',[{label:'场景搭建',body:f.scene||'待补充场地与搭建方向'},{label:'美术制景',body:f.art||'待补充美术与材质方向'}]);
     }else overview('故事与人物表达',[{label:'故事摘要',body:f.script||f.description},{label:'关键台词摘要',body:f.dialogue}]);
     overview('影像与摄影方向',[{label:'影像氛围',body:f.atmosphere||'待补充影像氛围'},{label:'摄影调性',body:f.camera||'待补充摄影方向'}]);

@@ -27,6 +27,13 @@ class ServerTests(unittest.TestCase):
         for name in ['deliverables/Lance专场整体汇报模板_v1.pptx','deliverables/Lance单条剧本汇报模板_v1.pptx']:
             target=s.ROOT/name
             if target.is_file():self.assertEqual(self.request('GET','/'+urllib.parse.quote(name))[0],200)
+        self.assertEqual(self.request('GET','/studio-security.js')[0],200)
+    def test_client_cannot_supply_credentials_or_override_model(self):
+        with patch.dict(os.environ,{'ARK_API_KEY':'server-test-key','ARK_DIRECTOR_MODEL':'director-test','ARK_REFINE_MODEL':'refine-test'}),patch.object(s,'ark_request',return_value={'choices':[{'message':{'content':'{}'}}]}) as call:
+            status,data=self.request('POST','/api/chat',json.dumps({'prompt':'test','purpose':'refine','model':'client-model'}),{'Authorization':'Bearer client-secret','Content-Type':'application/json'})
+            self.assertEqual(status,200);self.assertEqual(call.call_args.args[1]['model'],'refine-test');self.assertEqual(call.call_args.args[2],'server-test-key')
+            self.assertNotIn(b'server-test-key',data);self.assertNotIn(b'client-secret',data)
+            status,_=self.request('POST','/api/chat',json.dumps({'purpose':'embedding'}));self.assertEqual(status,400)
     def test_video_contract(self):
         payload=s.build_video_body({'prompt':'test','duration':8,'ratio':'4:3'},'model-id');self.assertEqual(payload['duration'],8);self.assertEqual(payload['ratio'],'4:3')
         with self.assertRaises(ValueError):s.build_video_body({'prompt':'test','duration':13},'model')

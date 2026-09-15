@@ -9,6 +9,7 @@ import html
 from html.parser import HTMLParser
 import ipaddress
 import json
+import math
 import mimetypes
 import os
 from pathlib import Path
@@ -35,6 +36,28 @@ POOL = concurrent.futures.ThreadPoolExecutor(max_workers=2)
 JOBS = {}
 LOCK = threading.Lock()
 
+def model_routes():
+    return {role:{'model':os.environ.get(env,'').strip()} for role,env in {
+        'director':'ARK_DIRECTOR_MODEL','refine':'ARK_REFINE_MODEL','image':'ARK_IMAGE_MODEL',
+        'video':'ARK_VIDEO_MODEL','embedding':'ARK_EMBEDDING_MODEL','speech':'SPEECH_MODEL_VERSION'}.items()}
+
+def route_model(role):
+    routes=model_routes()
+    if role not in routes:raise ValueError('未知模型分工')
+    model=routes[role]['model']
+    if role=='director' and not model:model=os.environ.get('ARK_TEXT_MODEL','').strip()
+    if not model:raise ValueError(f'服务端未配置 {role} 模型ID；请在本机 .env 设置，不在前端填写密钥')
+    if not re.fullmatch(r'[a-zA-Z0-9_.:-]{1,160}',model):raise ValueError('服务端模型ID格式无效')
+    return model
+
+def safe_error(error):
+    message=str(error)
+    for key in ('ARK_API_KEY','VOLC_ACCESS_KEY_ID','VOLC_SECRET_ACCESS_KEY','SPEECH_API_KEY','SPEECH_ACCESS_TOKEN','SUPABASE_SERVICE_ROLE_KEY'):
+        secret=os.environ.get(key,'')
+        if secret:message=message.replace(secret,'[已隐藏]')
+    message=re.sub(r'https?://\S+','[上游地址已隐藏]',message)
+    return message[:500]
+
 def load_env():
     path = ROOT / '.env'
     if path.exists():
@@ -54,7 +77,7 @@ def server_binding():
     return host,int(os.environ.get('LANCE_PORT',8000))
 
 def media_path(name):
-    if not re.fullmatch(r'[a-f0-9]{32}\.(?:mp4|mov|webm|jpg|jpeg|png|webp|pdf|mp3|wav|m4a|docx|txt|md)', name or ''):
+    if not re.fullmatch(r'[a-f0-9]{32}\.(?:mp4|mov|webm|jpg|jpeg|png|webp|pdf|mp3|wav|m4a|ogg|docx|txt|md)', name or ''):
         raise ValueError('媒体标识无效')
     path = MEDIA / name
     if not path.is_file():
@@ -125,7 +148,7 @@ def data_url(name):
 
 def ark_request(path, body, token, method='POST'):
     if not token:
-        raise ValueError('未配置 Ark API Key，请在连接设置中填写，或设置本地 ARK_API_KEY')
+        raise ValueError('服务端未配置 Ark API Key，请仅在本机 .env 设置 ARK_API_KEY')
     payload=json.dumps(body,ensure_ascii=False).encode() if body is not None else None
     request=urllib.request.Request(ARK+path,data=payload,method=method,headers={'Authorization':'Bearer '+token,'Content-Type':'application/json'})
     try:
@@ -138,7 +161,7 @@ def ark_request(path, body, token, method='POST'):
             message=detail.get('message','模型调用失败') if isinstance(detail,dict) else str(detail)
         except Exception:
             message='模型调用失败'
-        raise ValueError(f'模型接口 {error.code}：{message[:400]}') from None
+        raise ValueError(f'模型接口 {error.code}：{safe_error(message)}') from None
 
 def public_url(url):
     parsed=urllib.parse.urlparse(url)
@@ -304,9 +327,84 @@ def run_job(fn,*args):
     JOBS[jid]={'status':'running'}
     def work():
         try: JOBS[jid]={'status':'succeeded','result':fn(*args)}
-        except Exception as error: JOBS[jid]={'status':'failed','error':str(error)[:500]}
+        except Exception as error: JOBS[jid]={'status':'failed','error':safe_error(error)}
     POOL.submit(work)
     return {'jobId':jid}
+
+def speech_headers():
+    headers={'Content-Type':'application/json','X-Api-Resource-Id':os.environ.get('SPEECH_RESOURCE_ID','volc.bigasr.auc_turbo'),
+             'X-Api-Request-Id':str(uuid.uuid4()),'X-Api-Sequence':'-1'}
+    if headers['X-Api-Resource-Id']!='volc.bigasr.auc_turbo':raise ValueError('当前适配器仅支持录音文件极速识别资源；标准版需单独适配')
+    if os.environ.get('SPEECH_API_KEY'):
+        headers['X-Api-Key']=os.environ['SPEECH_API_KEY']
+    elif os.environ.get('SPEECH_APP_ID') and os.environ.get('SPEECH_ACCESS_TOKEN'):
+        headers.update({'X-Api-App-Key':os.environ['SPEECH_APP_ID'],'X-Api-Access-Key':os.environ['SPEECH_ACCESS_TOKEN']})
+    else:raise ValueError('请在服务端配置豆包语音凭据；它与 Ark API Key 不通用')
+    return headers
+
+def transcribe_audio(name):
+    headers=speech_headers();source=media_path(name);meta=describe(source)
+    if meta['kind']!='audio' or not 0<meta['duration']<=7200 or source.stat().st_size>100*1024*1024:
+        raise ValueError('转写只接收不超过2小时、100MB的音频；原录音未修改')
+    # Browser WebM/M4A recordings are normalized privately; originals remain intact.
+    with tempfile.TemporaryDirectory(prefix='lance-asr-') as folder:
+        target=Path(folder)/'speech.mp3'
+        subprocess.run(['ffmpeg','-v','error','-i',str(source),'-vn','-ac','1','-ar','16000','-b:a','32k','-y',str(target)],check=True,capture_output=True,timeout=180)
+        if target.stat().st_size>20*1024*1024:raise ValueError('转换后的录音超过20MB，请分段转写')
+        options={'model_name':'bigmodel'}
+        if os.environ.get('SPEECH_MODEL_VERSION'):options['model_version']=os.environ['SPEECH_MODEL_VERSION']
+        payload={'user':{'uid':'lance-local-studio'},'audio':{'data':base64.b64encode(target.read_bytes()).decode()},'request':options}
+        request=urllib.request.Request('https://openspeech.bytedance.com/api/v3/auc/bigmodel/recognize/flash',data=json.dumps(payload).encode(),headers=headers,method='POST')
+        try:
+            with urllib.request.urlopen(request,timeout=240) as response:
+                code=response.headers.get('X-Api-Status-Code','')
+                if code!='20000000':raise ValueError('语音识别未成功，状态码：'+code)
+                raw=json.loads(response.read())
+        except urllib.error.HTTPError as error:raise ValueError(f'语音接口HTTP {error.code}，请核对服务端权限和资源配置') from None
+    result=raw.get('result',{});text=result.get('text','')
+    if not isinstance(text,str) or not text.strip():raise ValueError('未返回有效文字，原录音已保留')
+    return {'text':text,'utterances':result.get('utterances',[]),'source':'doubao-asr','modelVersion':os.environ.get('SPEECH_MODEL_VERSION','未指定，按账户默认版本'),'localId':name}
+
+EMBED_LOCK=threading.Lock()
+
+def cached_embedding(space,text,image_id=None):
+    if space not in ('personal','xinxuan'):raise ValueError('检索空间无效')
+    if not isinstance(text,str) or len(text)>6000:raise ValueError('每条检索描述最多6000字')
+    model=route_model('embedding');content=[]
+    if text.strip():content.append({'type':'text','text':text})
+    image_hash=''
+    if image_id:
+        path=media_path(image_id);image_hash=hashlib.sha256(path.read_bytes()).hexdigest()
+        content.append({'type':'image_url','image_url':{'url':data_url(image_id)}})
+    if not content:raise ValueError('没有可索引的文字或图片')
+    fingerprint=hashlib.sha256(json.dumps([model,text,image_hash],ensure_ascii=False).encode()).hexdigest()
+    folder=DATA/'embeddings'/space;folder.mkdir(parents=True,exist_ok=True)
+    cache=folder/(fingerprint+'.json')
+    with EMBED_LOCK:
+        if cache.is_file():return json.loads(cache.read_text())
+        raw=ark_request('/embeddings/multimodal',{'model':model,'input':content,'encoding_format':'float'},os.environ.get('ARK_API_KEY',''))
+        vector=raw.get('data',{}).get('embedding')
+        if not isinstance(vector,list) or not vector or any(not isinstance(x,(int,float)) or not math.isfinite(x) for x in vector):
+            raise ValueError('检索模型没有返回有效向量')
+        norm=math.sqrt(sum(x*x for x in vector))
+        if not norm:raise ValueError('检索向量为空')
+        vector=[x/norm for x in vector]
+        cache.write_text(json.dumps(vector));cache.chmod(0o600)
+        return vector
+
+def semantic_search(body):
+    space=body.get('scope');items=body.get('items');query=body.get('query','')
+    if space not in ('personal','xinxuan'):raise ValueError('检索空间无效')
+    if not isinstance(query,str) or not query.strip() or len(query)>1000:raise ValueError('请输入1–1000字的审美描述')
+    if not isinstance(items,list) or not 1<=len(items)<=100:raise ValueError('一次检索限定1–100条参考，请先选择项目文件夹缩小范围')
+    if any(not isinstance(i,dict) or not isinstance(i.get('id'),str) or not i['id'] for i in items):raise ValueError('参考条目无效')
+    if len({i['id'] for i in items})!=len(items):raise ValueError('参考条目重复')
+    query_vector=cached_embedding(space,query);matches=[]
+    for item in items:
+        vector=cached_embedding(space,item.get('text',''),item.get('imageId'))
+        if len(query_vector)!=len(vector):raise ValueError('检索向量维度不一致，请检查模型配置')
+        matches.append({'id':item['id'],'score':sum(a*b for a,b in zip(query_vector,vector))})
+    return {'scope':space,'matches':sorted(matches,key=lambda x:x['score'],reverse=True)[:24],'model':route_model('embedding'),'indexed':len(items)}
 
 class Handler(BaseHTTPRequestHandler):
     def allowed(self):
@@ -321,6 +419,7 @@ class Handler(BaseHTTPRequestHandler):
         return host in {f'127.0.0.1:{self.server.server_port}',f'localhost:{self.server.server_port}'} and (not origin or origin in permitted)
 
     def send_json(self,value,status=200):
+        if isinstance(value,dict) and value.get('error'):value={**value,'error':safe_error(value['error'])}
         data=json.dumps(value,ensure_ascii=False).encode()
         self.send_response(status);self.send_header('Content-Type','application/json; charset=utf-8');self.send_header('Content-Length',str(len(data)));self.send_header('Cache-Control','no-store')
         origin=self.headers.get('Origin')
@@ -335,7 +434,9 @@ class Handler(BaseHTTPRequestHandler):
         if not self.allowed(): return self.send_json({'error':'来源不被允许'},403)
         path=urllib.parse.unquote(urllib.parse.urlparse(self.path).path)
         try:
-            if path=='/api/health': return self.send_json({'ok':True,'keyConfigured':bool(os.environ.get('ARK_API_KEY')),'models':{k:os.environ.get('ARK_'+k.upper()+'_MODEL','') for k in ('text','image','video')},'ffmpeg':bool(shutil.which('ffmpeg') and shutil.which('ffprobe'))})
+            if path=='/api/health':
+                routes=model_routes();routes['director']['model']=routes['director']['model'] or os.environ.get('ARK_TEXT_MODEL','')
+                return self.send_json({'ok':True,'keyConfigured':bool(os.environ.get('ARK_API_KEY')),'routes':routes,'models':{'text':routes['director']['model'],'image':routes['image']['model'],'video':routes['video']['model']},'speechConfigured':bool(os.environ.get('SPEECH_API_KEY') or os.environ.get('SPEECH_APP_ID') and os.environ.get('SPEECH_ACCESS_TOKEN')),'ffmpeg':bool(shutil.which('ffmpeg') and shutil.which('ffprobe'))})
             if path=='/api/profile-seed':
                 seed=DATA/'profile-seed.json'
                 selected_scope=urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query).get('scope',[''])[0]
@@ -345,7 +446,7 @@ class Handler(BaseHTTPRequestHandler):
             if path.startswith('/media/'): target=media_path(path[7:])
             else:
                 name='index.html' if path=='/' else path.lstrip('/')
-                if name not in {'index.html','legacy.html','studio.js','studio.css','studio-core.js','studio-reverse.js','studio-aesthetic.js','studio-aesthetic-ui.js','studio-folders.js','studio-folders-ui.js','studio-aesthetic.css','studio-profile.js','studio-inspiration.js','studio-fragments.js','studio-fragments-ui.js','studio-ppt.js','vendor/presentation.js','lance_qrcode_public.png','lance_qrcode.png','lance_intro.mp4','api-guide.html','tutorial.html','deliverables/Lance专场整体汇报模板_v1.pptx','deliverables/Lance单条剧本汇报模板_v1.pptx'}:
+                if name not in {'index.html','legacy.html','studio.js','studio-security.js','studio.css','studio-core.js','studio-reverse.js','studio-aesthetic.js','studio-aesthetic-ui.js','studio-folders.js','studio-folders-ui.js','studio-aesthetic.css','studio-profile.js','studio-inspiration.js','studio-fragments.js','studio-fragments-ui.js','studio-ppt.js','vendor/presentation.js','lance_qrcode_public.png','lance_qrcode.png','lance_intro.mp4','api-guide.html','tutorial.html','deliverables/Lance专场整体汇报模板_v1.pptx','deliverables/Lance单条剧本汇报模板_v1.pptx'}:
                     return self.send_json({'error':'文件不存在'},404)
                 target=ROOT/name
             if not target.is_file(): return self.send_json({'error':'文件不存在'},404)
@@ -379,30 +480,42 @@ class Handler(BaseHTTPRequestHandler):
             if self.path=='/api/upload':
                 name=urllib.parse.unquote(self.headers.get('X-File-Name',''))
                 ext=Path(name).suffix.lower()
-                if ext not in {'.mp4','.mov','.webm','.jpg','.jpeg','.png','.webp','.pdf','.mp3','.wav','.m4a','.docx','.txt','.md'}:raise ValueError('支持图片、PDF/DOCX/TXT/MD、MP4/MOV/WebM视频和音频')
+                if ext not in {'.mp4','.mov','.webm','.jpg','.jpeg','.png','.webp','.pdf','.mp3','.wav','.m4a','.ogg','.docx','.txt','.md'}:raise ValueError('支持图片、PDF/DOCX/TXT/MD、MP4/MOV/WebM视频和音频')
                 target=MEDIA/(uuid.uuid4().hex+ext)
                 target.write_bytes(self.rfile.read(length))
+                # MediaRecorder's streaming WebM often has no duration header.
+                # Normalize only an audio container with missing duration; retain its original.
+                if ext in {'.webm','.ogg','.m4a','.wav','.mp3'}:
+                    probe=ffprobe(target)
+                    if not any(s.get('codec_type')=='video' for s in probe.get('streams',[])) and not float(probe.get('format',{}).get('duration') or 0):
+                        normalized=MEDIA/(uuid.uuid4().hex+'.mp3')
+                        subprocess.run(['ffmpeg','-v','error','-i',str(target),'-vn','-c:a','libmp3lame','-b:a','128k','-y',str(normalized)],check=True,capture_output=True,timeout=180)
+                        target=normalized
                 meta=describe(target)
                 if meta['kind']=='video':meta=normalize_video(target)
                 return self.send_json(meta)
             if length>20*1024*1024:raise ValueError('生成请求超过20MB')
             body=json.loads(self.rfile.read(length))
             if not isinstance(body,dict):raise ValueError('请求格式错误')
+            if self.path=='/api/transcribe':
+                speech_headers()
+                return self.send_json(run_job(transcribe_audio,body.get('localId')))
+            if self.path=='/api/reference/search':
+                route_model('embedding')
+                return self.send_json(run_job(semantic_search,body))
             if self.path=='/api/document/text':return self.send_json(document_text(body.get('localId')))
             if self.path=='/api/link/import':return self.send_json(parse_public_link(body.get('url')))
-            authorization=self.headers.get('Authorization','')
-            token=authorization[7:].strip() if authorization.startswith('Bearer ') else ''
-            token=token or os.environ.get('ARK_API_KEY','')
+            token=os.environ.get('ARK_API_KEY','')
             if self.path=='/api/chat':
-                model=body.get('model') or os.environ.get('ARK_TEXT_MODEL')
-                if not model:raise ValueError('请填写支持图片理解的文本模型ID')
+                purpose=body.get('purpose','director')
+                if purpose not in ('director','refine'):raise ValueError('未知文本模型分工')
+                model=route_model(purpose)
                 content=[{'type':'text','text':str(body.get('prompt',''))}]
                 for name in body.get('references',[])[:12]:content.append({'type':'image_url','image_url':{'url':data_url(name)}})
                 result=ark_request('/chat/completions',{'model':model,'messages':[{'role':'system','content':'你是Lance的内容总监助理。只输出完整JSON，严格遵守用户结构。区分已知事实与待确认事项，不编造场地尺寸、服装品牌、预算报价或产品性能。'}, {'role':'user','content':content}],'max_tokens':12000,'temperature':0.65},token)
-                return self.send_json({'text':result.get('choices',[{}])[0].get('message',{}).get('content','')})
+                return self.send_json({'text':result.get('choices',[{}])[0].get('message',{}).get('content',''),'purpose':purpose,'model':model,'usage':result.get('usage',{})})
             if self.path=='/api/image':
-                model=body.get('model') or os.environ.get('ARK_IMAGE_MODEL')
-                if not model:raise ValueError('请配置支持参考图的图片生成模型ID')
+                model=route_model('image')
                 payload={'model':model,'prompt':body['prompt'],'size':image_size(body),'response_format':'url','watermark':False}
                 refs=body.get('references',[])[:4]
                 if refs:payload['image']=[data_url(name) for name in refs]
@@ -411,8 +524,7 @@ class Handler(BaseHTTPRequestHandler):
                 if not data or not data[0].get('url'):raise ValueError('模型未返回图片，原素材已保留')
                 return self.send_json(download_generated(data[0]['url'],'.jpg'))
             if self.path=='/api/video':
-                model=body.get('model') or os.environ.get('ARK_VIDEO_MODEL')
-                if not model:raise ValueError('请配置支持8秒和图生视频的模型ID')
+                model=route_model('video')
                 result=ark_request('/contents/generations/tasks',build_video_body(body,model),token)
                 if not result.get('id'):raise ValueError('未返回视频任务ID')
                 return self.send_json({'taskId':result['id']})
@@ -438,7 +550,7 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send_json(describe(media_path(body['localId']),body.get('source','upload')))
             self.send_json({'error':'未知接口'},404)
         except (BrokenPipeError,ConnectionResetError):pass
-        except Exception as error:self.send_json({'error':str(error)[:500]},400)
+        except Exception as error:self.send_json({'error':safe_error(error)},400)
 
     def log_message(self,fmt,*args):
         # Paths only, never log headers, payloads, or credentials.
