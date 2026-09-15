@@ -8,3 +8,9 @@ shot_*.jpg
 node_modules/
 .lance-data/
 test-output/
+.build-*/
+.codex-finalizer-*/
+tmp/
+assets/presentation/midautumn-*.png
+assets/presentation/templates/
+deliverables/2026中秋专场内容策划_3小时首轮提案_v*.pptx

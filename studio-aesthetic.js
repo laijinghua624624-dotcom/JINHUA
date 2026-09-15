@@ -9,5 +9,21 @@
   function filter(items,q={}){const search=(q.search||'').toLowerCase();return items.filter(a=>(!q.category||q.category==='全部'||a.category===q.category)&&(!q.tag||q.tag==='全部'||a.tags.includes(q.tag))&&(!q.favorite||a.favorite)&&(`${a.name} ${a.category} ${a.tags.join(' ')} ${a.notes} ${a.link}`.toLowerCase().includes(search))).sort((a,b)=>String(b.createdAt).localeCompare(String(a.createdAt)));}
   function image(a){return a.files.find(f=>f.localId===a.coverId&&f.kind==='image')||a.files.find(f=>f.kind==='image')||null;}
   function forProject(items,scope,id){return id?items.filter(a=>a.usedIn.some(p=>p.scope===scope&&p.id===id)):[];}
-  return {CATEGORIES,link,tags,entry,normalize,migrate,filter,image,forProject};
+  function splitLegacy(items,folders,dataByScope={}){
+    const scopes=['xinxuan','personal'],folderScopes=new Map((folders||[]).map(f=>[f.id,new Set()]));
+    for(const scope of scopes)for(const item of [...(dataByScope[scope]?.projects||[]),...(dataByScope[scope]?.topics||[]),...(dataByScope[scope]?.assets||[])])
+      for(const id of item.folderIds||[])if(folderScopes.has(id))folderScopes.get(id).add(scope);
+    for(const item of items||[])for(const use of item.usedIn||[])if(scopes.includes(use.scope))for(const id of item.folderIds||[])if(folderScopes.has(id))folderScopes.get(id).add(use.scope);
+    for(const owners of folderScopes.values())if(!owners.size)owners.add('personal');
+    const result=Object.fromEntries(scopes.map(scope=>[scope,{items:[],folders:[]}]));
+    for(const folder of folders||[])for(const scope of folderScopes.get(folder.id)||['personal'])result[scope].folders.push(C.clone(folder));
+    for(const raw of items||[]){
+      const item=normalize(raw),owners=new Set((item.usedIn||[]).map(x=>x.scope).filter(x=>scopes.includes(x)));
+      for(const id of item.folderIds||[])for(const scope of folderScopes.get(id)||[])owners.add(scope);
+      if(!owners.size)owners.add('personal');
+      for(const scope of owners){const copy=C.clone(item);copy.folderIds=(copy.folderIds||[]).filter(id=>result[scope].folders.some(f=>f.id===id));copy.usedIn=(copy.usedIn||[]).filter(x=>x.scope===scope);result[scope].items.push(copy);}
+    }
+    return result;
+  }
+  return {CATEGORIES,link,tags,entry,normalize,migrate,filter,image,forProject,splitLegacy};
 });

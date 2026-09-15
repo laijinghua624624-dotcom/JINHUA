@@ -1,0 +1,7 @@
+(function(root,factory){if(typeof module==='object')module.exports=factory();else root.StudioFolders=factory();})(globalThis,function(){
+  const ids=value=>Array.isArray(value)?[...new Set(value.filter(x=>typeof x==='string'))]:[];
+  function resolve(shared,assets,scope,entity,project){const folderIds=ids([...ids(entity?.folderIds),...ids(project?.folderIds)]);const projectId=project?.id||entity?.projectId;const match=a=>ids(a.folderIds).some(id=>folderIds.includes(id));return {folderIds,shared:shared.filter(a=>match(a)||(a.usedIn||[]).some(p=>p.scope===scope&&p.id===projectId)),assets:assets.filter(a=>match(a)||(projectId&&a.projectId===projectId))};}
+  function restore(folders,data,shared,uid){const map=new Map((folders||[]).map(f=>[f.id,uid()]));for(const item of [...(data.projects||[]),...(data.topics||[]),...(data.assets||[]),...shared])item.folderIds=ids(item.folderIds).map(id=>map.get(id)).filter(Boolean);return (folders||[]).map(f=>({id:map.get(f.id),name:String(f.name||'未命名')+'（恢复副本）',description:String(f.description||'')}));}
+  function pickerMatch(item,query={}){const words=String(query.search||'').trim().toLowerCase().split(/\s+/).filter(Boolean);const text=[item.name,item.category,...(item.tags||[]),item.notes,item.link].join(' ').toLowerCase();return words.every(w=>text.includes(w))&&(!query.category||item.category===query.category)&&(!query.favorite||item.favorite);}
+  return {ids,resolve,restore,pickerMatch};
+});

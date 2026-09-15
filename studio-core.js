@@ -11,25 +11,47 @@
   const assetOK=(a,kind)=>!!(a&&a.kind===kind&&a.localId&&a.verified===true);
   function selected(slot){return slot?.versions?.find(v=>v.id===slot.selectedId)||null;}
   function slot(label,prompt=''){return {id:uid(),label,prompt,versions:[],selectedId:null,locked:false,task:null,error:''};}
-  function topic(title='未命名脚本',projectId=null){return {id:uid(),title,projectId,idea:'',createdAt:new Date().toISOString(),revision:1,quick:{fields:Object.fromEntries(QUICK.map(([k])=>[k,''])),images:[slot('主视觉'),slot('关键动作'),slot('结尾情绪')],videos:Object.fromEntries(PHASES.map(([k,label])=>[k,slot(label+'8秒')])),approved:null},deep:{fields:Object.fromEntries(DEEP.map(([k])=>[k,''])),shots:[],film:null,bgm:null},feedback:[],snapshots:[]};}
+  function coverOption(label,angle){return {id:uid(),label,angle,headline:'',subheadline:'',description:'',image:slot(label+'封面图')};}
+  function cover(){const options=[coverOption('A','情绪钩子'),coverOption('B','人物识别'),coverOption('C','信息转化')];return {recommendation:'',selectedId:options[0].id,ratio:'3:4',options};}
+  function ensureCover(t){
+    if(!t.quick)t.quick={};
+    if(!t.quick.cover||typeof t.quick.cover!=='object')t.quick.cover=cover();
+    const c=t.quick.cover;
+    if(!Array.isArray(c.options))c.options=[];
+    const defaults=[['A','情绪钩子'],['B','人物识别'],['C','信息转化']];
+    while(c.options.length<3){const [label,angle]=defaults[c.options.length];c.options.push(coverOption(label,angle));}
+    c.options=c.options.slice(0,3).map((o,i)=>{const [label,angle]=defaults[i];return {id:o?.id||uid(),label:o?.label||label,angle:o?.angle||angle,headline:o?.headline||'',subheadline:o?.subheadline||'',description:o?.description||'',image:o?.image&&typeof o.image==='object'?o.image:slot(label+'封面图')};});
+    if(!text(c.recommendation))c.recommendation=c.recommendation||'';
+    if(!['3:4','9:16'].includes(c.ratio))c.ratio='3:4';
+    if(!c.options.some(o=>o.id===c.selectedId))c.selectedId=c.options[0].id;
+    return c;
+  }
+  function topic(title='未命名脚本',projectId=null){return {id:uid(),title,projectId,idea:'',createdAt:new Date().toISOString(),revision:1,quick:{fields:Object.fromEntries(QUICK.map(([k])=>[k,''])),cover:cover(),images:[slot('主视觉'),slot('关键动作'),slot('结尾情绪')],videos:Object.fromEntries(PHASES.map(([k,label])=>[k,slot(label+'8秒')])),approved:null},deep:{fields:Object.fromEntries(DEEP.map(([k])=>[k,''])),shots:[],film:null,bgm:null},feedback:[],snapshots:[]};}
   function project(title){return {id:uid(),title,idea:'',date:'',fields:Object.fromEntries(SESSION.map(([k])=>[k,''])),topicIds:[],assetIds:[],createdAt:new Date().toISOString()};}
   function quickStatus(t){
+    const coverPlan=ensureCover(t);
     const missing=QUICK.filter(([k])=>!text(t.quick.fields[k])).map(([,label])=>label);
+    if(!text(coverPlan.recommendation))missing.push('封面首选推荐理由');
+    if(coverPlan.options.length!==3)missing.push('封面方案必须为A/B/C三套');
+    let covers=0;
+    coverPlan.options.forEach(o=>{if(!text(o.headline))missing.push(`封面${o.label}主标题`);if(!text(o.subheadline))missing.push(`封面${o.label}辅助文案`);if(!text(o.description))missing.push(`封面${o.label}构图与点击逻辑`);if(assetOK(selected(o.image),'image'))covers++;else missing.push(`封面${o.label}实际图片`);});
+    if(!coverPlan.options.some(o=>o.id===coverPlan.selectedId))missing.push('请选择首选封面');
     const images=t.quick.images.filter(s=>assetOK(selected(s),'image')).length;
     if(t.quick.images.length<3||t.quick.images.length>5)missing.push('参考图数量必须为3–5张');
     if(images!==t.quick.images.length||images<3)missing.push(`视觉参考图 ${images}/${t.quick.images.length}`);
     const videos=PHASES.filter(([k])=>{const a=selected(t.quick.videos[k]);return assetOK(a,'video')&&a.source==='ai'&&Math.abs(a.duration-8)<=0.15;}).length;
     PHASES.forEach(([k,label])=>{const a=selected(t.quick.videos[k]);if(!assetOK(a,'video')||a.source!=='ai'||!Number.isFinite(a.duration)||Math.abs(a.duration-8)>0.15)missing.push(label+'8秒AI视频');});
-    const total=QUICK.length+t.quick.images.length+3;
-    const done=QUICK.filter(([k])=>text(t.quick.fields[k])).length+images+videos;
-    return {ready:missing.length===0,missing,images,videos,percent:Math.min(missing.length?99:100,Math.round(done/total*100))};
+    const coverText=coverPlan.options.reduce((n,o)=>n+[o.headline,o.subheadline,o.description].filter(text).length,0)+(text(coverPlan.recommendation)?1:0)+(coverPlan.options.some(o=>o.id===coverPlan.selectedId)?1:0);
+    const total=QUICK.length+t.quick.images.length+3+14;
+    const done=QUICK.filter(([k])=>text(t.quick.fields[k])).length+images+videos+coverText+covers;
+    return {ready:missing.length===0,missing,images,videos,covers,percent:Math.min(missing.length?99:100,Math.round(done/total*100))};
   }
   function sessionStatus(p,topics){
     const items=p.topicIds.map(id=>topics.find(t=>t.id===id)).filter(Boolean);
     const missing=SESSION.filter(([k])=>!text(p.fields[k])).map(([,v])=>v);
     if(items.length!==6||new Set(p.topicIds).size!==6)missing.push(`故事脚本 ${items.length}/6`);
     items.forEach((t,i)=>{if(!quickStatus(t).ready)missing.push(`第${i+1}条《${t.title}》未齐备`);});
-    return {ready:missing.length===0,missing,items,images:items.reduce((s,t)=>s+quickStatus(t).images,0),videos:items.reduce((s,t)=>s+quickStatus(t).videos,0)};
+    return {ready:missing.length===0,missing,items,images:items.reduce((s,t)=>s+quickStatus(t).images,0),videos:items.reduce((s,t)=>s+quickStatus(t).videos,0),covers:items.reduce((s,t)=>s+quickStatus(t).covers,0)};
   }
   function shotFingerprint(shots){return JSON.stringify(shots.map(s=>[s.id,s.visual,s.dialogue,s.camera,s.duration,s.image.selectedId,s.video.selectedId]));}
   function deepStatus(t){
@@ -48,9 +70,9 @@
   function putVersion(s,asset){if(s.locked)throw Error('该参考已锁定，请先解锁');s.versions.push({...asset,id:uid(),createdAt:new Date().toISOString(),prompt:s.prompt});s.selectedId=s.versions.at(-1).id;s.error='';s.task=null;}
   function parseJSON(reply){let raw=String(reply).trim().replace(/^```(?:json)?\s*/,'').replace(/\s*```$/,'');try{return JSON.parse(raw);}catch{throw Error('AI未返回完整JSON，原有内容已保留，请重试');}}
   function validateFields(value,defs){if(!value||typeof value!=='object')throw Error('AI返回的策划字段缺失');for(const[k,label]of defs){if(!text(value[k]))throw Error(`AI未提供${label}，本次结果未覆盖原稿`);}return Object.fromEntries(defs.map(([k])=>[k,value[k].trim()]));}
-  function validateQuick(raw,count){const fields=validateFields(raw.fields,QUICK);if(!Array.isArray(raw.imagePrompts)||raw.imagePrompts.length!==count||raw.imagePrompts.some(p=>!text(p)))throw Error('AI返回的视觉参考数量不完整');if(PHASES.some(([k])=>!text(raw.videoPrompts?.[k])))throw Error('开场、中间、结尾视频设计不完整');return {fields,imagePrompts:raw.imagePrompts,videoPrompts:raw.videoPrompts};}
+  function validateQuick(raw,count){const fields=validateFields(raw.fields,QUICK);if(!Array.isArray(raw.imagePrompts)||raw.imagePrompts.length!==count||raw.imagePrompts.some(p=>!text(p)))throw Error('AI返回的视觉参考数量不完整');if(PHASES.some(([k])=>!text(raw.videoPrompts?.[k])))throw Error('开场、中间、结尾视频设计不完整');const c=raw.cover;if(!c||!text(c.recommendation)||!Number.isInteger(c.recommendedIndex)||c.recommendedIndex<0||c.recommendedIndex>2||!Array.isArray(c.options)||c.options.length!==3)throw Error('AI返回的视频封面推荐不完整');c.options.forEach((o,i)=>{if(!text(o.headline)||!text(o.subheadline)||!text(o.description)||!text(o.prompt))throw Error(`AI返回的封面方案${i+1}不完整`);});return {fields,imagePrompts:raw.imagePrompts,videoPrompts:raw.videoPrompts,cover:c};}
   function validateShots(raw){if(!Array.isArray(raw.shots)||raw.shots.length!==25)throw Error('必须返回25个完整分镜，原分镜已保留');return raw.shots.map((s,i)=>{if(!text(s.visual)||!text(s.camera)||!Number.isInteger(s.duration)||s.duration<2||s.duration>12)throw Error(`第${i+1}镜画面、摄影或时长不完整（2–12秒）`);return {id:uid(),number:i+1,visual:s.visual,dialogue:s.dialogue||'无台词',camera:s.camera,duration:s.duration,image:slot(`第${i+1}镜`,s.imagePrompt||s.visual),video:slot(`第${i+1}镜视频`,s.videoPrompt||s.visual)};});}
   function snapshot(t,note){const data=clone(t);delete data.snapshots;t.snapshots.push({id:uid(),time:new Date().toISOString(),note,data});t.revision++;}
   function importLegacy(old){const t=topic(old.title);const current=old.versions?.find(v=>v.version===old.currentVersion)?.data||old;const val=k=>current[k]||old[k]||'';t.id='legacy-'+old.id;t.idea=old.hook||'';t.legacyId=old.id;t.legacy=clone(old);const mapping={outline:'creativeOutline',meaning:'creativeMeaning',description:'creativeDescription',dialogue:'narrationDescription',atmosphere:'visualAtmosphere',camera:'cinematographyStyle',script:'script'};for(const[k,v]of Object.entries(mapping))t.quick.fields[k]=val(v);return t;}
-  return {QUICK,SESSION,DEEP,PHASES,uid,clone,text,assetOK,selected,slot,topic,project,quickStatus,sessionStatus,deepStatus,shotFingerprint,putVersion,parseJSON,validateFields,validateQuick,validateShots,snapshot,importLegacy};
+  return {QUICK,SESSION,DEEP,PHASES,uid,clone,text,assetOK,selected,slot,cover,ensureCover,topic,project,quickStatus,sessionStatus,deepStatus,shotFingerprint,putVersion,parseJSON,validateFields,validateQuick,validateShots,snapshot,importLegacy};
 });

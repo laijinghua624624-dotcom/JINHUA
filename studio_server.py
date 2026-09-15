@@ -5,6 +5,8 @@ No credentials or uploaded files are served by the static-file handler.
 import base64
 import concurrent.futures
 import hashlib
+import html
+from html.parser import HTMLParser
 import ipaddress
 import json
 import mimetypes
@@ -152,6 +154,78 @@ class PublicRedirect(urllib.request.HTTPRedirectHandler):
         public_url(newurl)
         return super().redirect_request(req,fp,code,msg,headers,newurl)
 
+class LinkMetadataParser(HTMLParser):
+    def __init__(self):
+        super().__init__();self.title=[];self.in_title=False;self.meta={}
+    def handle_starttag(self,tag,attrs):
+        attrs={str(k).lower():v for k,v in attrs if v is not None}
+        if tag.lower()=='meta':
+            key=(attrs.get('property') or attrs.get('name') or '').lower()
+            if key and key not in self.meta:self.meta[key]=attrs.get('content','').strip()
+        if tag.lower()=='title':self.in_title=True
+    def handle_endtag(self,tag):
+        if tag.lower()=='title':self.in_title=False
+    def handle_data(self,data):
+        if self.in_title:self.title.append(data)
+
+def normalize_video(path,source='upload'):
+    meta=describe(path,source)
+    if meta['kind']!='video':raise ValueError('链接未返回可解码的视频')
+    normalized=MEDIA/(uuid.uuid4().hex+'.mp4')
+    subprocess.run(['ffmpeg','-v','error','-i',str(path),'-map','0:v:0','-map','0:a:0?','-c:v','libx264','-preset','fast','-pix_fmt','yuv420p','-c:a','aac','-movflags','+faststart','-y',str(normalized)],check=True,capture_output=True,timeout=240)
+    result=describe(normalized,source);result['originalLocalId']=path.name
+    return result
+
+def read_public(url,limit):
+    request=urllib.request.Request(public_url(url),headers={'User-Agent':'Mozilla/5.0 LanceContentStudio/2.0','Accept':'text/html,video/*;q=0.9,*/*;q=0.5'})
+    opener=urllib.request.build_opener(PublicRedirect())
+    with opener.open(request,timeout=45) as response:
+        final=public_url(response.geturl());content_type=response.headers.get_content_type().lower();suffix=Path(urllib.parse.urlparse(final).path).suffix.lower()
+        effective=MAX_UPLOAD if content_type.startswith('video/') or (content_type=='application/octet-stream' and suffix in {'.mp4','.mov','.webm'}) else limit
+        size=int(response.headers.get('Content-Length') or 0)
+        if size>effective:raise ValueError('链接内容超过可解析大小')
+        data=response.read(effective+1)
+        if len(data)>effective:raise ValueError('链接内容超过可解析大小')
+        return data,content_type,final,response.headers.get_content_charset() or 'utf-8'
+
+def save_public_video(data,content_type,final):
+    suffix=Path(urllib.parse.urlparse(final).path).suffix.lower()
+    if content_type.startswith('video/'):
+        ext={'video/mp4':'.mp4','video/quicktime':'.mov','video/webm':'.webm'}.get(content_type,suffix if suffix in {'.mp4','.mov','.webm'} else '.mp4')
+    elif content_type=='application/octet-stream' and suffix in {'.mp4','.mov','.webm'}:ext=suffix
+    else:raise ValueError('候选地址不是可直接下载的公开视频')
+    MEDIA.mkdir(parents=True,exist_ok=True);target=MEDIA/(uuid.uuid4().hex+ext);target.write_bytes(data)
+    try:return normalize_video(target,'link')
+    except Exception:
+        target.unlink(missing_ok=True);raise
+
+def download_public_video(url):
+    data,content_type,final,_=read_public(url,MAX_UPLOAD)
+    return save_public_video(data,content_type,final)
+
+def parse_public_link(url):
+    url=public_url(str(url or '').strip())
+    data,content_type,final,charset=read_public(url,2*1024*1024)
+    if content_type.startswith('video/') or (content_type=='application/octet-stream' and Path(urllib.parse.urlparse(final).path).suffix.lower() in {'.mp4','.mov','.webm'}):
+        asset=save_public_video(data,content_type,final)
+        return {'url':url,'finalUrl':final,'title':Path(urllib.parse.urlparse(final).path).name or '链接视频','description':'','siteName':urllib.parse.urlparse(final).hostname,'asset':asset,'notice':'已解析并保存公开视频。'}
+    if content_type not in {'text/html','application/xhtml+xml'}:raise ValueError('链接不是网页或可支持的视频直链')
+    parser=LinkMetadataParser();parser.feed(data.decode(charset,'replace'))
+    meta=parser.meta;title=meta.get('og:title') or meta.get('twitter:title') or ''.join(parser.title).strip()
+    description=meta.get('og:description') or meta.get('twitter:description') or meta.get('description') or ''
+    site=meta.get('og:site_name') or urllib.parse.urlparse(final).hostname
+    asset=None;reason=''
+    candidates=[]
+    for key in ('og:video:secure_url','og:video:url','og:video','twitter:player:stream'):
+        if meta.get(key):candidates.append(urllib.parse.urljoin(final,html.unescape(meta[key])))
+    for candidate in dict.fromkeys(candidates):
+        try:asset=download_public_video(candidate);break
+        except Exception as error:reason=str(error)
+    notice='已解析页面信息'
+    if asset:notice+='，并保存页面公开视频。'
+    else:notice+='；未取得可直接下载的公开视频，请手动上传原片。'
+    return {'url':url,'finalUrl':final,'title':html.unescape(title)[:500],'description':html.unescape(description)[:4000],'siteName':html.unescape(site or '')[:200],'asset':asset,'notice':notice,'mediaNotice':reason[:300]}
+
 def download_generated(url,ext):
     MEDIA.mkdir(parents=True,exist_ok=True)
     path=MEDIA/(uuid.uuid4().hex+ext)
@@ -175,6 +249,12 @@ def build_video_body(body,model):
     if body.get('reference'):
         content.append({'type':'image_url','image_url':{'url':data_url(body['reference'])},'role':'first_frame'})
     return {'model':model,'content':content,'duration':duration,'ratio':ratio,'watermark':False}
+
+def image_size(body):
+    size=body.get('size') or '2304x1728'
+    if size not in {'2304x1728','1728x2304','1440x2560'}:
+        raise ValueError('图片尺寸不支持')
+    return size
 
 def extract_frames(name):
     path=media_path(name)
@@ -265,7 +345,7 @@ class Handler(BaseHTTPRequestHandler):
             if path.startswith('/media/'): target=media_path(path[7:])
             else:
                 name='index.html' if path=='/' else path.lstrip('/')
-                if name not in {'index.html','legacy.html','studio.js','studio.css','studio-core.js','studio-reverse.js','studio-aesthetic.js','studio-aesthetic-ui.js','studio-aesthetic.css','studio-profile.js','studio-inspiration.js','studio-fragments.js','studio-fragments-ui.js','studio-ppt.js','vendor/presentation.js','lance_qrcode_public.png','lance_qrcode.png','lance_intro.mp4','api-guide.html','tutorial.html'}:
+                if name not in {'index.html','legacy.html','studio.js','studio.css','studio-core.js','studio-reverse.js','studio-aesthetic.js','studio-aesthetic-ui.js','studio-folders.js','studio-folders-ui.js','studio-aesthetic.css','studio-profile.js','studio-inspiration.js','studio-fragments.js','studio-fragments-ui.js','studio-ppt.js','vendor/presentation.js','lance_qrcode_public.png','lance_qrcode.png','lance_intro.mp4','api-guide.html','tutorial.html','deliverables/Lance专场整体汇报模板_v1.pptx','deliverables/Lance单条剧本汇报模板_v1.pptx'}:
                     return self.send_json({'error':'文件不存在'},404)
                 target=ROOT/name
             if not target.is_file(): return self.send_json({'error':'文件不存在'},404)
@@ -303,17 +383,13 @@ class Handler(BaseHTTPRequestHandler):
                 target=MEDIA/(uuid.uuid4().hex+ext)
                 target.write_bytes(self.rfile.read(length))
                 meta=describe(target)
-                if meta['kind']=='video':
-                    # Retain original and normalize for native MP4 playback and PPT embedding.
-                    normalized=MEDIA/(uuid.uuid4().hex+'.mp4')
-                    subprocess.run(['ffmpeg','-v','error','-i',str(target),'-map','0:v:0','-map','0:a:0?','-c:v','libx264','-preset','fast','-pix_fmt','yuv420p','-c:a','aac','-movflags','+faststart','-y',str(normalized)],check=True,capture_output=True,timeout=240)
-                    meta=describe(normalized)
-                    meta['originalLocalId']=target.name
+                if meta['kind']=='video':meta=normalize_video(target)
                 return self.send_json(meta)
             if length>20*1024*1024:raise ValueError('生成请求超过20MB')
             body=json.loads(self.rfile.read(length))
             if not isinstance(body,dict):raise ValueError('请求格式错误')
             if self.path=='/api/document/text':return self.send_json(document_text(body.get('localId')))
+            if self.path=='/api/link/import':return self.send_json(parse_public_link(body.get('url')))
             authorization=self.headers.get('Authorization','')
             token=authorization[7:].strip() if authorization.startswith('Bearer ') else ''
             token=token or os.environ.get('ARK_API_KEY','')
@@ -327,7 +403,7 @@ class Handler(BaseHTTPRequestHandler):
             if self.path=='/api/image':
                 model=body.get('model') or os.environ.get('ARK_IMAGE_MODEL')
                 if not model:raise ValueError('请配置支持参考图的图片生成模型ID')
-                payload={'model':model,'prompt':body['prompt'],'size':'2304x1728','response_format':'url','watermark':False}
+                payload={'model':model,'prompt':body['prompt'],'size':image_size(body),'response_format':'url','watermark':False}
                 refs=body.get('references',[])[:4]
                 if refs:payload['image']=[data_url(name) for name in refs]
                 result=ark_request('/images/generations',payload,token)
