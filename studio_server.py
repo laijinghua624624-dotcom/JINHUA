@@ -610,7 +610,10 @@ class Handler(BaseHTTPRequestHandler):
                 model=route_model(purpose)
                 content=[{'type':'text','text':str(body.get('prompt',''))}]
                 for name in body.get('references',[])[:12]:content.append({'type':'image_url','image_url':{'url':data_url(name)}})
-                result=ark_request('/chat/completions',{'model':model,'messages':[{'role':'system','content':'你是Lance的内容总监助理。只输出完整JSON，严格遵守用户结构。区分已知事实与待确认事项，不编造场地尺寸、服装品牌、预算报价或产品性能。'}, {'role':'user','content':content}],'max_tokens':12000,'temperature':0.65},token)
+                # Seed 2.1 Pro enables deep thinking by default. For this workbench the
+                # model must return bounded structured JSON; leaving thinking enabled can
+                # spend the whole HTTP timeout before producing a single response byte.
+                result=ark_request('/chat/completions',{'model':model,'messages':[{'role':'system','content':'你是Lance的内容总监助理。只输出完整JSON，严格遵守用户结构。区分已知事实与待确认事项，不编造场地尺寸、服装品牌、预算报价或产品性能。'}, {'role':'user','content':content}],'thinking':{'type':'disabled'},'max_tokens':8000 if purpose=='director' else 4000,'temperature':0.65},token)
                 return self.send_json({'text':result.get('choices',[{}])[0].get('message',{}).get('content',''),'purpose':purpose,'model':model,'usage':result.get('usage',{})})
             if self.path=='/api/image':
                 model=route_model('image')
