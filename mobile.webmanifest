@@ -1,0 +1,11 @@
+{
+  "name": "Lance 随身采集",
+  "short_name": "Lance随身",
+  "description": "记录语音、文字、图片和链接，回到 Mac 后进入 JINHUA 深加工。",
+  "start_url": "./mobile.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#10130f",
+  "theme_color": "#151914",
+  "icons": [{"src":"mobile-icon.svg","sizes":"any","type":"image/svg+xml","purpose":"any maskable"}]
+}
