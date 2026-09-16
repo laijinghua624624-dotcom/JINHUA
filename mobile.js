@@ -2,10 +2,13 @@
 'use strict';
 const Cloud=StudioCloud;
 const app=document.querySelector('#mobile-app'),syncState=document.querySelector('#sync-state');
-const state={tab:'capture',kind:'text',session:null,items:[],projects:[],localItems:[],pending:0,message:'',recording:null,recordedFile:null};
+const state={tab:'capture',kind:'text',session:null,items:[],projects:[],localItems:[],pending:0,message:'',recording:null,recordedFile:null,shared:{title:'',body:'',url:''}};
 const labels={text:'文字灵感',voice:'语音灵感',image:'图片参考',video:'视频参考',document:'文档资料',link:'链接收藏'};
 const esc=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-function publicLink(value){if(!value)return '';let url;try{url=new URL(value);}catch{throw Error('链接格式不正确');}if(!['http:','https:'].includes(url.protocol)||url.username||url.password)throw Error('只支持公开的 http 或 https 链接');return url.href;}
+function publicLink(value){if(!value)return '';const match=String(value).match(/https?:\/\/[^\s<>"'，。；、【】「」]+/i);if(!match)throw Error('链接格式不正确');let url;try{url=new URL(match[0].replace(/[)\]）!！?？,;]+$/,''));}catch{throw Error('链接格式不正确');}if(!['http:','https:'].includes(url.protocol)||url.username||url.password)throw Error('只支持公开的 http 或 https 链接');return url.href;}
+function readShareIntent(){const params=new URLSearchParams(location.search),text=params.get('text')||'',url=params.get('url')||'';if(!params.get('title')&&!text&&!url)return;let sharedUrl='';try{sharedUrl=publicLink(url||text);}catch{}state.kind=sharedUrl?'link':'text';state.shared={title:(params.get('title')||'').slice(0,100),body:text.replace(/https?:\/\/\S+/g,'').trim(),url:sharedUrl};history.replaceState(null,'',location.pathname+location.hash);}
+function captureHome(){return new URL('./mobile.html',location.href).href.split(/[?#]/)[0];}
+function bookmarklet(){const target=JSON.stringify(captureHome());return `javascript:(()=>{const s=window.getSelection?String(window.getSelection()):'';location.href=${target}+'?kind=link&url='+encodeURIComponent(location.href)+'&title='+encodeURIComponent(document.title)+'&text='+encodeURIComponent(s)})()`;}
 function show(message){state.message=message;render();setTimeout(()=>{if(state.message===message){state.message='';render();}},5000);}
 function openQueue(){return new Promise((resolve,reject)=>{const req=indexedDB.open('jinhua_mobile_queue',1);req.onupgradeneeded=()=>req.result.createObjectStore('items',{keyPath:'localId'});req.onsuccess=()=>resolve(req.result);req.onerror=()=>reject(req.error);});}
 async function queueStore(mode,value){const db=await openQueue();return new Promise((resolve,reject)=>{const tx=db.transaction('items',mode==='read'?'readonly':'readwrite'),store=tx.objectStore('items');let req;if(mode==='put')req=store.put(value);else if(mode==='delete')req=store.delete(value);else req=store.getAll();req.onsuccess=()=>resolve(req.result);req.onerror=()=>reject(req.error);tx.oncomplete=()=>db.close();});}
@@ -21,8 +24,8 @@ function captureView(){
   return header('QUICK CAPTURE','想到什么，先留住。','不用在手机上整理成完整脚本；文字、声音和参考都会进入 Mac 收件箱。')+captureForm();
 }
 function captureForm(){
-  const fileKinds=['voice','image','video','document'],accept={voice:'audio/*',image:'image/*',video:'video/*',document:'.pdf,.txt,.md,.docx'};
-  return `<section class="mobile-card"><h2>这次要记录什么</h2><div class="capture-types">${[['text','文字','一句想法'],['voice','语音','直接说下来'],['image','图片','现场与参考'],['video','视频','片段与现场'],['document','文档','需求与资料'],['link','链接','稍后研究']].map(([key,name,sub])=>`<button data-kind="${key}" class="${state.kind===key?'active':''}"><strong>${name}</strong><small>${sub}</small></button>`).join('')}</div><label>归入空间<select id="capture-workspace"><option value="xinxuan">My·工作</option><option value="personal">My·个人</option></select></label><label>标题<input id="capture-title" maxlength="100" placeholder="可以先写一个临时名字"></label><label>${state.kind==='link'?'链接说明':'想法／补充说明'}<textarea id="capture-body" placeholder="被什么打动、想解决什么、回到电脑后希望继续做什么……"></textarea></label>${state.kind==='link'?'<label>公开链接<input id="capture-url" type="url" inputmode="url" placeholder="https://"></label>':''}${fileKinds.includes(state.kind)?`<label>选择${labels[state.kind]}文件<input id="capture-file" type="file" accept="${accept[state.kind]}"></label><p class="file-note">${state.recordedFile?`已录制：${esc(state.recordedFile.name)}`:'文件会进入私人云存储；离线时先保存在此设备。'}</p>`:''}${state.kind==='voice'?`<button class="secondary voice-button ${state.recording?'recording':''}" data-action="voice"><span class="record-dot"></span>${state.recording?'停止并保存录音':'开始录音'}</button>`:''}<div class="button-row" style="margin-top:18px"><button class="primary" data-action="capture-save">保存到随身收件箱</button></div></section>`;
+  const fileKinds=['voice','image','video','document','link'],accept={voice:'audio/*',image:'image/*',video:'video/*',document:'.pdf,.txt,.md,.docx',link:'image/png,image/jpeg,image/webp,application/pdf'};
+  return `<section class="mobile-card"><h2>这次要记录什么</h2><div class="capture-types">${[['text','文字','一句想法'],['voice','语音','直接说下来'],['image','图片','现场与参考'],['video','视频','片段与现场'],['document','文档','需求与资料'],['link','链接','网页与网站参考']].map(([key,name,sub])=>`<button data-kind="${key}" class="${state.kind===key?'active':''}"><strong>${name}</strong><small>${sub}</small></button>`).join('')}</div><label>归入空间<select id="capture-workspace"><option value="xinxuan">My·工作</option><option value="personal">My·个人</option></select></label><label>标题<input id="capture-title" maxlength="100" value="${esc(state.kind==='link'?state.shared.title:'')}" placeholder="可以先写一个临时名字"></label><label>${state.kind==='link'?'为什么收藏／想借鉴什么':'想法／补充说明'}<textarea id="capture-body" placeholder="被什么打动、想解决什么、回到电脑后希望继续做什么……">${esc(state.kind==='link'?state.shared.body:'')}</textarea></label>${state.kind==='link'?`<label>公开链接<input id="capture-url" type="url" inputmode="url" value="${esc(state.shared.url)}" placeholder="https://"></label><div class="button-row"><button class="secondary" data-action="paste-link">从剪贴板粘贴链接</button></div><p class="file-note">ShotDeck 等登录网站只保存链接和你主动上传的截图／导出文件，不自动爬取。</p>`:''}${fileKinds.includes(state.kind)?`<label>${state.kind==='link'?'可选：上传截图或导出的PDF':`选择${labels[state.kind]}文件`}<input id="capture-file" type="file" accept="${accept[state.kind]}"></label><p class="file-note">${state.recordedFile?`已录制：${esc(state.recordedFile.name)}`:'文件会进入私人云存储；离线时先保存在此设备。'}</p>`:''}${state.kind==='voice'?`<button class="secondary voice-button ${state.recording?'recording':''}" data-action="voice"><span class="record-dot"></span>${state.recording?'停止并保存录音':'开始录音'}</button>`:''}<div class="button-row" style="margin-top:18px"><button class="primary" data-action="capture-save">保存到随身收件箱</button></div></section>`;
 }
 function localDrafts(){return `<section class="mobile-list">${state.localItems.map(item=>`<article class="mobile-item"><div class="item-head"><div><span class="pill">本机草稿 · ${esc(labels[item.kind]||'记录')}</span><h3>${esc(item.title||labels[item.kind]||'未命名')}</h3></div><span class="item-meta">${esc(new Date(item.created_at).toLocaleDateString('zh-CN'))}</span></div><p>${esc((item.body||item.source_url||item.file_name||'').slice(0,280))}</p><button class="danger-button" data-action="local-delete" data-id="${esc(item.localId)}">删除这条本机草稿</button></article>`).join('')||'<div class="empty">当前设备没有待同步草稿。</div>'}</section>`;}
 function inboxView(){
@@ -38,7 +41,7 @@ function projectsView(){
 function accountView(){
   if(!Cloud.configured())return header('ACCOUNT','随身版设置','当前为本机草稿模式。')+`<section class="mobile-card"><h2>还差一步云配置</h2><p>在 Supabase 执行随身版权限脚本，并填写新 publishable key 后即可跨设备同步。</p><p class="account-line">绝不在网页中使用 secret 或 service_role。</p></section>`;
   if(!state.session)return header('ACCOUNT','我的同步账号','登录后管理同步状态。')+loginCard();
-  return header('ACCOUNT','我的同步账号','轻量采集，不调用付费AI。')+`<section class="mobile-card"><h2>${esc(state.session.user?.email||'已登录')}</h2><p>${state.pending?`还有 ${state.pending} 条本机草稿等待同步。`:'所有本机草稿均已同步。'}</p><div class="button-row"><button class="secondary" data-action="sync">立即同步</button><button class="danger-button" data-action="sign-out">退出登录</button></div></section><div class="notice">把此页面添加到主屏幕后，可像应用一样打开。数据仍以云端账号为准。</div>`;
+  return header('ACCOUNT','我的同步账号','轻量采集，不调用付费AI。')+`<section class="mobile-card"><h2>${esc(state.session.user?.email||'已登录')}</h2><p>${state.pending?`还有 ${state.pending} 条本机草稿等待同步。`:'所有本机草稿均已同步。'}</p><div class="button-row"><button class="secondary" data-action="sync">立即同步</button><button class="danger-button" data-action="sign-out">退出登录</button></div></section><section class="mobile-card"><h2>网页一键收藏</h2><p>电脑浏览器把下面按钮拖到书签栏；浏览网页时点一次，就会带着页面标题、链接和选中的文字打开 JINHUA。</p><div class="button-row"><a class="primary bookmarklet" href="${esc(bookmarklet())}">收藏到 JINHUA</a><button class="secondary" data-action="copy-bookmarklet">复制收藏按钮代码</button></div><p class="file-note">手机可使用系统分享菜单（支持网页分享目标的浏览器），或复制链接后点“从剪贴板粘贴链接”。</p></section><div class="notice">把此页面添加到主屏幕后，可像应用一样打开。数据仍以云端账号为准。</div>`;
 }
 function render(){
   document.querySelectorAll('.mobile-nav button').forEach(button=>button.classList.toggle('active',button.dataset.tab===state.tab));
@@ -62,7 +65,7 @@ async function saveCapture(){
     if(Cloud.configured()&&state.session&&navigator.onLine){let filePath=null;if(file)filePath=await Cloud.uploadFile(file);await Cloud.createInbox({...item,localId:undefined,file_path:filePath});show('已进入云端收件箱');}
     else{await queuePut({...item,file});show('已保存在此设备，登录联网后会同步');}
   }catch(error){await queuePut({...item,file});show('云端暂时不可用，已保存在此设备：'+error.message);}
-  state.recordedFile=null;await updatePending();if(state.session)await loadCloud();else render();
+  state.recordedFile=null;state.shared={title:'',body:'',url:''};await updatePending();if(state.session)await loadCloud();else render();
 }
 async function toggleVoice(){
   if(state.recording){state.recording.recorder.stop();return;}
@@ -77,6 +80,8 @@ document.addEventListener('click',async event=>{
     if(button.dataset.action==='sign-in'||button.dataset.action==='sign-up'){const email=document.querySelector('#cloud-email').value.trim(),password=document.querySelector('#cloud-password').value;if(!email||password.length<8)throw Error('请输入邮箱和至少8位密码');state.session=await (button.dataset.action==='sign-in'?Cloud.signIn(email,password):Cloud.signUp(email,password));if(!state.session?.access_token){StudioCloud.signOut();state.session=null;throw Error('注册已提交，请先到邮箱确认，再返回登录');}await syncPending();return;}
     if(button.dataset.action==='sign-out'){Cloud.signOut();state.session=null;state.items=[];state.projects=[];await updatePending();render();return;}
     if(button.dataset.action==='capture-save'){await saveCapture();return;}
+    if(button.dataset.action==='paste-link'){const text=await navigator.clipboard.readText(),url=publicLink(text);state.shared={title:document.querySelector('#capture-title')?.value||'',body:document.querySelector('#capture-body')?.value||'',url};show('链接已粘贴，可补充截图和收藏原因');return;}
+    if(button.dataset.action==='copy-bookmarklet'){await navigator.clipboard.writeText(bookmarklet());show('收藏按钮代码已复制');return;}
     if(button.dataset.action==='voice'){await toggleVoice();return;}
     if(button.dataset.action==='sync'){await syncPending();return;}
     if(button.dataset.action==='refresh'){await loadCloud();return;}
@@ -86,4 +91,4 @@ document.addEventListener('click',async event=>{
 });
 addEventListener('online',()=>{if(state.session)syncPending().catch(error=>show(error.message));});
 if('serviceWorker'in navigator)navigator.serviceWorker.register('./mobile-sw.js').catch(()=>{});
-(async()=>{await updatePending();render();if(Cloud.configured())await loadCloud();})();
+(async()=>{readShareIntent();await updatePending();render();if(Cloud.configured())await loadCloud();})();

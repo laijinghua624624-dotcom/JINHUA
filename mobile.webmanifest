@@ -4,6 +4,12 @@
   "description": "记录语音、文字、图片和链接，回到 Mac 后进入 JINHUA 深加工。",
   "start_url": "./mobile.html",
   "scope": "./",
+  "share_target": {
+    "action": "./mobile.html",
+    "method": "GET",
+    "enctype": "application/x-www-form-urlencoded",
+    "params": {"title":"title","text":"text","url":"url"}
+  },
   "display": "standalone",
   "background_color": "#10130f",
   "theme_color": "#151914",

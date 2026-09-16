@@ -18,7 +18,13 @@ function renderMobileInbox(){
 
 function mobileInboxCard(item){
   const current=item.workspace===scope,status=item.status==='inbox'?'待处理':item.status==='imported'?'已进入 Mac':'已归档';
-  const safeLink=mobileSafeLink(item.source_url);return `<article class="card mobile-inbox-card ${item.status!=='inbox'?'mobile-inbox-done':''}"><div class="shot-title"><div><span class="badge">${esc(mobileWorkspaceLabel(item.workspace))} · ${esc(mobileKindLabel(item.kind))} · ${status}</span><h3>${esc(item.title||mobileKindLabel(item.kind))}</h3></div><small>${esc(new Date(item.created_at).toLocaleString('zh-CN'))}</small></div><p class="preview-copy">${esc(item.body||item.source_url||item.file_name||'无补充说明')}</p>${safeLink?`<p><a href="${esc(safeLink)}" target="_blank" rel="noopener noreferrer">打开来源链接 ↗</a></p>`:''}${item.file_name?`<p class="muted">附件：${esc(item.file_name)}</p>`:''}${item.status==='inbox'?`<div class="actions">${btn(current?'确认进入正式资料':'切换空间并导入','mobile-import',`data-id="${esc(item.id)}"`,true)}${btn('归档','mobile-archive',`data-id="${esc(item.id)}"`)}</div>`:''}</article>`;
+  const safeLink=mobileSafeLink(item.source_url),primary=item.kind==='link'?btn(current?'整理进审美库':'切换空间并整理','mobile-link-organize',`data-id="${esc(item.id)}"`,true):btn(current?'确认进入正式资料':'切换空间并导入','mobile-import',`data-id="${esc(item.id)}"`,true);return `<article class="card mobile-inbox-card ${item.status!=='inbox'?'mobile-inbox-done':''}"><div class="shot-title"><div><span class="badge">${esc(mobileWorkspaceLabel(item.workspace))} · ${esc(mobileKindLabel(item.kind))} · ${status}</span><h3>${esc(item.title||mobileKindLabel(item.kind))}</h3></div><small>${esc(new Date(item.created_at).toLocaleString('zh-CN'))}</small></div><p class="preview-copy">${esc(item.body||item.source_url||item.file_name||'无补充说明')}</p>${safeLink?`<p><a href="${esc(safeLink)}" target="_blank" rel="noopener noreferrer">打开来源链接 ↗</a></p>`:''}${item.file_name?`<p class="muted">附件：${esc(item.file_name)}</p>`:''}${item.status==='inbox'?`<div class="actions">${primary}${btn('归档','mobile-archive',`data-id="${esc(item.id)}"`)}</div>`:''}</article>`;
+}
+
+function mobileLinkDialog(item){
+  const url=mobileSafeLink(item.source_url),host=url?new URL(url).hostname.replace(/^www\./,''):'',shotdeck=/(^|\.)shotdeck\.com$/i.test(host),categories=[...new Set([...A.CATEGORIES,...globalAssets().map(a=>a.category)])];
+  dialog('整理网页收藏',`<div class="callout"><strong>${shotdeck?'ShotDeck 内部参考模式':'先确认，再进入正式审美库'}</strong><br>${shotdeck?'只保存原始链接、你的说明及主动上传的截图／PDF；不会自动抓取网站内容。':'系统不会因为一条链接自动判断你的审美，先补充“为什么喜欢”再归档。'}</div><div class="formgrid"><label>标题<input id="mobile-link-title" value="${esc(item.title||host||'网页参考')}"></label><label>分类<input id="mobile-link-category" list="mobile-link-categories" value="摄影参考"><datalist id="mobile-link-categories">${categories.map(c=>`<option value="${esc(c)}">`).join('')}</datalist></label><label class="wide">标签（逗号分隔）<input id="mobile-link-tags" value="${esc(shotdeck?'ShotDeck，待整理':'网页收藏，待整理')}"></label><label>使用范围标记<select id="mobile-link-usage"><option value="internal-reference" selected>仅内部视觉参考</option><option value="link-only">只保存链接</option><option value="owned">本人／团队原创素材</option><option value="licensed">已确认授权素材</option></select></label><label>来源网站<input id="mobile-link-site" value="${esc(host)}"></label><label class="wide">为什么喜欢／准备借鉴什么<textarea id="mobile-link-notes">${esc(item.body||'')}</textarea></label></div>${folderMembership({folderIds:[]})}${item.file_name?`<p class="muted">将同时导入附件：${esc(item.file_name)}</p>`:''}`,
+    btn('确认进入审美库','mobile-link-import',`data-id="${esc(item.id)}"`,true)+btn('改存为灵感文字','mobile-link-fragment',`data-id="${esc(item.id)}"`));
 }
 
 async function refreshMobileInbox(){
@@ -29,10 +35,14 @@ async function refreshMobileInbox(){
   finally{MobileInbox.loading=false;if(route.view==='inbox')render();}
 }
 
-async function importMobileItem(item){
+async function importMobileItem(item,options={}){
   if(item.workspace!==scope){scope=item.workspace;localStorage.setItem('lance_studio_scope',scope);db=read(scope);}
   const now=new Date().toISOString();
-  if(['text','link','voice'].includes(item.kind)){
+  if(item.kind==='link'&&options.destination!=='fragment'){
+    const asset=A.entry(options.title||item.title||'网页参考');asset.category=options.category||'摄影参考';asset.tags=A.tags(options.tags||'网页收藏，待整理');asset.notes=options.notes||item.body||'';asset.requirements=asset.notes;asset.link=mobileSafeLink(item.source_url);asset.sourceSite=options.sourceSite||(asset.link?new URL(asset.link).hostname:'');asset.sourceUsage=options.sourceUsage||'internal-reference';asset.folderIds=options.folderIds||[];asset.mobileSource={id:item.id,capturedAt:item.created_at};
+    if(item.file_path){const blob=await StudioCloud.downloadFile(item.file_path),file=new File([blob],item.file_name||'网页参考附件',{type:item.mime_type||blob.type||'application/octet-stream'}),uploaded=await api('upload',file);uploaded.name=file.name;asset.files=[uploaded];}
+    asset.updatedAt=now;const all=globalAssets();all.push(asset);saveAesthetic(all);
+  }else if(['text','link','voice'].includes(item.kind)){
     const fragment=StudioFragments.create(item.body||item.source_url||'',item.kind);
     fragment.title=item.title||mobileKindLabel(item.kind);fragment.sourceUrl=item.source_url||'';fragment.mobileSource={id:item.id,capturedAt:item.created_at};
     if(item.kind==='voice'&&item.file_path){const blob=await StudioCloud.downloadFile(item.file_path);fragment.audioKey='voice-'+C.uid();fragment.audioMime=item.mime_type||blob.type||'audio/webm';await StudioPpt.putExport(fragment.audioKey,blob);}
@@ -66,5 +76,8 @@ async function mobileInboxAction(action,e){
   if(action==='mobile-publish'){const rows=mobileProjectRows();await StudioCloud.publishProjects(rows);notify(`已把当前空间的 ${rows.length} 个项目／脚本概览发布到手机`);return;}
   const item=MobileInbox.items.find(x=>x.id===e.dataset.id);if(!item)throw Error('随身记录不存在或已被移动');
   if(action==='mobile-archive'){await StudioCloud.patchInbox(item.id,{status:'archived',updated_at:new Date().toISOString()});await refreshMobileInbox();return;}
+  if(action==='mobile-link-organize'){if(item.workspace!==scope){scope=item.workspace;localStorage.setItem('lance_studio_scope',scope);db=read(scope);save();}mobileLinkDialog(item);return;}
+  if(action==='mobile-link-import'){await importMobileItem(item,{title:$('#mobile-link-title').value.trim(),category:$('#mobile-link-category').value.trim()||'摄影参考',tags:$('#mobile-link-tags').value,notes:$('#mobile-link-notes').value.trim(),sourceSite:$('#mobile-link-site').value.trim(),sourceUsage:$('#mobile-link-usage').value,folderIds:selectedFolders('material-folder')});close();route={view:'aesthetic'};render();notify('网页收藏已进入审美库');return;}
+  if(action==='mobile-link-fragment'){await importMobileItem(item,{destination:'fragment'});close();route={view:'fragments'};render();notify('网页收藏已改存为灵感文字');return;}
   if(action==='mobile-import'){await importMobileItem(item);route={view:'inbox'};render();notify(`已进入 ${mobileWorkspaceLabel(scope)} 的${['text','link','voice'].includes(item.kind)?'灵感库':'审美参考库'}`);return;}
 }
