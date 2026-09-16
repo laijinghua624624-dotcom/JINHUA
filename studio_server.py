@@ -19,6 +19,7 @@ import socket
 import subprocess
 import tempfile
 import threading
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -37,9 +38,11 @@ JOBS = {}
 LOCK = threading.Lock()
 
 def model_routes():
-    return {role:{'model':os.environ.get(env,'').strip()} for role,env in {
+    routes={role:{'model':os.environ.get(env,'').strip()} for role,env in {
         'director':'ARK_DIRECTOR_MODEL','refine':'ARK_REFINE_MODEL','image':'ARK_IMAGE_MODEL',
-        'video':'ARK_VIDEO_MODEL','embedding':'ARK_EMBEDDING_MODEL','speech':'SPEECH_MODEL_VERSION'}.items()}
+        'video':'ARK_VIDEO_MODEL','embedding':'ARK_EMBEDDING_MODEL'}.items()}
+    routes['speech']={'model':os.environ.get('SPEECH_MODEL_VERSION','').strip() or os.environ.get('SPEECH_RESOURCE_ID','volc.seedasr.auc').strip()}
+    return routes
 
 def route_model(role):
     routes=model_routes()
@@ -119,8 +122,44 @@ def describe(path, source='upload'):
         raise ValueError('无法读取素材时长')
     return dict(localId=path.name,kind=kind,verified=True,source=source,duration=duration,width=(video or {}).get('width',0),height=(video or {}).get('height',0),hasAudio=any(s.get('codec_type')=='audio' for s in probe.get('streams',[])))
 
+def document_binary(name):
+    found=shutil.which(name)
+    if found:return found
+    # Codex desktop bundles Poppler behind small wrapper scripts. Use the
+    # companion executable when the current runtime exposes it.
+    if name=='pdftotext':
+        anchor=shutil.which('pdftoppm') or shutil.which('pdfinfo')
+        if anchor:
+            for relative in ('../../native/poppler/bin','../../native/poppler/poppler/bin'):
+                candidate=(Path(anchor).parent/relative/name).resolve()
+                if candidate.is_file() and os.access(candidate,os.X_OK):return str(candidate)
+    return None
+
+def pdf_ocr(path):
+    renderer=document_binary('pdftoppm');ocr=document_binary('tesseract')
+    if not renderer or not ocr:raise ValueError('PDF没有可提取文字，且本机OCR组件未齐备')
+    with tempfile.TemporaryDirectory(prefix='lance-pdf-ocr-') as folder:
+        prefix=Path(folder)/'page'
+        rendered=subprocess.run([renderer,'-f','1','-l','30','-r','160','-png',str(path),str(prefix)],capture_output=True,timeout=180)
+        if rendered.returncode:raise ValueError('PDF无法渲染，可能已加密或损坏')
+        def page_number(item):
+            match=re.search(r'-(\d+)\.png$',item.name);return int(match.group(1)) if match else 0
+        pages=sorted(Path(folder).glob('page-*.png'),key=page_number)
+        if not pages:raise ValueError('PDF未渲染出可识别页面')
+        texts=[]
+        for image in pages:
+            command=[ocr,str(image),'stdout','-l','chi_sim+eng','--psm','6']
+            result=subprocess.run(command,capture_output=True,timeout=120)
+            if result.returncode:
+                result=subprocess.run([ocr,str(image),'stdout','-l','eng','--psm','6'],capture_output=True,timeout=120)
+            if not result.returncode:texts.append(result.stdout.decode('utf-8','replace'))
+        text='\n'.join(texts).strip()
+        if not text:raise ValueError('OCR未识别到文字；原PDF已保留，可上传清晰截图或手动填写')
+        return text,len(pages)
+
 def document_text(name):
     path=media_path(name);ext=path.suffix.lower()
+    notice=''
     if ext in {'.txt','.md'}:text=path.read_text(encoding='utf-8-sig')
     elif ext=='.docx':
         with zipfile.ZipFile(path) as archive:
@@ -130,13 +169,17 @@ def document_text(name):
         ns='{http://schemas.openxmlformats.org/wordprocessingml/2006/main}'
         text='\n'.join(''.join(p.itertext()) for p in root.iter(ns+'p'))
     elif ext=='.pdf':
-        if not shutil.which('pdftotext'):raise ValueError('本机缺少pdftotext，原文件已归档；请安装后重试或上传TXT/DOCX')
-        result=subprocess.run(['pdftotext','-f','1','-l','100','-layout',str(path),'-'],capture_output=True,timeout=60)
-        if result.returncode:raise ValueError('PDF无法提取文字，可能加密或损坏，请上传可读文件')
-        text=result.stdout.decode('utf-8','replace')
+        extractor=document_binary('pdftotext');text=''
+        if extractor:
+            result=subprocess.run([extractor,'-f','1','-l','100','-layout',str(path),'-'],capture_output=True,timeout=90)
+            if not result.returncode:text=result.stdout.decode('utf-8','replace')
+        if not text.strip():
+            text,pages=pdf_ocr(path);notice=f'文本层不可用，已OCR前{pages}页；可能有识别误差，必须人工核对'
+        else:notice='最多提取前100页/60000字，请核对是否完整'
     else:raise ValueError('此文件只归档；支持TXT、Markdown、DOCX和文本PDF提取')
     if not text.strip():raise ValueError('未提取到文字；扫描件需要另行OCR或手动填写')
-    return {'text':text.strip()[:60000],'notice':'最多前100页/60000字，请核对是否完整' if ext=='.pdf' or len(text)>60000 else ''}
+    if len(text)>60000:notice=(notice+'；' if notice else '')+'只保留前60000字'
+    return {'text':text.strip()[:60000],'notice':notice}
 
 def data_url(name):
     path=media_path(name)
@@ -149,19 +192,36 @@ def data_url(name):
 def ark_request(path, body, token, method='POST'):
     if not token:
         raise ValueError('服务端未配置 Ark API Key，请仅在本机 .env 设置 ARK_API_KEY')
+    if not shutil.which('curl'):
+        raise ValueError('系统缺少 curl，无法安全连接模型服务')
     payload=json.dumps(body,ensure_ascii=False).encode() if body is not None else None
-    request=urllib.request.Request(ARK+path,data=payload,method=method,headers={'Authorization':'Bearer '+token,'Content-Type':'application/json'})
+    payload_file=None
     try:
-        with urllib.request.urlopen(request,timeout=240) as response:
-            return json.loads(response.read())
-    except urllib.error.HTTPError as error:
-        # Do not echo credentials, full requests, or signed URLs.
-        try:
-            detail=json.loads(error.read()).get('error',{})
-            message=detail.get('message','模型调用失败') if isinstance(detail,dict) else str(detail)
-        except Exception:
-            message='模型调用失败'
-        raise ValueError(f'模型接口 {error.code}：{safe_error(message)}') from None
+        command=['curl','-sS','--max-time','240','--write-out','\n%{http_code}','-X',method,'-H','@-']
+        if payload is not None:
+            payload_file=tempfile.NamedTemporaryFile(prefix='lance-ark-',suffix='.json',delete=False)
+            payload_file.write(payload);payload_file.close()
+            os.chmod(payload_file.name,0o600)
+            command+=['--data-binary','@'+payload_file.name]
+        command.append(ARK+path)
+        # Pass credentials through stdin so they never appear in argv, logs, or process listings.
+        headers=('Authorization: Bearer '+token+'\nContent-Type: application/json\n').encode()
+        result=subprocess.run(command,input=headers,capture_output=True,timeout=250)
+        raw=result.stdout.decode('utf-8','replace')
+        response_text,separator,status_text=raw.rpartition('\n')
+        status=int(status_text) if separator and status_text.isdigit() else 0
+        if result.returncode or status<200 or status>=300:
+            try:
+                detail=json.loads(response_text).get('error',{})
+                message=detail.get('message','模型调用失败') if isinstance(detail,dict) else str(detail)
+            except Exception:
+                message=result.stderr.decode('utf-8','replace') or '模型调用失败'
+            label=status or result.returncode
+            raise ValueError(f'模型接口 {label}：{safe_error(message)}')
+        return json.loads(response_text)
+    finally:
+        if payload_file:
+            Path(payload_file.name).unlink(missing_ok=True)
 
 def public_url(url):
     parsed=urllib.parse.urlparse(url)
@@ -331,10 +391,11 @@ def run_job(fn,*args):
     POOL.submit(work)
     return {'jobId':jid}
 
-def speech_headers():
-    headers={'Content-Type':'application/json','X-Api-Resource-Id':os.environ.get('SPEECH_RESOURCE_ID','volc.bigasr.auc_turbo'),
-             'X-Api-Request-Id':str(uuid.uuid4()),'X-Api-Sequence':'-1'}
-    if headers['X-Api-Resource-Id']!='volc.bigasr.auc_turbo':raise ValueError('当前适配器仅支持录音文件极速识别资源；标准版需单独适配')
+def speech_headers(request_id=None):
+    headers={'Content-Type':'application/json','X-Api-Resource-Id':os.environ.get('SPEECH_RESOURCE_ID','volc.seedasr.auc'),
+             'X-Api-Request-Id':request_id or str(uuid.uuid4()),'X-Api-Sequence':'-1'}
+    if headers['X-Api-Resource-Id'] not in {'volc.seedasr.auc','volc.bigasr.auc_turbo'}:
+        raise ValueError('仅支持豆包录音文件识别 2.0 或兼容的旧极速资源')
     if os.environ.get('SPEECH_API_KEY'):
         headers['X-Api-Key']=os.environ['SPEECH_API_KEY']
     elif os.environ.get('SPEECH_APP_ID') and os.environ.get('SPEECH_ACCESS_TOKEN'):
@@ -342,28 +403,65 @@ def speech_headers():
     else:raise ValueError('请在服务端配置豆包语音凭据；它与 Ark API Key 不通用')
     return headers
 
+def speech_request(url, payload, headers, timeout=240):
+    if not shutil.which('curl'):
+        raise ValueError('系统缺少 curl，无法安全连接语音服务')
+    with tempfile.TemporaryDirectory(prefix='lance-speech-request-') as folder:
+        folder=Path(folder);payload_path=folder/'payload.json';header_path=folder/'headers.txt';body_path=folder/'body.json'
+        payload_path.write_text(json.dumps(payload,ensure_ascii=False));os.chmod(payload_path,0o600)
+        command=['curl','-sS','--max-time',str(timeout),'-X','POST','-H','@-','--data-binary','@'+str(payload_path),
+                 '--dump-header',str(header_path),'--output',str(body_path),'--write-out','%{http_code}',url]
+        header_input=''.join(f'{key}: {value}\n' for key,value in headers.items()).encode()
+        result=subprocess.run(command,input=header_input,capture_output=True,timeout=timeout+10)
+        http_status=int(result.stdout.decode('ascii','ignore') or 0)
+        response_headers={}
+        for line in header_path.read_text(errors='replace').splitlines():
+            if ':' in line:
+                key,value=line.split(':',1);response_headers[key.strip().lower()]=value.strip()
+        if result.returncode or not 200<=http_status<300:
+            message=response_headers.get('x-api-message') or response_headers.get('x-api-status-message') or ''
+            try:
+                detail=json.loads(body_path.read_text() or '{}')
+                if isinstance(detail,dict):message=message or detail.get('message') or detail.get('error','')
+            except json.JSONDecodeError:pass
+            message=safe_error(message or '请核对服务权限和资源配置')
+            raise ValueError(f'语音接口 {http_status or result.returncode}：{message}')
+        try: body=json.loads(body_path.read_text() or '{}')
+        except json.JSONDecodeError:raise ValueError('语音服务返回了无效结果') from None
+        return response_headers,body
+
 def transcribe_audio(name):
-    headers=speech_headers();source=media_path(name);meta=describe(source)
-    if meta['kind']!='audio' or not 0<meta['duration']<=7200 or source.stat().st_size>100*1024*1024:
-        raise ValueError('转写只接收不超过2小时、100MB的音频；原录音未修改')
+    request_id=str(uuid.uuid4());headers=speech_headers(request_id);source=media_path(name);meta=describe(source)
+    resource=headers['X-Api-Resource-Id'];max_duration=18000 if resource=='volc.seedasr.auc' else 7200
+    if meta['kind'] not in {'audio','video'} or meta['kind']=='video' and not meta.get('hasAudio') or not 0<meta['duration']<=max_duration or source.stat().st_size>250*1024*1024:
+        raise ValueError('转写只接收服务允许时长内、带有效音轨的音频或视频；原文件未修改')
     # Browser WebM/M4A recordings are normalized privately; originals remain intact.
     with tempfile.TemporaryDirectory(prefix='lance-asr-') as folder:
         target=Path(folder)/'speech.mp3'
         subprocess.run(['ffmpeg','-v','error','-i',str(source),'-vn','-ac','1','-ar','16000','-b:a','32k','-y',str(target)],check=True,capture_output=True,timeout=180)
         if target.stat().st_size>20*1024*1024:raise ValueError('转换后的录音超过20MB，请分段转写')
-        options={'model_name':'bigmodel'}
+        options={'model_name':'bigmodel','enable_itn':True,'enable_punc':True,'show_utterances':True}
         if os.environ.get('SPEECH_MODEL_VERSION'):options['model_version']=os.environ['SPEECH_MODEL_VERSION']
-        payload={'user':{'uid':'lance-local-studio'},'audio':{'data':base64.b64encode(target.read_bytes()).decode()},'request':options}
-        request=urllib.request.Request('https://openspeech.bytedance.com/api/v3/auc/bigmodel/recognize/flash',data=json.dumps(payload).encode(),headers=headers,method='POST')
-        try:
-            with urllib.request.urlopen(request,timeout=240) as response:
-                code=response.headers.get('X-Api-Status-Code','')
-                if code!='20000000':raise ValueError('语音识别未成功，状态码：'+code)
-                raw=json.loads(response.read())
-        except urllib.error.HTTPError as error:raise ValueError(f'语音接口HTTP {error.code}，请核对服务端权限和资源配置') from None
+        payload={'user':{'uid':'lance-local-studio'},'audio':{'data':base64.b64encode(target.read_bytes()).decode(),'format':'mp3'},'request':options}
+        if resource=='volc.bigasr.auc_turbo':
+            response_headers,raw=speech_request('https://openspeech.bytedance.com/api/v3/auc/bigmodel/recognize/flash',payload,headers)
+            code=response_headers.get('x-api-status-code','')
+            if code!='20000000':raise ValueError('语音识别未成功，状态码：'+code)
+        else:
+            response_headers,_=speech_request('https://openspeech.bytedance.com/api/v3/auc/bigmodel/submit',payload,headers)
+            code=response_headers.get('x-api-status-code','')
+            if code!='20000000':raise ValueError('语音任务提交失败，状态码：'+code)
+            deadline=time.monotonic()+600;raw={}
+            while time.monotonic()<deadline:
+                time.sleep(2)
+                response_headers,raw=speech_request('https://openspeech.bytedance.com/api/v3/auc/bigmodel/query',{},headers,60)
+                code=response_headers.get('x-api-status-code','')
+                if code=='20000000':break
+                if code not in {'20000001','20000002'}:raise ValueError('语音转写失败，状态码：'+code)
+            else:raise ValueError('语音转写超过10分钟未完成，原录音已保留，可重试')
     result=raw.get('result',{});text=result.get('text','')
     if not isinstance(text,str) or not text.strip():raise ValueError('未返回有效文字，原录音已保留')
-    return {'text':text,'utterances':result.get('utterances',[]),'source':'doubao-asr','modelVersion':os.environ.get('SPEECH_MODEL_VERSION','未指定，按账户默认版本'),'localId':name}
+    return {'text':text,'utterances':result.get('utterances',[]),'source':'doubao-asr','modelVersion':os.environ.get('SPEECH_MODEL_VERSION') or resource,'localId':name}
 
 EMBED_LOCK=threading.Lock()
 
@@ -436,7 +534,7 @@ class Handler(BaseHTTPRequestHandler):
         try:
             if path=='/api/health':
                 routes=model_routes();routes['director']['model']=routes['director']['model'] or os.environ.get('ARK_TEXT_MODEL','')
-                return self.send_json({'ok':True,'keyConfigured':bool(os.environ.get('ARK_API_KEY')),'routes':routes,'models':{'text':routes['director']['model'],'image':routes['image']['model'],'video':routes['video']['model']},'speechConfigured':bool(os.environ.get('SPEECH_API_KEY') or os.environ.get('SPEECH_APP_ID') and os.environ.get('SPEECH_ACCESS_TOKEN')),'ffmpeg':bool(shutil.which('ffmpeg') and shutil.which('ffprobe'))})
+                return self.send_json({'ok':True,'keyConfigured':bool(os.environ.get('ARK_API_KEY')),'routes':routes,'models':{'text':routes['director']['model'],'image':routes['image']['model'],'video':routes['video']['model']},'speechConfigured':bool(os.environ.get('SPEECH_API_KEY') or os.environ.get('SPEECH_APP_ID') and os.environ.get('SPEECH_ACCESS_TOKEN')),'ffmpeg':bool(shutil.which('ffmpeg') and shutil.which('ffprobe')),'pdfText':bool(document_binary('pdftotext')),'ocr':bool(document_binary('pdftoppm') and document_binary('tesseract'))})
             if path=='/api/profile-seed':
                 seed=DATA/'profile-seed.json'
                 selected_scope=urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query).get('scope',[''])[0]

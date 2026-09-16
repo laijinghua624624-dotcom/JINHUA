@@ -5,6 +5,7 @@
   const SESSION=[['outline','专场创意大纲'],['description','创意描述'],['meaning','创意寓意'],['scene','场景搭建参考'],['art','美术制景参考'],['atmosphere','整体影像氛围参考'],['camera','摄影调性参考']];
   const DEEP=[['acting','表演与人物'],['location','场地与尺寸约束'],['art','美术制景'],['props','道具'],['costume','服装妆造'],['lighting','灯光'],['camera','摄影与画幅'],['sound','台词、音乐与音效'],['edit','剪辑与转场'],['budget','预算与资源'],['schedule','拍摄排期'],['risks','可行性与待确认事项']];
   const PHASES=[['opening','开场'],['middle','中间'],['ending','结尾']];
+  const COST={image:0.22,videoSecond:0.60,monthlyBase:45,retryRate:0.20};
   const uid=()=>globalThis.crypto?.randomUUID?.()||Date.now().toString(36)+Math.random().toString(36).slice(2);
   const clone=x=>JSON.parse(JSON.stringify(x));
   const text=x=>typeof x==='string'&&x.trim().length>0;
@@ -81,6 +82,26 @@
     if(t.deep.shots.length&&Math.abs((film?.duration||0)-t.deep.shots.reduce((a,s)=>a+Number(s.duration),0))>0.5&&!missing.includes('完整AI成片参考未生成或需更新'))missing.push('成片时长与分镜不一致');
     return {ready:missing.length===0,missing,images,videos};
   }
+  function budgetPlan(value={}){
+    const positive=(v,fallback)=>Number.isFinite(Number(v))&&Number(v)>0?Number(v):fallback;
+    return {monthlyCny:positive(value.monthlyCny,800),projects:Math.round(positive(value.projects,3)),scripts:Math.round(positive(value.scripts,10)),deepScripts:Math.round(positive(value.deepScripts,6))};
+  }
+  function costTotal(images,videoSeconds,base=0){const media=images*COST.image+videoSeconds*COST.videoSecond;return Math.round((base+media*(1+COST.retryRate))*100)/100;}
+  function monthlyCostRange(value){
+    const p=budgetPlan(value),images=p.scripts*7+p.deepScripts*25,quickSeconds=p.scripts*24;
+    const lowSeconds=quickSeconds+p.deepScripts*25*3,highSeconds=quickSeconds+p.deepScripts*25*4;
+    return {...p,images,quickSeconds,deepSeconds:[p.deepScripts*75,p.deepScripts*100],videoSeconds:[lowSeconds,highSeconds],cost:[costTotal(images,lowSeconds,COST.monthlyBase),costTotal(images,highSeconds,COST.monthlyBase)]};
+  }
+  function quickGenerationCost(t){
+    const c=ensureCover(t),images=[...c.options.map(o=>o.image),...t.quick.images].filter(s=>!assetOK(selected(s),'image')).length;
+    const videoSeconds=PHASES.reduce((n,[k])=>{const a=selected(t.quick.videos[k]);return n+(assetOK(a,'video')&&a.source==='ai'&&Math.abs(a.duration-8)<=.15?0:8);},0);
+    return {images,videoSeconds,cost:costTotal(images,videoSeconds)};
+  }
+  function deepGenerationCost(t,kind='all'){
+    const images=kind==='video'?0:t.deep.shots.filter(s=>!assetOK(selected(s.image),'image')||selected(s.image).source!=='ai').length;
+    const videoSeconds=kind==='image'?0:t.deep.shots.reduce((n,s)=>{const a=selected(s.video);return n+(assetOK(a,'video')&&a.source==='ai'&&a.duration>=s.duration-.15?0:Number(s.duration)||0);},0);
+    return {images,videoSeconds,cost:costTotal(images,videoSeconds)};
+  }
   function putVersion(s,asset){if(s.locked)throw Error('该参考已锁定，请先解锁');s.versions.push({...asset,id:uid(),createdAt:new Date().toISOString(),prompt:s.prompt});s.selectedId=s.versions.at(-1).id;s.error='';s.task=null;}
   function parseJSON(reply){let raw=String(reply).trim().replace(/^```(?:json)?\s*/,'').replace(/\s*```$/,'');try{return JSON.parse(raw);}catch{throw Error('AI未返回完整JSON，原有内容已保留，请重试');}}
   function validateFields(value,defs){if(!value||typeof value!=='object')throw Error('AI返回的策划字段缺失');for(const[k,label]of defs){if(!text(value[k]))throw Error(`AI未提供${label}，本次结果未覆盖原稿`);}return Object.fromEntries(defs.map(([k])=>[k,value[k].trim()]));}
@@ -88,5 +109,5 @@
   function validateShots(raw){if(!Array.isArray(raw.shots)||raw.shots.length!==25)throw Error('必须返回25个完整分镜，原分镜已保留');return raw.shots.map((s,i)=>{if(!text(s.visual)||!text(s.camera)||!Number.isInteger(s.duration)||s.duration<2||s.duration>12)throw Error(`第${i+1}镜画面、摄影或时长不完整（2–12秒）`);return {id:uid(),number:i+1,visual:s.visual,dialogue:s.dialogue||'无台词',camera:s.camera,duration:s.duration,image:slot(`第${i+1}镜`,s.imagePrompt||s.visual),video:slot(`第${i+1}镜视频`,s.videoPrompt||s.visual)};});}
   function snapshot(t,note){const data=clone(t);delete data.snapshots;t.snapshots.push({id:uid(),time:new Date().toISOString(),note,data});t.revision++;}
   function importLegacy(old){const t=topic(old.title);const current=old.versions?.find(v=>v.version===old.currentVersion)?.data||old;const val=k=>current[k]||old[k]||'';t.id='legacy-'+old.id;t.idea=old.hook||'';t.legacyId=old.id;t.legacy=clone(old);const mapping={outline:'creativeOutline',meaning:'creativeMeaning',description:'creativeDescription',dialogue:'narrationDescription',atmosphere:'visualAtmosphere',camera:'cinematographyStyle',script:'script'};for(const[k,v]of Object.entries(mapping))t.quick.fields[k]=val(v);return t;}
-  return {QUICK,SESSION,DEEP,PHASES,uid,clone,text,assetOK,selected,slot,cover,ensureCover,topic,project,sessionTarget,setSessionTarget,directionStatus,quickStatus,sessionStatus,deepStatus,shotFingerprint,putVersion,parseJSON,validateFields,validateQuick,validateShots,snapshot,importLegacy};
+  return {QUICK,SESSION,DEEP,PHASES,COST,uid,clone,text,assetOK,selected,slot,cover,ensureCover,topic,project,sessionTarget,setSessionTarget,directionStatus,quickStatus,sessionStatus,deepStatus,budgetPlan,monthlyCostRange,quickGenerationCost,deepGenerationCost,shotFingerprint,putVersion,parseJSON,validateFields,validateQuick,validateShots,snapshot,importLegacy};
 });

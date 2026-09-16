@@ -21,8 +21,11 @@ class ModelRoutesTests(unittest.TestCase):
             with self.assertRaises(ValueError):s.speech_headers()
         with patch.dict(os.environ,{'SPEECH_API_KEY':'speech-test'},clear=True):
             headers=s.speech_headers();self.assertEqual(headers['X-Api-Key'],'speech-test')
-            self.assertEqual(headers['X-Api-Resource-Id'],'volc.bigasr.auc_turbo')
+            self.assertEqual(headers['X-Api-Resource-Id'],'volc.seedasr.auc')
+            self.assertEqual(s.model_routes()['speech']['model'],'volc.seedasr.auc')
             self.assertNotIn('X-Api-Access-Key',headers)
+        with patch.dict(os.environ,{'SPEECH_API_KEY':'speech-test','SPEECH_RESOURCE_ID':'unsupported'},clear=True):
+            with self.assertRaises(ValueError):s.speech_headers()
 
     def test_semantic_cache_separates_scopes_and_invalidates_content_and_model(self):
         with tempfile.TemporaryDirectory() as folder,patch.object(s,'DATA',Path(folder)),patch.dict(os.environ,{'ARK_EMBEDDING_MODEL':'embed-test','ARK_API_KEY':'test'},clear=True),patch.object(s,'ark_request',return_value={'data':{'embedding':[3.,4.]}}) as call:
