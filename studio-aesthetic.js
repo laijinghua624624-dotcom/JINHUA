@@ -9,6 +9,16 @@
   function filter(items,q={}){const search=(q.search||'').toLowerCase();return items.filter(a=>(!q.category||q.category==='全部'||a.category===q.category)&&(!q.tag||q.tag==='全部'||a.tags.includes(q.tag))&&(!q.favorite||a.favorite)&&(`${a.name} ${a.category} ${a.tags.join(' ')} ${a.notes} ${a.link} ${a.sourceSite||''}`.toLowerCase().includes(search))).sort((a,b)=>String(b.createdAt).localeCompare(String(a.createdAt)));}
   function image(a){return a.files.find(f=>f.localId===a.coverId&&f.kind==='image')||a.files.find(f=>f.kind==='image')||null;}
   function forProject(items,scope,id){return id?items.filter(a=>a.usedIn.some(p=>p.scope===scope&&p.id===id)):[];}
+  function trashItem(items,id,deletedAt=new Date().toISOString()){
+    if(!Array.isArray(items))throw Error('审美库数据格式异常');
+    const active=C.clone(items),index=active.findIndex(item=>item.id===id);if(index<0)throw Error('参考不存在');
+    const [deleted]=active.splice(index,1);deleted.deletedAt=deletedAt;return {items:active,deleted};
+  }
+  function restoreItem(items,trash,id,uid=C.uid){
+    if(!Array.isArray(items)||!Array.isArray(trash))throw Error('审美库或回收站数据格式异常');
+    const active=C.clone(items),bin=C.clone(trash),index=bin.findIndex(item=>item.id===id);if(index<0)throw Error('回收站中没有这条参考');
+    const [restored]=bin.splice(index,1);if(active.some(item=>item.id===restored.id))restored.id=uid();delete restored.deletedAt;restored.updatedAt=new Date().toISOString();active.push(restored);return {items:active,trash:bin,restored};
+  }
   function splitLegacy(items,folders,dataByScope={}){
     const scopes=['xinxuan','personal'],folderScopes=new Map((folders||[]).map(f=>[f.id,new Set()]));
     for(const scope of scopes)for(const item of [...(dataByScope[scope]?.projects||[]),...(dataByScope[scope]?.topics||[]),...(dataByScope[scope]?.assets||[])])
@@ -25,5 +35,5 @@
     }
     return result;
   }
-  return {CATEGORIES,link,tags,entry,normalize,migrate,filter,image,forProject,splitLegacy};
+  return {CATEGORIES,link,tags,entry,normalize,migrate,filter,image,forProject,trashItem,restoreItem,splitLegacy};
 });
