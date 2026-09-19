@@ -9,9 +9,10 @@ RUN sed -i \
         /etc/apt/sources.list.d/debian.sources \
     && apt-get -o Acquire::Retries=5 -o Acquire::ForceIPv4=true update \
     && apt-get -o Acquire::Retries=5 -o Acquire::ForceIPv4=true install -y --no-install-recommends \
-        ca-certificates ffmpeg poppler-utils tesseract-ocr tesseract-ocr-chi-sim \
+        ca-certificates ffmpeg libcap2-bin poppler-utils tesseract-ocr tesseract-ocr-chi-sim \
     && rm -rf /var/lib/apt/lists/*
 COPY --from=caddy /usr/bin/caddy /usr/bin/caddy
+RUN setcap -r /usr/bin/caddy
 RUN useradd --create-home --uid 10001 studio \
     && mkdir -p /app /data /tmp/caddy-config /tmp/caddy-data \
     && chown -R studio:studio /app /data /tmp/caddy-config /tmp/caddy-data
