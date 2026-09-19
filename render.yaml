@@ -21,13 +21,5 @@ services:
         sync: false
       - key: ARK_EMBEDDING_MODEL
         sync: false
-      - key: SPEECH_API_KEY
-        sync: false
-      - key: SPEECH_APP_ID
-        sync: false
-      - key: SPEECH_ACCESS_TOKEN
-        sync: false
       - key: SPEECH_RESOURCE_ID
-        sync: false
-      - key: SPEECH_MODEL_VERSION
-        sync: false
+        value: volc.seedasr.auc
