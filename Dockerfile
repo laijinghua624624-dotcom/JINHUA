@@ -27,7 +27,7 @@ COPY deployment/start-render.sh /usr/local/bin/start-render
 RUN chmod 755 /usr/local/bin/start-render
 ENV PYTHONUNBUFFERED=1 \
     LANCE_DATA_DIR=/data \
-    LANCE_BIND_HOST=0.0.0.0 \
+    LANCE_BIND_HOST=127.0.0.1 \
     LANCE_TRUSTED_PROXY=1 \
     LANCE_PORT=8000 \
     XDG_CONFIG_HOME=/tmp/caddy-config \
