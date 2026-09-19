@@ -5,7 +5,7 @@ const assert=require('node:assert/strict');
   const browser=await chromium.launch({headless:true,executablePath:'/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'});
   const page=await browser.newPage({viewport:{width:1440,height:1000}}),errors=[];
   page.on('pageerror',error=>errors.push(error.message));
-  await page.goto('http://127.0.0.1:8765/');
+  await page.goto('http://127.0.0.1:8787/');
   await page.getByRole('button',{name:'案例雷达'}).click();
   await page.getByRole('heading',{name:'案例雷达'}).waitFor();
   assert.equal(await page.getByRole('heading',{name:'今天先看 3 个'}).count(),1);

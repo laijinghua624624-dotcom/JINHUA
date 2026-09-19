@@ -2,7 +2,7 @@
 const {chromium}=require('playwright');const assert=require('node:assert/strict');const path=require('node:path');
 (async()=>{
  const browser=await chromium.launch({headless:true,channel:'chrome'});const page=await browser.newPage({viewport:{width:1440,height:1000}});const errors=[];page.on('pageerror',e=>errors.push(e.message));page.on('dialog',d=>d.accept());
- const url='http://127.0.0.1:8000';await page.goto(url);await page.getByRole('button',{name:'新建单条脚本',exact:true}).click();await page.locator('#new-title').fill('【自动化验收】下播后的最后一束光');await page.locator('#new-idea').fill('软件测试用稿，非正式创意：从主播下班时的疲惫切入，不虚构产品功能。');await page.getByRole('button',{name:'创建并开始',exact:true}).click();
+ const url='http://127.0.0.1:8787';await page.goto(url);await page.getByRole('button',{name:'新建单条脚本',exact:true}).click();await page.locator('#new-title').fill('【自动化验收】下播后的最后一束光');await page.locator('#new-idea').fill('软件测试用稿，非正式创意：从主播下班时的疲惫切入，不虚构产品功能。');await page.getByRole('button',{name:'创建并开始',exact:true}).click();
  await page.locator('[data-action="workflow-stage"][data-stage="full"]').click();await page.getByRole('button',{name:'选择PPT版本',exact:true}).click();assert.equal(await page.getByRole('button',{name:'下载完整策划版',exact:true}).isDisabled(),true);await page.getByRole('button',{name:'关闭',exact:true}).click();assert.equal(await page.getByRole('button',{name:'确认完整交付，进入深化'}).isDisabled(),true);
  assert.equal(await page.getByRole('heading',{name:'视频封面推荐 · A/B/C三套',exact:true}).count(),1);
  for(const k of ['outline','meaning','description','dialogue','atmosphere','camera','script']){const f=page.locator(`[data-field="topics.0.quick.fields.${k}"]`);await f.fill('测试内容：凌晨下播，人物收起话筒，留下一束工作灯。产品性能须实测确认。');await f.blur();}

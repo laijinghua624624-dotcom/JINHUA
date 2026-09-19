@@ -2,7 +2,7 @@
 const {chromium}=require('playwright'),assert=require('node:assert/strict'),path=require('node:path');
 (async()=>{const browser=await chromium.launch({headless:true,channel:'chrome'});try{
  const page=await browser.newPage({viewport:{width:1440,height:1000}}),errors=[],mediaCalls=[];page.on('pageerror',e=>errors.push(e.message));page.on('request',r=>{if(/\/api\/(image|video)$/.test(r.url()))mediaCalls.push(r.url());});
- await page.goto('http://127.0.0.1:8000/');await page.getByRole('button',{name:'新建专场',exact:true}).click();await page.locator('#new-title').fill('中秋 · 七条片验收');await page.locator('#new-count').fill('7');await page.locator('#new-idea').fill('4条预热视频，2条自述，1条祝福。');await page.getByRole('button',{name:'创建并开始',exact:true}).click();
+ await page.goto('http://127.0.0.1:8787/');await page.getByRole('button',{name:'新建专场',exact:true}).click();await page.locator('#new-title').fill('中秋 · 七条片验收');await page.locator('#new-count').fill('7');await page.locator('#new-idea').fill('4条预热视频，2条自述，1条祝福。');await page.getByRole('button',{name:'创建并开始',exact:true}).click();
  assert.equal(await page.locator('[data-action="project-all"]').count(),0);
  let expected=7,calls=0,bad=false;
  await page.route('**/api/chat',async route=>{const body=route.request().postDataJSON();assert.equal(body.purpose,'director');assert.equal(body.model,undefined);assert.equal(route.request().headers().authorization,undefined);assert.match(body.prompt,new RegExp('只补充缺少的'+expected+'条'));calls++;await route.fulfill({json:{text:JSON.stringify({fields:Object.fromEntries(['outline','description','meaning','scene','art','atmosphere','camera'].map(k=>[k,'测试方向：'+k])),stories:Array.from({length:bad?expected+1:expected},(_,i)=>({title:'故事'+calls+'-'+i,idea:'仅测试用方向与分工，拍摄条件待确认'}))})}});});

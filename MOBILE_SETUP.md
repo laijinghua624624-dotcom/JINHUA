@@ -19,7 +19,7 @@
 3. 在 Authentication 中保留 Email 登录；是否要求邮件确认按你的需要设置。
 4. 将项目的 Project URL 与 **publishable key** 填入 `mobile-config.js`。
 5. 不要填写 secret key、service_role 或数据库密码。
-6. 本机打开 `http://127.0.0.1:8000/mobile.html`，注册／登录并做一条同步测试。
+6. 本机打开 `http://127.0.0.1:8787/mobile.html`，注册／登录并做一条同步测试。
 7. 验证 Mac“随身收件箱”能导入后，再同步代码到 GitHub Pages。
 
 ## iPhone / iPad

@@ -23,7 +23,7 @@ AK = os.environ.get("VOLC_ACCESS_KEY_ID", "").strip()
 SK = os.environ.get("VOLC_SECRET_ACCESS_KEY", "").strip()
 MAX_BODY_BYTES = 1_000_000
 DEFAULT_ALLOWED_ORIGINS = (
-    "http://127.0.0.1:8000,http://localhost:8000,"
+    "http://127.0.0.1:8787,http://localhost:8787,"
     "https://laijinghua624624-dotcom.github.io"
 )
 ALLOWED_ORIGINS = {

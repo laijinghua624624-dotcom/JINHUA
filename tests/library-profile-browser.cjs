@@ -13,7 +13,7 @@ const {chromium}=require('playwright');const assert=require('node:assert/strict'
  const idle=()=>page.waitForFunction(()=>!document.querySelector('.job'));
  const read=space=>page.evaluate(s=>JSON.parse(localStorage.getItem('lance_studio_v2_'+s)),space);
  const global=space=>page.evaluate(s=>JSON.parse(localStorage.getItem('lance_studio_aesthetic_'+s)||'[]'),space);
- await page.goto('http://127.0.0.1:8000/');await nav('aesthetic');assert.equal((await global('xinxuan')).length,0);
+ await page.goto('http://127.0.0.1:8787/');await nav('aesthetic');assert.equal((await global('xinxuan')).length,0);
  await page.reload();await nav('aesthetic');assert.equal((await global('xinxuan')).length,0);
  await click('添加参考／链接');await page.locator('#aes-name').fill('测试摄影收藏');await page.locator('#aes-category').fill('自定义摄影');await page.locator('#aes-tags').fill('低饱和，追光');await page.locator('#aes-link').fill('分享：https://example.com/shot，看看摄影');await page.locator('#aes-notes').fill('用于验收的备注');await click('保存参考');await click('关闭');assert.equal((await global('xinxuan')).length,1);
  await click('批量上传');await page.locator('#aes-batch-category').fill('AI参考');await page.locator('[data-upload="aesthetic-batch"]').setInputFiles([{name:'first.png',mimeType:'image/png',buffer:require('node:fs').readFileSync(path.resolve(__dirname,'../test-output/fixture.png'))},{name:'second.png',mimeType:'image/png',buffer:require('node:fs').readFileSync(path.resolve(__dirname,'../test-output/fixture.png'))}]);await idle();assert.equal((await global('xinxuan')).length,3);

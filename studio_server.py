@@ -78,7 +78,9 @@ def server_binding():
         raise ValueError('LANCE_PUBLIC_ORIGIN 必须为不含路径的 HTTPS 来源地址')
     if host not in {'127.0.0.1','localhost','::1'} and (not origin or os.environ.get('LANCE_TRUSTED_PROXY')!='1'):
         raise ValueError('非本机监听必须配置 HTTPS 来源及带认证的反向代理；不可直接开放端口')
-    return host,int(os.environ.get('LANCE_PORT') or os.environ.get('PORT') or 8000)
+    # Keep the desktop workbench away from the user's other local project on
+    # 8000 and from the legacy Jimeng proxy on 8765.
+    return host,int(os.environ.get('LANCE_PORT') or os.environ.get('PORT') or 8787)
 
 def media_path(name):
     if not re.fullmatch(r'[a-f0-9]{32}\.(?:mp4|mov|webm|jpg|jpeg|png|webp|pdf|mp3|wav|m4a|ogg|docx|txt|md)', name or ''):

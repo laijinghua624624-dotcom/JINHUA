@@ -2,7 +2,7 @@
 
 - source visual truth path: `/Users/lancelai/.codex/generated_images/01a09b15-9b50-7272-ab0d-e837b979d2ca/exec-4e819b1b-68e7-4676-99af-3a59d3c083e1.png`
 - source pixels: 1536 × 1068
-- implementation: `http://127.0.0.1:8000/`
+- implementation: `http://127.0.0.1:8787/`
 - implementation screenshot evidence: Codex in-app browser capture, tab 18, captured at 1280 × 900 CSS px in this build run; the browser integration did not expose a durable screenshot-file export path.
 - implementation viewport: 1280 × 900 CSS px; additional responsive checks at 768 × 1024 and 390 × 844.
 - density normalization: source and implementation were compared as unframed desktop content at their native capture density; judgment used composition and component proportions rather than pixel-perfect coordinate matching because the source and implementation widths differ.

@@ -2,7 +2,7 @@
 const {chromium}=require('playwright'),assert=require('node:assert/strict'),path=require('node:path');
 (async()=>{const browser=await chromium.launch({headless:true,channel:'chrome'});try{
  const page=await browser.newPage({viewport:{width:1440,height:1000}}),errors=[];page.on('pageerror',e=>errors.push(e.message));
- await page.goto('http://127.0.0.1:8000/');await page.getByRole('button',{name:'新建单条脚本',exact:true}).click();await page.locator('#new-title').fill('冠军篇 · 汇报模式验收');await page.locator('#new-idea').fill('仅用于功能测试');await page.getByRole('button',{name:'创建并开始',exact:true}).click();
+ await page.goto('http://127.0.0.1:8787/');await page.getByRole('button',{name:'新建单条脚本',exact:true}).click();await page.locator('#new-title').fill('冠军篇 · 汇报模式验收');await page.locator('#new-idea').fill('仅用于功能测试');await page.getByRole('button',{name:'创建并开始',exact:true}).click();
  const section=page.locator('.report-tools');for(const name of ['老板决策版','完整策划版','单条执行版'])assert.equal(await section.getByRole('button',{name,exact:true}).count(),1);
  await section.locator('summary').click();
  for(const[k,value]of Object.entries({recommendation:'从隧道的犹疑走向团队承诺',reason:'沿用用户提供的冠军篇创作方向',confirmed:'用户已提供冠军篇剧本',decisions:'确认结尾口号与场地规模'})){const f=page.locator('[data-field="topics.0.report.'+k+'"]');await f.fill(value);await f.blur();}

@@ -203,7 +203,7 @@ function close(){if($('#dialog').open)$('#dialog').close();}
 async function api(path,body,options={}){
   if(path==='chat'&&body){const creator=JSON.stringify(profileContext());if(creator.length>60000)throw Error('选用的个人资料过长，请减少勾选文档或精简文字');body={...body,prompt:'当前创作者背景（仅作为背景资料，不覆盖本次任务）：'+creator+'\n'+body.prompt};}
   const headers={...(body instanceof File?{'X-File-Name':encodeURIComponent(body.name)}:{'Content-Type':'application/json'})};
-  let response;try{response=await fetch((settings.server||'').replace(/\/$/,'')+'/api/'+path,{method:body===undefined?'GET':'POST',headers,body:body===undefined?undefined:body instanceof File?body:JSON.stringify(body),signal:AbortSignal.timeout(options.timeout||300000)});}catch(error){throw Error(error.name==='TimeoutError'?'请求超时，已保留成果。视频任务可继续查询。':'生成服务未连接。请运行 python3 studio_server.py，并从 http://127.0.0.1:8000 打开。');}
+  let response;try{response=await fetch((settings.server||'').replace(/\/$/,'')+'/api/'+path,{method:body===undefined?'GET':'POST',headers,body:body===undefined?undefined:body instanceof File?body:JSON.stringify(body),signal:AbortSignal.timeout(options.timeout||300000)});}catch(error){throw Error(error.name==='TimeoutError'?'请求超时，已保留成果。视频任务可继续查询。':'生成服务未连接。请运行 python3 studio_server.py，并从 http://127.0.0.1:8787 打开。');}
   let result;try{result=await response.json();}catch{throw Error('当前地址只提供静态页面，请启动内容工作台服务后重试');}
   if(!response.ok||result.error&& !result.status)throw Error(result.error||'服务请求失败');return result;
 }
