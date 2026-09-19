@@ -8,6 +8,18 @@
 
 这是单人测试部署方案，不是多租户平台。文字、关联、PPT 索引仍在浏览器；上传／生成媒体位于服务器持久卷。换网址前先在旧网址导出每个空间的 ZIP，PPT 另存，再在新网址导入。上线不会自动迁移本机资料，也不会跨设备同步。
 
+## Render 一键部署（建议）
+
+仓库根目录的 `render.yaml` 、`Dockerfile.render` 以及 `deployment/Caddyfile.render` 已组成单服务部署：Render 终止 HTTPS，容器内 Caddy 对全路径进行密码保护，再转发给 Python 工作台。媒体挂载在 `/data` 的 10GB 持久磁盘。默认计算规格为新加坡区 `1c-2g`，适合低频个人使用；25镜合成若频繁再升级。
+
+1. 用 GitHub 登录 Render，打开 `https://render.com/deploy?repo=https://github.com/laijinghua624624-dotcom/JINHUA`。
+2. 确认服务、付费计算规格和 10GB 持久盘。持久盘不支持免费服务，不应用免费盘测试真实素材。
+3. 在创建页填写所有标记为 `sync: false` 的秘密环境变量。不要将密钥粘贴到 GitHub、聊天或前端。
+4. `LANCE_PASSWORD_HASH` 必须是 Caddy bcrypt 哈希，站点用户名固定为 `lance`。可在本机交互生成：`docker run --rm -it caddy:2.11-alpine caddy hash-password`。
+5. 创建成功后，Render 会提供 `https://lance-content-studio-....onrender.com`。这个地址才是可运行 AI 和媒体服务的公网工作台；GitHub Pages 只作为静态展示。
+
+Render 会在运行时自动提供 `RENDER_EXTERNAL_URL` 和 `PORT`；启动脚本会把公网 URL 作为同源安全边界，内部 Python 端口仍为 8000，不直接暴露。
+
 ## 上线前必填
 
 1. 专用或经授权的 Linux 主机，Docker Engine 与 Compose；足够视频生成及合成用的 CPU、内存和磁盘。先确认 80/443 未被现有服务占用；如已占用，由服务器管理员整合已有代理，不能停止其他服务。

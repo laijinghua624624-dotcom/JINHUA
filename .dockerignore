@@ -1,5 +1,7 @@
 *
 !Dockerfile
+!Dockerfile.render
+!render.yaml
 !index.html
 !studio*.js
 !studio*.css
@@ -12,3 +14,15 @@
 !lance_qrcode_public.png
 !lance_qrcode.png
 !lance_intro.mp4
+!mobile.html
+!mobile.js
+!mobile.css
+!mobile-config.js
+!mobile-icon.svg
+!mobile-sw.js
+!mobile.webmanifest
+!deliverables/
+!deliverables/*.pptx
+!deployment/
+!deployment/Caddyfile.render
+!deployment/start-render.sh

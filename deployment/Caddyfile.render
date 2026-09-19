@@ -1,0 +1,15 @@
+:{$PORT} {
+    basic_auth {
+        lance {$LANCE_PASSWORD_HASH}
+    }
+    header {
+        X-Content-Type-Options nosniff
+        X-Frame-Options DENY
+        Referrer-Policy no-referrer
+        Cache-Control no-store
+    }
+    reverse_proxy 127.0.0.1:8000 {
+        header_up Host 127.0.0.1:8000
+        header_up -Authorization
+    }
+}

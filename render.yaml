@@ -1,0 +1,35 @@
+services:
+  - type: web
+    name: lance-content-studio
+    runtime: docker
+    dockerfilePath: ./Dockerfile.render
+    region: singapore
+    plan: 1c-2g
+    autoDeployTrigger: commit
+    disk:
+      name: studio-media
+      mountPath: /data
+      sizeGB: 10
+    envVars:
+      - key: LANCE_PASSWORD_HASH
+        sync: false
+      - key: ARK_API_KEY
+        sync: false
+      - key: ARK_DIRECTOR_MODEL
+        sync: false
+      - key: ARK_REFINE_MODEL
+        sync: false
+      - key: ARK_IMAGE_MODEL
+        sync: false
+      - key: ARK_VIDEO_MODEL
+        sync: false
+      - key: ARK_EMBEDDING_MODEL
+        sync: false
+      - key: SPEECH_APP_ID
+        sync: false
+      - key: SPEECH_ACCESS_TOKEN
+        sync: false
+      - key: SPEECH_RESOURCE_ID
+        sync: false
+      - key: SPEECH_MODEL_VERSION
+        sync: false
