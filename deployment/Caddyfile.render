@@ -18,7 +18,7 @@
         header_regexp mobile User-Agent (?i)(iphone|ipad|ipod|android|mobile)
     }
     handle @mobile_root {
-        redir /mobile.html 302
+        redir * /mobile.html 302
     }
 
     @mobile_public path /mobile.html /mobile.css /mobile.js /mobile-config.js /mobile-icon.svg /mobile-sw.js /mobile.webmanifest /studio-cloud.js
