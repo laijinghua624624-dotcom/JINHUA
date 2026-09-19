@@ -49,7 +49,7 @@ function renderBudgetMini(){
   return `<details class="budget-mini"><summary><span>本月AI预算</span><strong>¥${estimate.cost[0].toFixed(0)}–¥${estimate.cost[1].toFixed(0)}</strong></summary><div class="budget-mini-body"><small class="${remaining<0?'budget-over':''}">${remaining>=0?`上限估算约余 ¥${remaining.toFixed(0)}`:`上限估算约超 ¥${Math.abs(remaining).toFixed(0)}`}</small><label>预算（元）<input type="number" min="1" data-number data-budget data-field="budgetPlan.monthlyCny" value="${p.monthlyCny}"></label><div class="budget-mini-grid"><label>项目<input type="number" min="1" data-number data-budget data-field="budgetPlan.projects" value="${p.projects}"></label><label>脚本<input type="number" min="1" data-number data-budget data-field="budgetPlan.scripts" value="${p.scripts}"></label><label>深化<input type="number" min="1" data-number data-budget data-field="budgetPlan.deepScripts" value="${p.deepScripts}"></label></div><small>参考量，不限制实际数量；生成前仍会显示本次估算。</small></div></details>`;
 }
 function render(){
-  const nav=[['home','工作台'],['fragments','灵感速记'],['inbox','随身收件箱'],['topics',scope==='personal'?'选题库':'脚本与汇报'],['projects',scope==='personal'?'我的项目':'专场排期'],['reverse','视频反推创意'],['aesthetic','审美参考'],['profile','我的资料'],['archive','成果与备份']];
+  const nav=[['home','工作台'],['fragments','灵感速记'],['inbox','随身收件箱'],['topics',scope==='personal'?'选题库':'脚本与汇报'],['projects',scope==='personal'?'我的项目':'专场排期'],['reverse','视频反推创意'],['radar','案例雷达'],['aesthetic','审美参考'],['profile','我的资料'],['archive','成果与备份']];
   const navGroups=[['首页',nav.slice(0,1)],['记录',nav.slice(1,3)],['创作',nav.slice(3,6)],['资料',nav.slice(6)]];
   $('#app').innerHTML=`<div class="shell"><aside class="side"><div class="brand">LANCE<small>CONTENT STUDIO / 内容工作台</small></div><select id="scope" aria-label="身份空间"><option value="xinxuan" ${scope==='xinxuan'?'selected':''}>My·工作</option><option value="personal" ${scope==='personal'?'selected':''}>My·个人</option></select><nav>${navGroups.map(([group,items])=>`<div class="nav-group"><small>${group}</small>${items.map(([id,label])=>btn(label,'nav',`data-view="${id}" class="${route.view===id?'active':''} ${id==='fragments'?'capture-nav':''}"`)).join('')}</div>`).join('')}</nav>${scope==='xinxuan'?renderBudgetMini():''}<footer>个人创意资产<br>本机保存 · 可导出完整备份<br><a href="mobile.html" target="_blank" rel="noopener">打开手机随身版 ↗</a><br><a href="legacy.html" target="_blank" rel="noopener">打开旧版存档 ↗</a></footer></aside><main class="main"><div class="topbar"><span>${scope==='xinxuan'?'My·工作 / 内容策划':'My·个人 / 创作'} / ${nav.find(n=>n[0]===route.view)?.[1]||(route.view==='supply'?'创意补给':'项目工程')}</span><div class="actions"><span class="save-state">本机自动保存</span>${btn(health?.ok?'本机服务已连接':'连接设置','settings')}</div></div>${job?`<div class="job" role="status"><strong>${esc(job.title)}</strong><progress value="${job.done}" max="${job.total}"></progress><div class="actions"><span>${job.done}/${job.total} · ${esc(job.detail||'')}</span>${btn(stop?'正在停止…':'停止后续生成','stop')}</div></div>`:''}${route.view==='home'?fragmentCaptureBanner():''}<div id="view">${renderView()}</div></main>${!['fragments','topic','reverse-detail'].includes(route.view)?btn('<span aria-hidden="true">＋</span> 记灵感','nav','data-view="fragments" class="capture-fab" title="随手记录语音或文字灵感"',true):''}</div>`;
   renderReportTools();
@@ -87,6 +87,7 @@ function renderView(){
   if(route.view==='projects')return hero('SESSION PLANNING','专场排期','按实际需求设置片数；先确认方向，再补齐完整交付。',btn('新建专场','new-project','',true))+`<div class="grid">${db.projects.map(projectCard).join('')||empty('创建一个专场','先确定创意方向和排期，再规划所需数量的故事。')}</div>`;
   if(route.view==='topic')return renderTopic(currentTopic());
   if(route.view==='project')return renderProject(currentProject());
+  if(route.view==='radar')return renderRadar();
   if(route.view==='aesthetic')return renderAesthetic();
   if(route.view==='profile')return renderProfile();
   if(route.view==='supply'&&scope!=='personal')return renderInspiration();
@@ -309,6 +310,7 @@ document.addEventListener('click',async event=>{
     if(action.startsWith('reverse-')){await reverseAction(action,e);return;}
     if(action.startsWith('folder-')){await folderAction(action,e);return;}
     if(action.startsWith('aesthetic-')){await aestheticAction(action,e);return;}
+    if(action.startsWith('radar-')){await radarAction(action,e);return;}
     if(action.startsWith('profile-')){await profileAction(action,e);return;}
     if(action.startsWith('supply-')){await supplyAction(action,e);return;}
     if(action.startsWith('mobile-')){await mobileInboxAction(action,e);return;}
