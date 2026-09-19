@@ -10,10 +10,10 @@
 
 ## Render 一键部署（建议）
 
-仓库根目录的 `render.yaml` 、`Dockerfile.render` 以及 `deployment/Caddyfile.render` 已组成单服务部署：Render 终止 HTTPS，容器内 Caddy 对全路径进行密码保护，再转发给 Python 工作台。媒体挂载在 `/data` 的 10GB 持久磁盘。默认计算规格为新加坡区 `1c-2g`，适合低频个人使用；25镜合成若频繁再升级。
+仓库根目录的 `render.yaml` 、`Dockerfile.render` 以及 `deployment/Caddyfile.render` 已组成单服务部署：Render 终止 HTTPS，容器内 Caddy 对全路径进行密码保护，再转发给 Python 工作台。默认使用新加坡区免费实例，无需银行卡，适合先跑通公网文字与模型调用。免费实例会休眠，容器文件系统也不是持久存储；上传和生成的媒体可能在重启或重新部署后丢失，25镜合成不作为稳定交付能力。需要长期保存时，再升级到至少 `1c-2g` 并挂载 `/data` 持久盘。
 
 1. 用 GitHub 登录 Render，打开 `https://render.com/deploy?repo=https://github.com/laijinghua624624-dotcom/JINHUA`。
-2. 确认服务、付费计算规格和 10GB 持久盘。持久盘不支持免费服务，不应用免费盘测试真实素材。
+2. 确认免费计算规格。免费实例不提供持久盘，请只用副本测试真实素材；重要文件及时下载。
 3. 在创建页填写所有标记为 `sync: false` 的秘密环境变量。不要将密钥粘贴到 GitHub、聊天或前端。
 4. `LANCE_PASSWORD_HASH` 必须是 Caddy bcrypt 哈希，站点用户名固定为 `lance`。可在本机交互生成：`docker run --rm -it caddy:2.11-alpine caddy hash-password`。
 5. 创建成功后，Render 会提供 `https://lance-content-studio-....onrender.com`。这个地址才是可运行 AI 和媒体服务的公网工作台；GitHub Pages 只作为静态展示。
