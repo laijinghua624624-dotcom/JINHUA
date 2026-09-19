@@ -27,6 +27,7 @@ import uuid
 import zipfile
 import xml.etree.ElementTree as ET
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from socketserver import ThreadingMixIn, UnixStreamServer
 
 ROOT = Path(__file__).resolve().parent
 DATA = Path(os.environ.get('LANCE_DATA_DIR', ROOT / '.lance-data'))
@@ -508,13 +509,19 @@ class Handler(BaseHTTPRequestHandler):
     def allowed(self):
         host=self.headers.get('Host','')
         origin=self.headers.get('Origin')
-        permitted={f'http://127.0.0.1:{self.server.server_port}',f'http://localhost:{self.server.server_port}'}
+        port=getattr(self.server,'server_port',None)
+        if port:
+            allowed_hosts={f'127.0.0.1:{port}',f'localhost:{port}'}
+            permitted={f'http://127.0.0.1:{port}',f'http://localhost:{port}'}
+        else:
+            allowed_hosts={'127.0.0.1','localhost'}
+            permitted={'http://127.0.0.1','http://localhost'}
         permitted.update(filter(None,os.environ.get('LANCE_ALLOWED_ORIGINS','').split(',')))
         public_origin=os.environ.get('LANCE_PUBLIC_ORIGIN','').rstrip('/')
         if public_origin:
             # Public deployment is same-origin behind an authenticated proxy.
             permitted={public_origin}
-        return host in {f'127.0.0.1:{self.server.server_port}',f'localhost:{self.server.server_port}'} and (not origin or origin in permitted)
+        return host in allowed_hosts and (not origin or origin in permitted)
 
     def send_json(self,value,status=200):
         if isinstance(value,dict) and value.get('error'):value={**value,'error':safe_error(value['error'])}
@@ -657,9 +664,25 @@ class Handler(BaseHTTPRequestHandler):
         # Paths only, never log headers, payloads, or credentials.
         print(f'[studio] {args[0] if args else fmt}')
 
+class ThreadingUnixHTTPServer(ThreadingMixIn,UnixStreamServer):
+    daemon_threads=True
+    allow_reuse_address=True
+
 if __name__=='__main__':
     load_env();MEDIA.mkdir(parents=True,exist_ok=True)
-    host,port=server_binding()
-    print(f'Lance内容工作台：http://127.0.0.1:{port}')
+    socket_path=os.environ.get('LANCE_UNIX_SOCKET','').strip()
+    if socket_path:
+        socket_file=Path(socket_path)
+        socket_file.parent.mkdir(parents=True,exist_ok=True)
+        socket_file.unlink(missing_ok=True)
+        server=ThreadingUnixHTTPServer(socket_path,Handler)
+        print(f'Lance内容工作台：unix://{socket_path}')
+    else:
+        host,port=server_binding()
+        server=ThreadingHTTPServer((host,port),Handler)
+        print(f'Lance内容工作台：http://127.0.0.1:{port}')
     print('文本、图片和视频模型未配置时仍可编辑和保存，生成会明确报错。')
-    ThreadingHTTPServer((host,port),Handler).serve_forever()
+    try:server.serve_forever()
+    finally:
+        server.server_close()
+        if socket_path:Path(socket_path).unlink(missing_ok=True)

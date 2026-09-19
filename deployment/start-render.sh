@@ -7,11 +7,13 @@ set -eu
 
 export PORT
 export LANCE_PUBLIC_ORIGIN="${LANCE_PUBLIC_ORIGIN:-$RENDER_EXTERNAL_URL}"
+export LANCE_UNIX_SOCKET="${LANCE_UNIX_SOCKET:-/tmp/studio.sock}"
 
 # A persistent disk can be mounted as root. Prepare only the dedicated app
 # paths here, then drop privileges for both network-facing processes.
 mkdir -p /data/media /tmp/caddy-config /tmp/caddy-data
 chown -R studio:studio /data /tmp/caddy-config /tmp/caddy-data
+rm -f "$LANCE_UNIX_SOCKET"
 
 setpriv --reuid=studio --regid=studio --init-groups \
   python3 -u /app/studio_server.py &

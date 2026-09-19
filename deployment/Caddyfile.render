@@ -8,8 +8,8 @@
         Referrer-Policy no-referrer
         Cache-Control no-store
     }
-    reverse_proxy 127.0.0.1:8000 {
-        header_up Host 127.0.0.1:8000
+    reverse_proxy unix//tmp/studio.sock {
+        header_up Host localhost
         header_up -Authorization
     }
 }
