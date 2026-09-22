@@ -7,22 +7,24 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="Lance随身">
-  <title>Lance · 随身采集</title>
+  <title>Lance · 随身创意</title>
   <link rel="manifest" href="mobile.webmanifest">
   <link rel="icon" href="mobile-icon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="mobile.css">
   <script defer src="mobile-config.js"></script>
   <script defer src="studio-cloud.js"></script>
+  <script defer src="studio-radar.js"></script>
   <script defer src="mobile.js"></script>
 </head>
 <body>
   <header class="mobile-head">
-    <div><span class="mobile-mark">LANCE</span><small>随身采集</small></div>
+    <div><span class="mobile-mark">LANCE</span><small>随身创意</small></div>
     <span id="sync-state" class="sync-state">本机草稿</span>
   </header>
   <main id="mobile-app" class="mobile-main" aria-live="polite"></main>
   <nav class="mobile-nav" aria-label="随身版导航">
-    <button data-tab="capture" class="active"><span>＋</span>采集</button>
+    <button data-tab="radar" class="active"><span>◉</span>雷达</button>
+    <button data-tab="capture"><span>＋</span>记录</button>
     <button data-tab="inbox"><span>⌁</span>收件箱</button>
     <button data-tab="projects"><span>▦</span>项目</button>
     <button data-tab="account"><span>●</span>我的</button>

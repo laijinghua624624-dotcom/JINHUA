@@ -1,7 +1,7 @@
 {
-  "name": "Lance 随身采集",
+  "name": "Lance 随身创意",
   "short_name": "Lance随身",
-  "description": "记录语音、文字、图片和链接，回到 Mac 后进入 JINHUA 深加工。",
+  "description": "每天查看选题雷达，也可记录语音、文字、图片和链接，回到 Mac 后进入 JINHUA 深加工。",
   "start_url": "./mobile.html",
   "scope": "./",
   "share_target": {
