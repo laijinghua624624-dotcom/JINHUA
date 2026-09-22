@@ -68,5 +68,14 @@
   }
   function daily(items,date=new Date(),count=3){const day=Math.floor(Date.UTC(date.getUTCFullYear(),date.getUTCMonth(),date.getUTCDate())/86400000),out=[];for(let i=0;i<Math.min(count,items.length);i++)out.push(items[(day+i*3)%items.length]);return out;}
   function mobileDaily(items,date=new Date(),count=3){const visual=items.filter(item=>item.visualFocus),general=items.filter(item=>!item.visualFocus),visualCount=Math.min(Math.max(count-1,0),visual.length),out=daily(visual,date,visualCount);for(const item of daily(general,new Date(date.getTime()+86400000),count-visualCount)){if(!out.some(existing=>existing.id===item.id))out.push(item);}return out.slice(0,count);}
-  return {CATEGORIES,SOURCES,CASES,normalizedURL,duplicate,notes,caseToAesthetic,sourceToAesthetic,caseToTopic,daily,mobileDaily};
+  function mobileBatch(items,seenIds=[],seed=0,count=3){
+    const unique=[...new Map((items||[]).filter(item=>item?.id).map(item=>[item.id,item])).values()],valid=new Set(unique.map(item=>item.id)),previous=(seenIds||[]).filter(id=>valid.has(id)),seen=new Set(previous);let available=unique.filter(item=>!seen.has(item.id)),reset=false;
+    if(available.length<Math.min(count,unique.length)){reset=true;const recent=new Set(previous.slice(-count));available=unique.filter(item=>!recent.has(item.id));seen.clear();if(available.length<Math.min(count,unique.length))available=unique.slice();}
+    const hash=value=>{let h=(Number(seed)||0)>>>0;for(const char of String(value)){h=Math.imul(h^char.charCodeAt(0),2654435761)>>>0;}return h;},rank=list=>[...list].sort((a,b)=>hash(a.id)-hash(b.id)),visual=rank(available.filter(item=>item.visualFocus)),general=rank(available.filter(item=>!item.visualFocus)),out=[],target=Math.min(count,unique.length);
+    out.push(...visual.slice(0,Math.min(2,target,visual.length)));
+    if(out.length<target)out.push(...general.slice(0,target-out.length));
+    if(out.length<target)out.push(...rank(available.filter(item=>!out.some(value=>value.id===item.id))).slice(0,target-out.length));
+    const nextSeen=[...seen,...out.map(item=>item.id)];return {items:out,seen:nextSeen,reset,remaining:Math.max(0,unique.length-nextSeen.length)};
+  }
+  return {CATEGORIES,SOURCES,CASES,normalizedURL,duplicate,notes,caseToAesthetic,sourceToAesthetic,caseToTopic,daily,mobileDaily,mobileBatch};
 });

@@ -38,3 +38,18 @@ test('手机视觉雷达每天至少两条拍摄或审美参考',()=>{
   assert.equal(picks.length,3);assert.equal(new Set(picks.map(x=>x.id)).size,3);assert.ok(picks.filter(x=>x.visualFocus).length>=2);
   assert.deepEqual(Radar.mobileDaily(Radar.CASES,new Date('2026-09-22T18:00:00Z')),picks);
 });
+
+test('手机点换一组时在当前一轮内不重复',()=>{
+  let seen=[],previous=[];
+  for(let turn=0;turn<5;turn++){
+    const batch=Radar.mobileBatch(Radar.CASES,seen,100+turn,3),ids=batch.items.map(item=>item.id);
+    assert.equal(ids.length,3);assert.equal(new Set(ids).size,3);assert.equal(ids.some(id=>previous.includes(id)),false);
+    assert.ok(ids.filter(id=>Radar.CASES.find(item=>item.id===id).visualFocus).length>=Math.min(2,Radar.CASES.filter(item=>item.visualFocus&&!seen.includes(item.id)).length));
+    previous=ids;seen=batch.seen;
+  }
+});
+
+test('手机雷达看完一轮才重置，且不立即重复上一组',()=>{
+  const all=Radar.CASES.map(item=>item.id),previous=all.slice(-3),batch=Radar.mobileBatch(Radar.CASES,all,999,3);
+  assert.equal(batch.reset,true);assert.equal(batch.items.some(item=>previous.includes(item.id)),false);assert.equal(batch.seen.length,3);
+});
