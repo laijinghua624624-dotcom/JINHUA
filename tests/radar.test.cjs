@@ -32,3 +32,9 @@ test('每日推荐稳定给3条且无重复',()=>{
   const picks=Radar.daily(Radar.CASES,new Date('2026-09-19T00:00:00Z'));
   assert.equal(picks.length,3);assert.equal(new Set(picks.map(x=>x.id)).size,3);assert.deepEqual(Radar.daily(Radar.CASES,new Date('2026-09-19T18:00:00Z')),picks);
 });
+
+test('手机视觉雷达每天至少两条拍摄或审美参考',()=>{
+  const picks=Radar.mobileDaily(Radar.CASES,new Date('2026-09-22T00:00:00Z'));
+  assert.equal(picks.length,3);assert.equal(new Set(picks.map(x=>x.id)).size,3);assert.ok(picks.filter(x=>x.visualFocus).length>=2);
+  assert.deepEqual(Radar.mobileDaily(Radar.CASES,new Date('2026-09-22T18:00:00Z')),picks);
+});
