@@ -1,6 +1,13 @@
-/* Remove only obsolete credential settings; never erase creative records. */
+/* One authorized clean-start migration, followed by ongoing credential cleanup. */
 (function(){
   'use strict';
+  const cleanStart='2026-09-23-clean-start';
+  if(localStorage.getItem('jinhua_clean_start')!==cleanStart){
+    const exact=new Set(['lance_ai_usage_v1','lance_studio_aesthetic','lance_studio_folders','lance_studio_scope_split_v1','jinhua_mobile_radar_saved','jinhua_mobile_radar_seen','jinhua_mobile_radar_last_viewed']);
+    for(const name of Object.keys(localStorage))if(exact.has(name)||name.startsWith('lance_studio_v2_')||name.startsWith('lance_studio_aesthetic_')||name.startsWith('lance_studio_folders_')||name.startsWith('xuan_ti_ku_'))localStorage.removeItem(name);
+    if(typeof indexedDB!=='undefined')for(const name of ['lance_studio_files','jinhua_mobile_queue'])try{indexedDB.deleteDatabase(name);}catch{}
+    localStorage.setItem('jinhua_clean_start',cleanStart);
+  }
   const sensitive=/^(apiKey|api_key|secretKey|secret_key|serviceRoleKey|service_role|jimengAK|jimengSK|accessToken|accessKey|secretAccessKey|token)$/i;
   function clean(value){
     if(!value||typeof value!=='object')return value;
