@@ -4,19 +4,18 @@
 
 ## 推荐结构
 
-同一个 HTTPS 地址提供页面、API 和媒体，Caddy 在所有路径前要求登录；后端容器不映射宿主机端口。登录名为 `lance`，密码由站点所有者设置。不要把普通本机服务直接用隧道公开。
+同一个 HTTPS 地址提供页面、API 和媒体；后端容器不映射宿主机端口。为减少单人使用的登录摩擦，Render 版本不再使用浏览器弹窗密码。模型密钥仍只保存在服务端环境变量，付费生成接口默认按来源限制为每小时 60 次。公网网址不要主动分享；长期多人使用时应恢复身份验证。
 
 这是单人测试部署方案，不是多租户平台。文字、关联、PPT 索引仍在浏览器；上传／生成媒体位于服务器持久卷。换网址前先在旧网址导出每个空间的 ZIP，PPT 另存，再在新网址导入。上线不会自动迁移本机资料，也不会跨设备同步。
 
 ## Render 一键部署（建议）
 
-仓库根目录的 `render.yaml` 、`Dockerfile.render` 以及 `deployment/Caddyfile.render` 已组成单服务部署：Render 终止 HTTPS，容器内 Caddy 对全路径进行密码保护，再转发给 Python 工作台。默认使用新加坡区免费实例，无需银行卡，适合先跑通公网文字与模型调用。免费实例会休眠，容器文件系统也不是持久存储；上传和生成的媒体可能在重启或重新部署后丢失，25镜合成不作为稳定交付能力。需要长期保存时，再升级到至少 `1c-2g` 并挂载 `/data` 持久盘。
+仓库根目录的 `render.yaml` 、`Dockerfile.render` 以及 `deployment/Caddyfile.render` 已组成单服务部署：Render 终止 HTTPS，容器内 Caddy 转发给 Python 工作台。默认使用新加坡区免费实例，无需银行卡，适合先跑通公网文字与模型调用。免费实例会休眠，容器文件系统也不是持久存储；上传和生成的媒体可能在重启或重新部署后丢失，25镜合成不作为稳定交付能力。需要长期保存时，再升级到至少 `1c-2g` 并挂载 `/data` 持久盘。
 
 1. 用 GitHub 登录 Render，打开 `https://render.com/deploy?repo=https://github.com/laijinghua624624-dotcom/JINHUA`。
 2. 确认免费计算规格。免费实例不提供持久盘，请只用副本测试真实素材；重要文件及时下载。
 3. 在创建页填写所有标记为 `sync: false` 的秘密环境变量。不要将密钥粘贴到 GitHub、聊天或前端。
-4. `LANCE_PASSWORD_HASH` 必须是 Caddy bcrypt 哈希，站点用户名固定为 `lance`。可在本机交互生成：`docker run --rm -it caddy:2.11-alpine caddy hash-password`。
-5. 创建成功后，Render 会提供 `https://lance-content-studio-....onrender.com`。这个地址才是可运行 AI 和媒体服务的公网工作台；GitHub Pages 只作为静态展示。
+4. 创建成功后，Render 会提供 `https://lance-content-studio-....onrender.com`。根地址是完整工作台；`/mobile.html` 是轻量随身版。GitHub Pages 只作为静态展示。
 
 Render 会在运行时自动提供 `RENDER_EXTERNAL_URL` 和 `PORT`；启动脚本会把公网 URL 作为同源安全边界，内部 Python 端口仍为 8000，不直接暴露。
 
@@ -38,8 +37,9 @@ docker compose --env-file deploy.env up -d --build
 
 ## 发布验收（不能用构建成功替代）
 
-- 未登录访问 `/`、`/api/health`、`/media/任意文件` 均需 401；错误密码不能进入。
-- 登录后健康检查返回 200、FFmpeg 可用、模型配置齐全；响应和日志不能出现密钥。
+- 根地址打开完整工作台，`/mobile.html` 打开轻量随身版；iPad 不应被自动跳到轻量版。
+- 健康检查返回 200、FFmpeg 可用、模型配置齐全；响应和日志不能出现密钥。
+- 公网来源连续超过每小时限制后，新付费生成请求返回 429；视频状态查询和已有成果读取不受影响。
 - 跨站请求应被拒绝，`.env`、Python 源码和私密目录不能读取。
 - 真实图片／视频／文档上传、8 秒视频核验、12 帧提取、25 镜合成、PPT 内嵌与下载。
 - 完成一条真实的文本生成、3–5 张图、三段各 8 秒视频；记录费用、耗时和失败原因。只有此项通过才能说 AI 流程跑通。
@@ -57,4 +57,4 @@ docker compose --env-file deploy.env up -d --build
 
 修改模型配置后停止当前服务再重新启动。电脑休眠／关机期间不可访问；程序退出后需要重新启动。服务器日志不应包含请求正文、API密钥或个人资料。
 
-实现依据：[Caddy 登录保护](https://caddyserver.com/docs/caddyfile/directives/basic_auth)、[Caddy 反向代理](https://caddyserver.com/docs/caddyfile/directives/reverse_proxy)。
+实现依据：[Caddy 反向代理](https://caddyserver.com/docs/caddyfile/directives/reverse_proxy)。

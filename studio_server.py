@@ -3,6 +3,7 @@
 No credentials or uploaded files are served by the static-file handler.
 """
 import base64
+from collections import defaultdict, deque
 import concurrent.futures
 import hashlib
 import html
@@ -37,6 +38,32 @@ MAX_UPLOAD = 250 * 1024 * 1024
 POOL = concurrent.futures.ThreadPoolExecutor(max_workers=2)
 JOBS = {}
 LOCK = threading.Lock()
+RATE_LOCK = threading.Lock()
+RATE_HITS = defaultdict(deque)
+PAID_PATHS = {'/api/chat','/api/image','/api/video','/api/transcribe','/api/reference/search'}
+
+def paid_request_allowed(handler):
+    """Keep an accidentally shared public URL from creating an unlimited bill."""
+    if not os.environ.get('LANCE_PUBLIC_ORIGIN'):
+        return True
+    try:
+        limit=max(1,min(int(os.environ.get('LANCE_PAID_REQUESTS_PER_HOUR','60')),500))
+    except ValueError:
+        limit=60
+    forwarded=handler.headers.get('X-Forwarded-For','').split(',',1)[0].strip()
+    try:
+        client=str(ipaddress.ip_address(forwarded))
+    except ValueError:
+        client='unknown'
+    now=time.time()
+    with RATE_LOCK:
+        hits=RATE_HITS[client]
+        while hits and hits[0] <= now-3600:
+            hits.popleft()
+        if len(hits)>=limit:
+            return False
+        hits.append(now)
+        return True
 
 def model_routes():
     routes={role:{'model':os.environ.get(env,'').strip()} for role,env in {
@@ -604,6 +631,8 @@ class Handler(BaseHTTPRequestHandler):
             if length>20*1024*1024:raise ValueError('生成请求超过20MB')
             body=json.loads(self.rfile.read(length))
             if not isinstance(body,dict):raise ValueError('请求格式错误')
+            if self.path in PAID_PATHS and not paid_request_allowed(self):
+                return self.send_json({'error':'本小时生成请求较多，已暂停新的付费任务；稍后再试。'},429)
             if self.path=='/api/transcribe':
                 speech_headers()
                 return self.send_json(run_job(transcribe_audio,body.get('localId')))

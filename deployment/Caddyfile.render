@@ -10,41 +10,11 @@
         Cache-Control no-store
     }
 
-    # Phones and tablets use the Supabase account shown inside the mobile
-    # companion.  Keep these static files outside the desktop Basic Auth gate
-    # so mobile users do not have to pass through two unrelated logins.
-    @mobile_root {
-        path /
-        header_regexp mobile User-Agent (?i)(iphone|ipad|ipod|android|mobile)
-    }
-    handle @mobile_root {
-        redir * /mobile.html 302
-    }
-
-    @mobile_public path /mobile.html /mobile.css /mobile.js /mobile-config.js /mobile-icon.svg /mobile-sw.js /mobile.webmanifest /studio-cloud.js
-    handle @mobile_public {
-        reverse_proxy unix//tmp/studio.sock {
-            header_up Host localhost
-            header_up -Authorization
-        }
-    }
-
-    # Render's health monitor cannot provide site credentials. This endpoint
-    # only reports capability flags and never returns secrets or user data.
-    handle /api/health {
-        reverse_proxy unix//tmp/studio.sock {
-            header_up Host localhost
-            header_up -Authorization
-        }
-    }
-
-    handle {
-        basic_auth {
-            lance {$LANCE_PASSWORD_HASH}
-        }
-        reverse_proxy unix//tmp/studio.sock {
-            header_up Host localhost
-            header_up -Authorization
-        }
+    # The full workbench is always the root page, including on iPad. The
+    # lightweight capture companion remains available explicitly at
+    # /mobile.html. API credentials stay in the Render environment.
+    reverse_proxy unix//tmp/studio.sock {
+        header_up Host localhost
+        header_up -Authorization
     }
 }
