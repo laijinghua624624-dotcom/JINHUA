@@ -3,6 +3,7 @@
   'use strict';
   const SESSION_KEY='jinhua_cloud_session_v1';
   const BUCKET='mobile-inbox';
+  const WORKBENCH_BUCKET='workbench-media';
   function config(){
     const value=root.JINHUA_MOBILE_CONFIG||{};
     return {url:String(value.supabaseUrl||'').replace(/\/$/,''),key:String(value.publishableKey||'')};
@@ -45,5 +46,25 @@
     const s=await auth(),rows=items.map(item=>({...item,user_id:s.user.id,updated_at:new Date().toISOString()}));if(!rows.length)return [];
     return request('/rest/v1/mobile_projects?on_conflict=user_id,workspace,source_id',{method:'POST',token:s.access_token,headers:{Prefer:'resolution=merge-duplicates,return=representation'},body:rows});
   }
-  return {SESSION_KEY,BUCKET,config,configured,readSession,saveSession,signUp,signIn,signOut,session,listInbox,createInbox,patchInbox,uploadFile,downloadFile,listProjects,publishProjects,safeName};
+  async function getWorkbench(workspace){
+    const s=await auth();
+    const rows=await request('/rest/v1/workbench_snapshots?workspace=eq.'+encodeURIComponent(workspace)+'&select=*&limit=1',{token:s.access_token});
+    return rows?.[0]||null;
+  }
+  async function putWorkbench(workspace,payload,revision,deviceId){
+    const s=await auth(),row={user_id:s.user.id,workspace,payload,revision:Number(revision)||Date.now(),device_id:String(deviceId||''),updated_at:new Date().toISOString()};
+    const rows=await request('/rest/v1/workbench_snapshots?on_conflict=user_id,workspace',{method:'POST',token:s.access_token,headers:{Prefer:'resolution=merge-duplicates,return=representation'},body:row});
+    return rows?.[0]||row;
+  }
+  async function uploadWorkbenchMedia(workspace,name,blob){
+    const s=await auth(),path=`${s.user.id}/${workspace}/${safeName(name)}`;
+    await request('/storage/v1/object/'+WORKBENCH_BUCKET+'/'+encodePath(path),{method:'POST',token:s.access_token,headers:{'Content-Type':blob.type||'application/octet-stream','x-upsert':'true'},body:blob});
+    return path;
+  }
+  async function signedWorkbenchMedia(path,expiresIn=604800){
+    const s=await auth(),c=config(),data=await request('/storage/v1/object/sign/'+WORKBENCH_BUCKET+'/'+encodePath(path),{method:'POST',token:s.access_token,body:{expiresIn}}),url=data?.signedURL||data?.signedUrl;
+    if(!url)throw Error('云端素材地址生成失败');
+    return /^https?:\/\//.test(url)?url:c.url+'/storage/v1'+url;
+  }
+  return {SESSION_KEY,BUCKET,WORKBENCH_BUCKET,config,configured,readSession,saveSession,signUp,signIn,signOut,session,listInbox,createInbox,patchInbox,uploadFile,downloadFile,listProjects,publishProjects,getWorkbench,putWorkbench,uploadWorkbenchMedia,signedWorkbenchMedia,safeName};
 });

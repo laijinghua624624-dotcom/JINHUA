@@ -75,3 +75,41 @@ drop policy if exists "mobile storage update own" on storage.objects;
 create policy "mobile storage update own" on storage.objects for update to authenticated using (bucket_id='mobile-inbox' and (storage.foldername(name))[1]=(select auth.uid())::text) with check (bucket_id='mobile-inbox' and (storage.foldername(name))[1]=(select auth.uid())::text);
 drop policy if exists "mobile storage delete own" on storage.objects;
 create policy "mobile storage delete own" on storage.objects for delete to authenticated using (bucket_id='mobile-inbox' and (storage.foldername(name))[1]=(select auth.uid())::text);
+
+-- Full workbench sync. One private snapshot is kept for each user/workspace.
+-- Media stays in a separate private bucket and is only readable by its owner.
+create table if not exists public.workbench_snapshots (
+  user_id uuid not null references auth.users(id) on delete cascade,
+  workspace text not null check (workspace in ('xinxuan','personal')),
+  payload jsonb not null default '{}'::jsonb,
+  revision bigint not null default 0,
+  device_id text not null default '',
+  updated_at timestamptz not null default now(),
+  primary key (user_id,workspace)
+);
+
+alter table public.workbench_snapshots enable row level security;
+revoke all on public.workbench_snapshots from anon;
+grant select,insert,update,delete on public.workbench_snapshots to authenticated;
+
+drop policy if exists "workbench snapshots select own" on public.workbench_snapshots;
+create policy "workbench snapshots select own" on public.workbench_snapshots for select to authenticated using ((select auth.uid())=user_id);
+drop policy if exists "workbench snapshots insert own" on public.workbench_snapshots;
+create policy "workbench snapshots insert own" on public.workbench_snapshots for insert to authenticated with check ((select auth.uid())=user_id);
+drop policy if exists "workbench snapshots update own" on public.workbench_snapshots;
+create policy "workbench snapshots update own" on public.workbench_snapshots for update to authenticated using ((select auth.uid())=user_id) with check ((select auth.uid())=user_id);
+drop policy if exists "workbench snapshots delete own" on public.workbench_snapshots;
+create policy "workbench snapshots delete own" on public.workbench_snapshots for delete to authenticated using ((select auth.uid())=user_id);
+
+insert into storage.buckets (id,name,public,file_size_limit,allowed_mime_types)
+values ('workbench-media','workbench-media',false,262144000,array['image/jpeg','image/png','image/webp','video/mp4','video/quicktime','video/webm','audio/webm','audio/mp4','audio/mpeg','audio/wav','audio/ogg','application/pdf','application/vnd.openxmlformats-officedocument.wordprocessingml.document','text/plain','text/markdown'])
+on conflict (id) do update set public=false,file_size_limit=excluded.file_size_limit,allowed_mime_types=excluded.allowed_mime_types;
+
+drop policy if exists "workbench media select own" on storage.objects;
+create policy "workbench media select own" on storage.objects for select to authenticated using (bucket_id='workbench-media' and (storage.foldername(name))[1]=(select auth.uid())::text);
+drop policy if exists "workbench media insert own" on storage.objects;
+create policy "workbench media insert own" on storage.objects for insert to authenticated with check (bucket_id='workbench-media' and (storage.foldername(name))[1]=(select auth.uid())::text);
+drop policy if exists "workbench media update own" on storage.objects;
+create policy "workbench media update own" on storage.objects for update to authenticated using (bucket_id='workbench-media' and (storage.foldername(name))[1]=(select auth.uid())::text) with check (bucket_id='workbench-media' and (storage.foldername(name))[1]=(select auth.uid())::text);
+drop policy if exists "workbench media delete own" on storage.objects;
+create policy "workbench media delete own" on storage.objects for delete to authenticated using (bucket_id='workbench-media' and (storage.foldername(name))[1]=(select auth.uid())::text);

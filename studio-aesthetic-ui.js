@@ -27,9 +27,9 @@ function loadAesthetic(){
   let items;try{items=A.migrate(JSON.parse(raw),JSON.parse(old));}catch{throw Error('审美库数据无法读取，未覆盖原数据。请保留旧版备份。');}
   const next=JSON.stringify(items);if(raw!==next){localStorage.setItem(store+'_previous',raw);localStorage.setItem(store,next);}return items;
 }
-function saveAesthetic(items,space=scope){ensureScopedLibraries();const store=aestheticStoreKey(space),prior=localStorage.getItem(store);try{if(prior)localStorage.setItem(store+'_previous',prior);localStorage.setItem(store,JSON.stringify(items));}catch{throw Error('审美库本机存储不足，原记录已保留，请先导出备份');}}
+function saveAesthetic(items,space=scope){ensureScopedLibraries();const store=aestheticStoreKey(space),prior=localStorage.getItem(store);try{if(prior)localStorage.setItem(store+'_previous',prior);localStorage.setItem(store,JSON.stringify(items));globalThis.markWorkspaceDirty?.(space);}catch{throw Error('审美库本机存储不足，原记录已保留，请先导出备份');}}
 function loadAestheticTrash(){let items;try{items=JSON.parse(localStorage.getItem(aestheticTrashKey())||'[]');}catch{throw Error('回收站数据无法读取，原数据未覆盖');}if(!Array.isArray(items))throw Error('回收站数据格式异常，原数据未覆盖');return items;}
-function saveAestheticTrash(items){const store=aestheticTrashKey(),prior=localStorage.getItem(store);try{if(prior)localStorage.setItem(store+'_previous',prior);localStorage.setItem(store,JSON.stringify(items));}catch{throw Error('回收站保存失败，未删除原参考');}}
+function saveAestheticTrash(items){const store=aestheticTrashKey(),prior=localStorage.getItem(store);try{if(prior)localStorage.setItem(store+'_previous',prior);localStorage.setItem(store,JSON.stringify(items));globalThis.markWorkspaceDirty?.(scope);}catch{throw Error('回收站保存失败，未删除原参考');}}
 function renderAesthetic(){
   const all=folderLibraryEntries(globalAssets()),trashCount=loadAestheticTrash().length,q=aestheticQuery,items=A.filter(all,q),categories=[...new Set([...A.CATEGORIES,...all.map(a=>a.category)])],tags=[...new Set(all.flatMap(a=>a.tags))].sort();
   const pages=Math.max(1,Math.ceil(items.length/24));q.page=Math.max(1,Math.min(q.page,pages));
