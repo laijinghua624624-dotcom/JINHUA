@@ -521,4 +521,8 @@ async function resumeWorkbenchSync(){
     cloudState.remote=cloudState.remotes?.[scope]||null;cloudState.status=cloudMeta().dirtyAt?'待同步':'云端已同步';render();
   }catch(error){cloudState.status='同步需处理';cloudState.error=error.message;render();}
 }
-try{db=read(scope);save(false);workspaceReady=true;render();applyProfileSeed();resumeWorkbenchSync();api('health',undefined,{timeout:5000}).then(h=>{health=h;render();}).catch(()=>{});}catch(error){$('#app').textContent=error.message;}
+try{
+  db=read(scope);save(false);workspaceReady=true;render();applyProfileSeed();resumeWorkbenchSync();
+  if(new URLSearchParams(location.search).get('sync')==='1')queueMicrotask(async()=>{await refreshCloudState();showCloudSync();});
+  api('health',undefined,{timeout:5000}).then(h=>{health=h;render();}).catch(()=>{});
+}catch(error){$('#app').textContent=error.message;}
