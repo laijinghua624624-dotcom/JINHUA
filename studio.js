@@ -40,13 +40,38 @@ const currentTopic=()=>db.topics.find(t=>t.id===route.id);
 const currentProject=()=>db.projects.find(p=>p.id===route.id);
 const ts=t=>db.topics.indexOf(t);
 const ps=p=>db.projects.indexOf(p);
+const AI_USAGE_KEY='lance_ai_usage_v1';
 function get(path){return path.split('.').reduce((v,k)=>v?.[k],db);}
 function set(path,value){const bits=path.split('.');const leaf=bits.pop();const parent=bits.reduce((v,k)=>v[k],db);parent[leaf]=value;}
 function context(t){const p=db.projects.find(p=>p.id===t.projectId);const refs=resolvedReferences(t).assets;return {form:t.form,motif:t.motif,inspirationSource:t.inspirationSource,exploration:t.exploration,creator:profileContext(),referenceFolders:referenceContext(t).folders,aesthetic:referenceContext(t).aesthetic,project:p?{title:p.title,kind:p.kind,personalRole:p.personalRole,deliverables:p.deliverables,fields:p.fields,idea:p.idea}:null,title:t.title,idea:t.idea,quick:t.quick.fields,cover:C.ensureCover(t),approved:t.quick.approved||t.directionApproved,preferences:db.preferences,assets:refs.map(a=>({name:a.name,kind:a.kind,dimensions:a.dimensions,dimensionsConfirmed:a.dimensionsConfirmed,requirements:a.requirements,inventory:a.inventory,analysis:a.analysis,selectedOutfits:a.outfits?.filter(o=>o.selected)})),format:'4:3 Open Gate，构图兼顾中央9:16主输出和16:9保底。尺寸不明处必须列为待确认。'};}
 function referenceIDs(t){return folderImageIDs(t);}
+function monthKey(date=new Date()){return `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}`;}
+function usageLedger(){
+  try{const value=JSON.parse(localStorage.getItem(AI_USAGE_KEY)||'{}');return {limitCny:Number(value.limitCny)>0?Number(value.limitCny):C.budgetPlan(db.budgetPlan).monthlyCny,months:value.months&&typeof value.months==='object'?value.months:{}};}catch{return {limitCny:C.budgetPlan(db.budgetPlan).monthlyCny,months:{}};}
+}
+function saveUsageLedger(value){localStorage.setItem(AI_USAGE_KEY,JSON.stringify(value));}
+function recordTextUsage(result,purpose){
+  const ledger=usageLedger(),month=monthKey(),entry=ledger.months[month]||(ledger.months[month]={actualCny:null,textCalls:[],createdAt:new Date().toISOString()});
+  if(!Array.isArray(entry.textCalls))entry.textCalls=[];
+  entry.textCalls.push({at:new Date().toISOString(),purpose,model:result.model||'',usage:result.usage||{}});
+  saveUsageLedger(ledger);
+}
+function generatedMediaUsage(){
+  const month=monthKey(),seen=new Set(),roots=[db];
+  for(const name of ['xinxuan','personal']){if(name===scope)continue;try{const other=JSON.parse(localStorage.getItem(key(name))||'null');if(other)roots.push(other);}catch{}}
+  const media=[];
+  const visit=value=>{if(!value||typeof value!=='object')return;if(value.localId&&value.source==='ai'&&!value.provenance&&String(value.createdAt||'').startsWith(month)&&['image','video'].includes(value.kind)){if(!seen.has(value.localId)){seen.add(value.localId);media.push(value);}}for(const child of Object.values(value))if(child&&typeof child==='object')visit(child);};
+  roots.forEach(visit);
+  const images=media.filter(x=>x.kind==='image').length,videoSeconds=media.filter(x=>x.kind==='video').reduce((n,x)=>n+(Number(x.duration)||0),0);
+  return {images,videoSeconds,cost:images*C.COST.image+videoSeconds*C.COST.videoSecond};
+}
+function currentAIUsage(){
+  const ledger=usageLedger(),month=monthKey(),entry=ledger.months[month]||{},media=generatedMediaUsage(),manual=entry.actualCny===''||entry.actualCny==null?null:Number(entry.actualCny),textCalls=Array.isArray(entry.textCalls)?entry.textCalls.length:0;
+  return {ledger,month,entry,media,textCalls,used:Number.isFinite(manual)?manual:media.cost,manual:Number.isFinite(manual)?manual:null};
+}
 function renderBudgetMini(){
-  const p=C.budgetPlan(db.budgetPlan),estimate=C.monthlyCostRange(p),remaining=p.monthlyCny-estimate.cost[1];
-  return `<details class="budget-mini"><summary><span>本月AI预算</span><strong>¥${estimate.cost[0].toFixed(0)}–¥${estimate.cost[1].toFixed(0)}</strong></summary><div class="budget-mini-body"><small class="${remaining<0?'budget-over':''}">${remaining>=0?`上限估算约余 ¥${remaining.toFixed(0)}`:`上限估算约超 ¥${Math.abs(remaining).toFixed(0)}`}</small><label>预算（元）<input type="number" min="1" data-number data-budget data-field="budgetPlan.monthlyCny" value="${p.monthlyCny}"></label><div class="budget-mini-grid"><label>项目<input type="number" min="1" data-number data-budget data-field="budgetPlan.projects" value="${p.projects}"></label><label>脚本<input type="number" min="1" data-number data-budget data-field="budgetPlan.scripts" value="${p.scripts}"></label><label>深化<input type="number" min="1" data-number data-budget data-field="budgetPlan.deepScripts" value="${p.deepScripts}"></label></div><small>参考量，不限制实际数量；生成前仍会显示本次估算。</small></div></details>`;
+  const u=currentAIUsage(),remaining=u.ledger.limitCny-u.used,label=u.manual==null?'系统估算':'账单金额';
+  return `<details class="budget-mini"><summary><span>本月已用</span><strong>${u.manual==null?'约 ':''}¥${u.used.toFixed(2)}</strong></summary><div class="budget-mini-body"><small>${label} · ${u.month}</small><small class="${remaining<0?'budget-over':''}">${remaining>=0?`距离 ¥${u.ledger.limitCny.toFixed(0)} 上限还剩 ¥${remaining.toFixed(2)}`:`已超出上限 ¥${Math.abs(remaining).toFixed(2)}`}</small><small>${u.media.images}张AI图 · ${Math.round(u.media.videoSeconds)}秒AI视频 · ${u.textCalls}次文字生成</small><label>账单实际已用（元，可选）<input type="number" min="0" step="0.01" data-usage-actual placeholder="未填写时显示系统估算" value="${u.manual??''}"></label><label>本月提醒上限（元）<input type="number" min="1" step="1" data-usage-limit value="${u.ledger.limitCny}"></label><small>自动金额只估算本工作台成功生成的图片和视频；文字、优惠、失败任务及其他平台调用以火山账单为准。</small></div></details>`;
 }
 const PRIMARY_NAV=[['home','首页'],['projects','项目'],['fragments','灵感'],['aesthetic','参考库'],['archive','成果']];
 function primarySection(view){if(['topic','topics','project','projects','supply'].includes(view))return'projects';if(['fragments','inbox'].includes(view))return'fragments';if(['aesthetic','asset','scenes','wardrobe','reverse','reverse-detail','radar'].includes(view))return'aesthetic';if(['archive'].includes(view))return'archive';return'home';}
@@ -215,7 +240,7 @@ async function api(path,body,options={}){
   let result;try{result=await response.json();}catch{throw Error('当前地址只提供静态页面，请启动内容工作台服务后重试');}
   if(!response.ok||result.error&& !result.status)throw Error(result.error||'服务请求失败');return result;
 }
-async function chat(prompt,refs=[],purpose='director'){const r=await api('chat',{purpose,prompt,references:refs});return C.parseJSON(r.text);}
+async function chat(prompt,refs=[],purpose='director'){const r=await api('chat',{purpose,prompt,references:refs});recordTextUsage(r,purpose);return C.parseJSON(r.text);}
 async function delay(ms){await new Promise(r=>setTimeout(r,ms));}
 async function pollJob(id){for(let n=0;n<600;n++){const r=await api('jobs/'+id);if(r.status==='succeeded')return r.result;if(r.status==='failed')throw Error(r.error);await delay(2000);}throw Error('处理超时，请稍后检查成果。');}
 async function withJob(title,total,fn,successMessage='本轮处理已完成，结果已保存到对应卡位。'){if(job){notify('当前任务仍在运行，请等待或停止后续生成。');return false;}let succeeded=false;job={title,done:0,total,detail:''};stop=false;render();try{await fn();succeeded=!stop;if(succeeded)notify(successMessage);}catch(error){notify(error.message,'error');}finally{job=null;save();render();}return succeeded;}
@@ -291,6 +316,8 @@ document.addEventListener('change',async event=>{
   try{
     if(e.id==='scope'){if(job||fragmentRecording||fragmentPending){e.value=scope;throw Error('生成期间请先停止后续任务，再切换空间');}fragmentSelected.clear();fragmentSearch='';referenceFolder='all';aestheticQuery={category:'全部',tag:'全部',search:'',favorite:false,page:1};scope=e.value;localStorage.setItem('lance_studio_scope',scope);db=read(scope);route={view:'home'};save();render();applyProfileSeed();return;}
     if(e.hasAttribute('data-session-count')){if(job)throw Error('请先结束当前任务');const p=db.projects.find(p=>p.id===e.dataset.sessionCount);C.setSessionTarget(p,e.value);save();render();return;}
+    if(e.hasAttribute('data-usage-actual')){const ledger=usageLedger(),month=monthKey(),entry=ledger.months[month]||(ledger.months[month]={textCalls:[],createdAt:new Date().toISOString()});entry.actualCny=e.value===''?null:Math.max(0,Number(e.value)||0);saveUsageLedger(ledger);render();return;}
+    if(e.hasAttribute('data-usage-limit')){const ledger=usageLedger();ledger.limitCny=Math.max(1,Number(e.value)||800);saveUsageLedger(ledger);render();return;}
     if(e.hasAttribute('data-budget')){if(job)throw Error('请先结束当前任务');set(e.dataset.field,Number(e.value));db.budgetPlan=C.budgetPlan(db.budgetPlan);save();render();return;}
     if(e.dataset.field){if(job)throw Error('生成过程中暂不修改，停止后可打磨');set(e.dataset.field,e.hasAttribute('data-bool')?e.checked:e.hasAttribute('data-number')?Number(e.value):e.value);save();refreshReadiness();return;}
     if(e.dataset.version){const s=get(e.dataset.version);if(s.locked)throw Error('参考已锁定');s.selectedId=e.value;s.prompt=C.selected(s)?.prompt||s.prompt;save();render();return;}
