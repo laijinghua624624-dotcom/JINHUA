@@ -514,15 +514,14 @@ document.addEventListener('click',async event=>{
   }catch(error){showError(error);}
 });
 window.addEventListener('beforeunload',event=>{if(job||fragmentRecording||fragmentPending){event.preventDefault();event.returnValue='';}});
-async function resumeWorkbenchSync(){
+async function resumeWorkbenchSync(openPanel=false){
   try{
-    await refreshCloudState();if(!cloudState.session){render();return;}
+    await refreshCloudState();if(!cloudState.session){render();if(openPanel)showCloudSync();return;}
     for(const space of ['xinxuan','personal']){const meta=cloudMeta(space),remote=cloudState.remotes?.[space];if(!meta.paired||!remote)continue;if(meta.dirtyAt){await uploadWorkspace(space,false);continue;}if(WC.newer(remote.revision,meta.lastRevision)){const payload=await addSignedMedia(C.clone(remote.payload));persistWorkspacePayload(space,payload,remote.revision);}else{const payload=workspacePayload(space);if(WC.mediaGroups(payload.data,payload.aesthetic,payload.trash).size){await addSignedMedia(payload);persistWorkspacePayload(space,payload,meta.lastRevision);}}}
-    cloudState.remote=cloudState.remotes?.[scope]||null;cloudState.status=cloudMeta().dirtyAt?'待同步':'云端已同步';render();
-  }catch(error){cloudState.status='同步需处理';cloudState.error=error.message;render();}
+    cloudState.remote=cloudState.remotes?.[scope]||null;cloudState.status=cloudMeta().dirtyAt?'待同步':'云端已同步';render();if(openPanel)showCloudSync();
+  }catch(error){cloudState.status='同步需处理';cloudState.error=error.message;render();if(openPanel)showCloudSync();}
 }
 try{
-  db=read(scope);save(false);workspaceReady=true;render();applyProfileSeed();resumeWorkbenchSync();
-  if(new URLSearchParams(location.search).get('sync')==='1')queueMicrotask(async()=>{await refreshCloudState();showCloudSync();});
+  db=read(scope);save(false);workspaceReady=true;render();applyProfileSeed();resumeWorkbenchSync(new URLSearchParams(location.search).get('sync')==='1');
   api('health',undefined,{timeout:5000}).then(h=>{health=h;render();}).catch(()=>{});
 }catch(error){$('#app').textContent=error.message;}
