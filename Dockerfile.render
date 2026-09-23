@@ -19,7 +19,7 @@ RUN useradd --create-home --uid 10001 studio \
 WORKDIR /app
 COPY index.html studio*.js studio*.css studio_server.py ./
 COPY vendor/presentation.js ./vendor/presentation.js
-COPY legacy.html api-guide.html tutorial.html lance_qrcode_public.png lance_qrcode.png lance_intro.mp4 ./
+COPY api-guide.html tutorial.html lance_qrcode_public.png lance_qrcode.png lance_intro.mp4 ./
 COPY mobile.html mobile.js mobile.css mobile-config.js mobile-icon.svg mobile-sw.js mobile.webmanifest ./
 COPY deliverables/*.pptx ./deliverables/
 COPY deployment/Caddyfile.render /etc/caddy/Caddyfile
