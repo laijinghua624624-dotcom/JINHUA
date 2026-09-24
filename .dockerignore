@@ -6,6 +6,8 @@
 !studio*.js
 !studio*.css
 !studio_server.py
+!studio_pdf.py
+!requirements.txt
 !vendor/
 !vendor/presentation.js
 !legacy.html
