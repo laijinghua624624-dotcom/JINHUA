@@ -151,7 +151,11 @@ function showCloudSync(){
   const currentLocal=scope==='xinxuan'?localWork:localPersonal,currentRemote=scope==='xinxuan'?remoteWork:remotePersonal,currentName=scope==='xinxuan'?'My·工作':'My·个人',autoHint=WC.empty(currentLocal)&&currentRemote&&!WC.empty(currentRemote)?`<div class="rule"><strong>发现这台设备为空，云端有成果。</strong><br>系统会自动恢复 ${currentName}，不会让空白页面覆盖云端。</div>`:`<div class="rule"><strong>自动同步已开启。</strong><br>本机、公网和 iPad 登录同一账号后会使用同一份云端成果；每次覆盖前都会留下恢复备份。</div>`;
   dialog('完整工作台同步',`<p class="account-line">已登录：${esc(cloudState.session.user?.email||'')}</p><div class="sync-columns"><section><h3>当前设备</h3>${syncSummaryHTML('My·工作',localWork)}${syncSummaryHTML('My·个人',localPersonal)}</section><section><h3>云端主版本</h3>${remoteWork?syncSummaryHTML('My·工作',remoteWork):'<p class="muted">My·工作尚无内容</p>'}${remotePersonal?syncSummaryHTML('My·个人',remotePersonal):'<p class="muted">My·个人尚无内容</p>'}</section></div>${cloudState.error?`<p class="missing">${esc(cloudState.error)}</p>`:''}${autoHint}<details class="danger-zone"><summary>高级恢复（通常不需要）</summary><p class="muted">只处理当前的 ${currentName}。系统禁止空白版本覆盖已有云端成果。</p><div class="actions">${btn('从云端重新恢复','workbench-cloud-pull')}${btn('明确以本机为主','workbench-cloud-push','class="danger"')}</div></details>`,btn('立即自动同步','workbench-cloud-sync-now','',true)+btn('退出同步账号','workbench-cloud-signout'));
 }
-function cloudBadge(){const cls=cloudState.status.includes('已同步')?'cloud-ok':cloudState.status.includes('未登录')?'':'cloud-warn';return btn(cloudState.status,'workbench-cloud-open',`class="cloud-badge ${cls}"`);}
+function cloudBadge(){
+  const synced=cloudState.status.includes('已同步'),offline=cloudState.status.includes('未登录'),saving=cloudState.status.includes('待同步')||cloudState.status.includes('正在');
+  const label=synced?'已自动保存':offline?'仅本机保存':saving?'正在保存…':'保存需处理';
+  return btn(label,'workbench-cloud-open',`class="cloud-badge ${synced?'cloud-ok':offline?'':'cloud-warn'}"`);
+}
 async function workbenchCloudAction(action){
   if(action==='workbench-cloud-open'){await refreshCloudState();showCloudSync();return;}
   if(action==='workbench-cloud-login'){
@@ -567,15 +571,16 @@ window.addEventListener('beforeunload',event=>{if(job||fragmentRecording||fragme
 async function runWorkbenchSync(openPanel=false){
   try{
     await refreshCloudState();if(!cloudState.session){render();if(openPanel)showCloudSync();return;}
+    const recovered=[];
     for(const space of ['xinxuan','personal']){
       const meta=cloudMeta(space),remote=cloudState.remotes?.[space],local=workspacePayload(space),decision=WC.syncDecision(local,remote,meta);
-      if(decision.action==='pull'){const payload=await addSignedMedia(C.clone(remote.payload));persistWorkspacePayload(space,payload,remote.revision);continue;}
+      if(decision.action==='pull'){const wasEmpty=WC.empty(local),payload=await addSignedMedia(C.clone(remote.payload));persistWorkspacePayload(space,payload,remote.revision);recovered.push((space==='xinxuan'?'My·工作':'My·个人')+(wasEmpty?'成果已自动找回':'已更新'));continue;}
       if(decision.action==='push'){await uploadWorkspace(space,false);continue;}
       if(decision.action==='pair'){setCloudMeta({paired:true,lastRevision:Number(remote?.revision)||0,dirtyAt:null,lastSyncedAt:new Date().toISOString()},space);continue;}
       if(decision.action==='conflict')throw Error(decision.reason);
       if(decision.action==='refresh'&&WC.mediaGroups(local.data,local.aesthetic,local.trash).size){await addSignedMedia(local);persistWorkspacePayload(space,local,meta.lastRevision);}
     }
-    cloudState.remote=cloudState.remotes?.[scope]||null;cloudState.status=cloudMeta().dirtyAt?'待同步':'云端已同步';render();if(openPanel)showCloudSync();
+    cloudState.remote=cloudState.remotes?.[scope]||null;cloudState.status=cloudMeta().dirtyAt?'待同步':'云端已同步';render();if(recovered.length)notify(recovered.join('，')+'。');if(openPanel)showCloudSync();
   }catch(error){cloudState.status='同步需处理';cloudState.error=friendlySyncError(error);render();if(openPanel)showCloudSync();}
 }
 function resumeWorkbenchSync(openPanel=false){
