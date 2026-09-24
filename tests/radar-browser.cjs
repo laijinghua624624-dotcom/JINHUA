@@ -12,6 +12,8 @@ const assert=require('node:assert/strict');
   assert.equal(await page.getByRole('heading',{name:'今天先看 3 个'}).count(),1);
   assert.equal(await page.locator('.radar-start .radar-case').count(),3);
   assert.equal(await page.locator('.radar-start .radar-case-visual img').count(),3);
+  assert.equal(await page.locator('.radar-start .radar-cn-guide').count(),3);
+  assert.equal(await page.getByText('英文网站不用硬读',{exact:true}).count(),1);
 
   await page.locator('.radar-start').getByRole('button',{name:'收藏到审美库'}).first().click();
   const stored=await page.evaluate(()=>JSON.parse(localStorage.getItem('lance_studio_aesthetic_xinxuan')));
