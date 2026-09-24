@@ -14,6 +14,13 @@ test('cloud path is written to every reference of the same local media',()=>{
   assert.equal(first.cloudPath,second.cloudPath);assert.equal(second.cloudUrl,'https://signed');
 });
 
+test('a project in the recoverable trash is still cloud content, not an empty workspace',()=>{
+  const payload=blank(),media={localId:'trash.jpg',kind:'image'};
+  payload.data.projectTrash=[{project:{id:'p-trash'},topics:[{id:'t-trash'}],assets:[{id:'a-trash',files:[media]}],reverse:[{id:'r-trash'}]}];
+  assert.deepEqual(Cloud.summary(payload),{projects:1,topics:1,reverse:1,references:1,media:1});
+  assert.equal(Cloud.empty(payload),false);
+});
+
 test('remote revision comparison is monotonic',()=>{assert.equal(Cloud.newer(11,10),true);assert.equal(Cloud.newer(10,10),false);});
 
 const blank=()=>({version:1,data:{version:2,projects:[],topics:[],reverse:[],assets:[]},aesthetic:[],folders:[]});

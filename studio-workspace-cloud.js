@@ -21,8 +21,8 @@
     const items=groups.get(oldId)||[];for(const item of items)Object.assign(item,next,{cloudPath:item.cloudPath,cloudUrl:item.cloudUrl,cloudSyncedAt:item.cloudSyncedAt});
   }
   function summary(payload){
-    const data=payload?.data||{},aesthetic=payload?.aesthetic||[];
-    return {projects:data.projects?.length||0,topics:data.topics?.length||0,reverse:data.reverse?.length||0,references:aesthetic.length+(data.assets?.length||0),media:mediaGroups(data,aesthetic).size};
+    const data=payload?.data||{},aesthetic=payload?.aesthetic||[],trash=Array.isArray(data.projectTrash)?data.projectTrash:[];
+    return {projects:(data.projects?.length||0)+trash.length,topics:(data.topics?.length||0)+trash.reduce((n,b)=>n+(b.topics?.length||0),0),reverse:(data.reverse?.length||0)+trash.reduce((n,b)=>n+(b.reverse?.length||0),0),references:aesthetic.length+(data.assets?.length||0)+trash.reduce((n,b)=>n+(b.assets?.length||0),0),media:mediaGroups(data,aesthetic).size};
   }
   function empty(payload){const s=summary(payload);return !s.projects&&!s.topics&&!s.reverse&&!s.references;}
   function valid(payload){return !!payload&&payload.version===1&&payload.data?.version===2&&Array.isArray(payload.data.topics)&&Array.isArray(payload.data.projects)&&Array.isArray(payload.aesthetic)&&Array.isArray(payload.folders);}
