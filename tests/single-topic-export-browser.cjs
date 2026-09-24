@@ -16,8 +16,8 @@ const {chromium}=require('playwright-core'),assert=require('node:assert/strict')
   });
   await page.reload();
   await page.getByRole('button',{name:'项目',exact:true}).click();
-  await page.getByRole('button',{name:'打开专场',exact:true}).click();
-  await page.locator('.project-optional').first().locator('summary').click();
+  await page.getByRole('button',{name:'继续项目',exact:true}).click();
+  await page.getByRole('button',{name:/02 单条内容/}).click();
   const card=page.locator('.project-story-list .work-card').filter({hasText:'秀前预告·从春夏的布瀑边出发'});
   assert.equal(await card.getByRole('button',{name:'导出本条PPT',exact:true}).count(),1);
   await card.getByRole('button',{name:'导出本条PPT',exact:true}).click();
@@ -27,7 +27,6 @@ const {chromium}=require('playwright-core'),assert=require('node:assert/strict')
   await page.getByRole('button',{name:'下载老板决策版',exact:true}).click();
   assert.match((await download).suggestedFilename(),/秀前预告·从春夏的布瀑边出发/);
   await page.waitForFunction(()=>!document.querySelector('.job'));
-  await page.locator('.project-optional').first().locator('summary').click();
   await card.getByRole('button',{name:'打开编辑',exact:true}).click();
   await page.getByRole('button',{name:'预览',exact:true}).click();
   const preview=page.getByRole('dialog');

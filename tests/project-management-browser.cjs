@@ -1,0 +1,43 @@
+// Project management keeps projects, standalone stories and archives separated.
+const {chromium}=require('playwright-core'),assert=require('node:assert/strict');
+(async()=>{const browser=await chromium.launch({headless:true,executablePath:'/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'});try{
+  const page=await browser.newPage({viewport:{width:1440,height:1000}}),errors=[];
+  page.on('pageerror',error=>errors.push(error.message));
+  await page.goto('http://127.0.0.1:8787/');
+  await page.evaluate(()=>{
+    const project=StudioCore.project('中秋直播专场'),story=StudioCore.topic('月光回家'),standalone=StudioCore.topic('独立品牌短片'),archived=StudioCore.project('去年双十一');
+    story.projectId=project.id;project.topicIds=[story.id];project.targetCount=1;
+    archived.archivedAt=new Date().toISOString();
+    const asset={id:StudioCore.uid(),name:'月光舞台参考',kind:'scene',category:'舞台',projectId:project.id,requirements:'',dimensions:'',dimensionsConfirmed:false,inventory:'',analysis:'',files:[],frames:[],outfits:[],proposal:StudioCore.slot('AI效果参考')};
+    localStorage.setItem('lance_studio_scope','xinxuan');
+    localStorage.setItem('lance_studio_v2_xinxuan',JSON.stringify({version:2,topics:[story,standalone],projects:[project,archived],assets:[asset],exports:[],preferences:'',imported:false}));
+  });
+  await page.reload();
+  await page.getByRole('button',{name:'项目',exact:true}).click();
+  assert.equal(await page.getByText('中秋直播专场',{exact:true}).count(),1);
+  assert.equal(await page.getByText('独立品牌短片',{exact:true}).count(),0);
+  await page.getByRole('button',{name:/独立内容 · 1/}).click();
+  assert.equal(await page.getByText('独立品牌短片',{exact:true}).count(),1);
+  assert.equal(await page.locator('.project-section').getByText('中秋直播专场',{exact:true}).count(),0);
+  await page.getByRole('button',{name:/整体项目 · 1/}).click();
+  await page.getByRole('button',{name:'继续项目',exact:true}).click();
+  assert.equal(await page.getByRole('heading',{name:'整体方向',exact:true}).count(),1);
+  assert.equal(await page.getByText('月光回家',{exact:true}).count(),0);
+  await page.getByRole('button',{name:/02 单条内容 · 1/}).click();
+  assert.equal(await page.getByText('月光回家',{exact:true}).count(),1);
+  await page.getByRole('button',{name:/03 项目资料 · 1/}).click();
+  assert.equal(await page.getByText('月光舞台参考',{exact:true}).count(),1);
+  await page.getByRole('button',{name:'项目设置',exact:true}).click();
+  await page.getByRole('button',{name:'归档项目',exact:true}).click();
+  await page.getByRole('button',{name:'确认归档',exact:true}).click();
+  assert.equal(await page.locator('.project-section').getByText('中秋直播专场',{exact:true}).count(),0);
+  await page.getByRole('button',{name:/已归档 · 2/}).click();
+  const archivedCard=page.locator('.project-section').getByText('中秋直播专场',{exact:true}).locator('xpath=ancestor::article');
+  assert.equal(await archivedCard.count(),1);
+  await archivedCard.getByRole('button',{name:'恢复到项目',exact:true}).click();
+  const stored=await page.evaluate(()=>JSON.parse(localStorage.getItem('lance_studio_v2_xinxuan')));
+  assert.equal(stored.projects.find(p=>p.title==='中秋直播专场').archivedAt,null);
+  assert.equal(stored.topics.find(t=>t.title==='月光回家').projectId,stored.projects.find(p=>p.title==='中秋直播专场').id);
+  assert.deepEqual(errors,[]);
+  console.log('PASS: projects, standalone stories and archives stay separate without data loss');
+}finally{await browser.close();}})().catch(error=>{console.error(error);process.exit(1);});

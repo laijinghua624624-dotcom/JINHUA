@@ -59,7 +59,7 @@ async function importMobileItem(item,options={}){
 }
 
 function mobileProjectRows(){
-  const projectRows=db.projects.map(project=>{const personal=isPersonalProject(project),count=(project.topicIds||[]).length,target=personal?count:C.sessionTarget(project);return {workspace:scope,source_id:'project:'+project.id,kind:'project',title:project.title,summary:(project.idea||project.fields?.outline||'').slice(0,500),status:personal?`${count}条关联内容`:`${count}/${target}条脚本 · ${project.stage==='full'?'完整交付':'方向阶段'}`,target_date:project.date||'',payload:{topicCount:count,targetCount:target,stage:project.stage||'direction'}};});
+  const projectRows=db.projects.filter(project=>!project.archivedAt).map(project=>{const personal=isPersonalProject(project),count=(project.topicIds||[]).length,target=personal?count:C.sessionTarget(project);return {workspace:scope,source_id:'project:'+project.id,kind:'project',title:project.title,summary:(project.idea||project.fields?.outline||'').slice(0,500),status:personal?`${count}条关联内容`:`${count}/${target}条脚本 · ${project.stage==='full'?'完整交付':'方向阶段'}`,target_date:project.date||'',payload:{topicCount:count,targetCount:target,stage:project.stage||'direction'}};});
   const topicRows=db.topics.map(topic=>{const personal=scope==='personal',status=personal?'个人选题':topic.quick?.stage==='full'?`完整交付 ${C.quickStatus(topic).percent}%`:'方向阶段';return {workspace:scope,source_id:'topic:'+topic.id,kind:'topic',title:topic.title,summary:(topic.idea||topic.quick?.fields?.outline||'').slice(0,500),status,target_date:'',payload:{projectId:topic.projectId||null,stage:topic.quick?.stage||'direction'}};});
   return [...projectRows,...topicRows];
 }

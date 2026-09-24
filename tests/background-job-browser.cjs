@@ -8,6 +8,7 @@ const {chromium}=require('playwright-core'),assert=require('node:assert/strict')
   await page.reload();
   await page.route('**/api/chat',async route=>{await new Promise(resolve=>{releaseResponse=resolve;});const fields=Object.fromEntries(C.QUICK.map(([key])=>[key,'生成结果 '+key]));await route.fulfill({json:{text:JSON.stringify({fields,cover:{recommendation:'首选A',recommendedIndex:0,options:['A','B','C'].map(label=>({headline:label,subheadline:'副标题',description:'构图',prompt:'无字画面'}))},imagePrompts:['图1','图2','图3'],videoPrompts:{opening:'开场',middle:'中间',ending:'结尾'}})}});});
   await page.getByRole('button',{name:'项目',exact:true}).click();
+  await page.getByRole('button',{name:/独立内容 · 1/}).click();
   await page.getByRole('button',{name:'打开编辑',exact:true}).click();
   await page.getByRole('button',{name:'AI补全文字方案',exact:true}).click();
   await page.locator('.job').waitFor({state:'visible'});

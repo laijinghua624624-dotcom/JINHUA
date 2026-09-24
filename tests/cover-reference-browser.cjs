@@ -16,6 +16,7 @@ const {chromium}=require('playwright-core'),assert=require('node:assert/strict')
   await page.route('**/api/image',async route=>{imageBody=route.request().postDataJSON();await route.fulfill({json:{id:'generated-cover',kind:'image',localId:'generated-cover.jpg',verified:true,source:'ai',createdAt:new Date().toISOString()}});});
   await page.route('**/media/**',route=>route.fulfill({status:404,body:''}));
   await page.getByRole('button',{name:'项目',exact:true}).click();
+  await page.getByRole('button',{name:/独立内容 · 1/}).click();
   await page.getByRole('button',{name:'打开编辑',exact:true}).click();
   await page.locator('#quick-covers > summary').click();
   await page.locator('[data-action="generate-slot"][data-path="topics.0.quick.cover.options.0.image"]').click();
