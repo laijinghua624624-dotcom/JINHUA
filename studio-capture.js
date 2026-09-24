@@ -67,7 +67,9 @@
       }catch{/* The record is already safe; deterministic classification remains. */}
     }
     const all=globalAssets(),record=all.find(item=>item.id===id);if(!record)return;
-    const sourceTitle=classification.title||info?.title;
+    // The source's official title is evidence. AI may classify and summarize it,
+    // but must never rename the work when the page already supplied a title.
+    const sourceTitle=info?.title||classification.title;
     if(sourceTitle&&(!record.name||record.name===new URL(record.link).hostname))record.name=sourceTitle;
     record.category=classification.category||record.category;record.tags=[...new Set([...(record.tags||[]),...(classification.tags||[]),'快速收藏'])].slice(0,8);
     record.sourceSite=info?.siteName||record.sourceSite;record.externalPreview=record.externalPreview||info?.previewImage||'';record.previewDirect=Boolean(record.externalPreview);record.mediaKind=record.mediaKind&&record.mediaKind!=='webpage'?record.mediaKind:classification.mediaType||info?.mediaKind||'webpage';

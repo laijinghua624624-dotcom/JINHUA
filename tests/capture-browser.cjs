@@ -7,7 +7,7 @@ const assert=require('node:assert/strict');
   const page=await browser.newPage({viewport:{width:1280,height:900}}),errors=[];page.on('pageerror',error=>errors.push(error.message));
   await page.route('https://example.com/poster.jpg',route=>route.fulfill({status:200,contentType:'image/png',body:Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M/wHwAFAgI/6tW2GQAAAABJRU5ErkJggg==','base64')}));
   await page.route('**/api/link/import',route=>route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({url:'https://example.com/case',finalUrl:'https://example.com/case',title:'走廊尽头的一束光',description:'A cinematic lighting study',siteName:'Example Film',previewImage:'https://example.com/cover.jpg',mediaKind:'image',asset:null,notice:'已读取'})}));
-  await page.route('**/api/chat',route=>route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({text:JSON.stringify({title:'走廊尽头的一束光',category:'灯光设计',tags:['逆光','长廊'],summary:'用尽头强光制造人物前进的决心。',mediaType:'image'}),usage:{}})}));
+  await page.route('**/api/chat',route=>route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({text:JSON.stringify({title:'AI不应覆盖正式片名',category:'灯光设计',tags:['逆光','长廊'],summary:'用尽头强光制造人物前进的决心。',mediaType:'image'}),usage:{}})}));
   await page.goto(base);await page.evaluate(()=>localStorage.clear());await page.reload();
   await page.getByRole('button',{name:/更多工具/}).click();await page.getByRole('button',{name:/案例雷达/}).click();await page.getByRole('button',{name:'快速收藏案例'}).click();
   const dialog=page.getByRole('dialog');assert.equal(await dialog.locator('textarea').count(),2);assert.equal(await dialog.locator('#radar-title,#radar-category,#radar-goal,#radar-mechanism').count(),0);
