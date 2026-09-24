@@ -45,6 +45,8 @@
     const textPage=(title,body,subtitle='')=>splitText(body).forEach((text,i)=>slides.push({type:'text',title:title+(i?'（续）':''),body:text,subtitle}));
     const overview=(title,sections)=>{const rows=sections.filter(s=>C.text(s.body));if(rows.length)slides.push({type:'summary',title,sections:rows.map(s=>({...s,display:excerpt(s.body,88)}))});};
     const coverOf=t=>{const c=C.ensureCover(t);return {topic:t.title,option:c.options.find(o=>o.id===c.selectedId),ratio:c.ratio,recommendation:c.recommendation};};
+    const coverReferences=list.flatMap(t=>{const c=C.ensureCover(t);return c.references.map(slot=>({topic:t.title,asset:C.selected(slot),note:slot.referenceNote||'',advice:c.referenceAdvice})).filter(entry=>C.assetOK(entry.asset,'image'));});
+    const coverReferenceAdvice=list.map(t=>({topic:t.title,body:C.ensureCover(t).referenceAdvice})).filter(x=>C.text(x.body));
     const recommendation=r.recommendation||f.outline;
     slides.push({type:'cover',title:item.title,subtitle:MODES[mode],body:excerpt(recommendation,110)});
     overview('本次主张',[{label:'主推方向',body:recommendation},{label:'推荐依据',body:r.reason||f.meaning},{label:'需要决定',body:r.decisions||'待明确本轮需要确认的方向、资源与时间'}]);
@@ -59,6 +61,7 @@
     overview('影像与摄影方向',[{label:'影像氛围',body:f.atmosphere||'待补充影像氛围'},{label:'摄影调性',body:f.camera||'待补充摄影方向'}]);
     const mainReference=list.flatMap(t=>t.quick.images||[]).find(slot=>C.assetOK(C.selected(slot),'image'));
     if(mainReference)slides.push({type:'image',title:'主视觉参考',asset:C.selected(mainReference),caption:mainReference.referenceNote||mainReference.label||'借鉴要点待补充'});
+    if(coverReferences.length)slides.push({type:'cover-reference',title:'过往封面参考（建议）',entries:coverReferences.slice(0,3),advice:coverReferenceAdvice.map(x=>(kind==='project'?x.topic+'：':'')+x.body).join('\n')||coverReferences.map(x=>x.note).filter(C.text).join('\n')||'仅借鉴人物、文案、构图、色彩或情绪表达，不照搬具体内容。'});
     if(kind==='project'){
       for(const [i,group]of chunks(list,3).entries())slides.push({type:'covers',title:'专场首选封面'+(list.length>3?' '+(i+1):''),entries:group.map(coverOf),preferred:true});
     }else{
@@ -140,6 +143,11 @@
           await drawCover(s,entry,x,3.02,3.5,3.6);
           notes+='\n'+entry.topic+'\n'+entry.option.label+' '+entry.option.headline+'\n'+entry.option.subheadline+'\n'+entry.option.description+'\n'+(entry.recommendation||'');
         }
+      }else if(p.type==='cover-reference'){
+        const count=p.entries.length;
+        if(count){const areaW=7.7,gap=.25,w=(areaW-gap*(count-1))/count;for(const [i,entry]of p.entries.entries()){const x=.72+i*(w+gap);txt(s,excerpt(entry.topic,18),x,2.42,w,.34,12,THEME.muted);await addImage(s,entry.asset,{x,y:2.85,w,h:3.9});}}
+        txt(s,'建议',8.75,2.5,3.8,.4,17,THEME.accent,true);txt(s,p.advice,8.75,3.05,3.75,3.55,21,THEME.ink);
+        notes='过往封面仅作为参考建议，不等同于高点击结论。\n'+p.advice+p.entries.map(entry=>'\n'+entry.topic+'：'+(entry.note||'未填写单图借鉴要点')+'\n素材来源：'+(entry.asset.source||'上传')).join('');
       }else if(p.type==='image'){
         if(p.cover)await drawCover(s,p.cover,.8,2.42,11.7,3.95);else await addImage(s,p.asset,{x:.8,y:2.42,w:11.7,h:3.95});
         txt(s,excerpt(p.caption,96),.8,6.45,11.7,.57,16,THEME.muted);

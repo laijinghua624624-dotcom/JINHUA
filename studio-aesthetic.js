@@ -1,6 +1,6 @@
 (function(root,factory){if(typeof module==='object')module.exports=factory(require('./studio-core'));else root.StudioAesthetic=factory(root.StudioCore);})(globalThis,function(C){
   'use strict';
-  const CATEGORIES=['AI参考','摄影参考','美术参考','舞台声光电','分镜参考','灯光设计','运镜参考','调色参考','服装造型','广告TVC','电影参考','秀场参考','音效配乐','其他'];
+  const CATEGORIES=['创意文字','封面参考','AI参考','摄影参考','美术参考','舞台声光电','分镜参考','灯光设计','运镜参考','调色参考','服装造型','广告TVC','电影参考','秀场参考','音效配乐','其他'];
   function link(value){const text=String(value||'').trim();if(!text)return '';const match=text.match(/https?:\/\/[^\s<>"'，。；、【】「」]+/i);if(!match)throw Error('请填写http或https链接，也可粘贴含链接的分享文字');let candidate=match[0].replace(/[)\]）!！?？,;]+$/,'');let url;try{url=new URL(candidate);}catch{throw Error('链接格式不正确');}if(!['http:','https:'].includes(url.protocol)||url.username||url.password)throw Error('不支持此链接格式或带账号密码的链接');return url.href;}
   const tags=value=>[...new Set((Array.isArray(value)?value:String(value||'').split(/[,，\n]/)).map(x=>String(x).trim()).filter(Boolean))];
   function entry(name='未命名参考'){return {id:C.uid(),name,kind:'aesthetic',category:'摄影参考',tags:[],notes:'',requirements:'',link:'',sourceSite:'',sourceUsage:'unconfirmed',files:[],coverId:null,favorite:false,usedIn:[],createdAt:new Date().toISOString(),updatedAt:new Date().toISOString()};}
@@ -19,6 +19,35 @@
     const active=C.clone(items),bin=C.clone(trash),index=bin.findIndex(item=>item.id===id);if(index<0)throw Error('回收站中没有这条参考');
     const [restored]=bin.splice(index,1);if(active.some(item=>item.id===restored.id))restored.id=uid();delete restored.deletedAt;restored.updatedAt=new Date().toISOString();active.push(restored);return {items:active,trash:bin,restored};
   }
+  const lines=(pairs,source)=>pairs.map(([key,label])=>C.text(source?.[key])?`${label}\n${source[key].trim()}`:'').filter(Boolean).join('\n\n');
+  function mediaFromSlots(slots){
+    const seen=new Set(),files=[];
+    for(const slot of slots||[]){const media=C.selected(slot);if(!C.assetOK(media,'image'))continue;const key=media.localId||media.id;if(seen.has(key))continue;seen.add(key);files.push(C.clone(media));}
+    return files;
+  }
+  function extracted(name,category,tagsList,notes,files,sourceLabel,extractedKind){
+    const item=entry(name);item.category=category;item.tags=tags(tagsList);item.notes=notes;item.requirements=notes;item.files=files;item.coverId=files[0]?.localId||null;item.folderIds=[];item.usedIn=[];item.sourceLabel=sourceLabel;item.extractedKind=extractedKind;item.extractedSignature=JSON.stringify({name,category,notes,files:files.map(file=>file.localId)});return item;
+  }
+  function projectReferences(project,topics=[]){
+    if(!project)throw Error('缺少可提取的内容');
+    const source=`工作台内容提取 · ${project.title||'未命名专场'}`,result=[],projectNotes=[C.text(project.idea)?`原始需求\n${project.idea.trim()}`:'',lines(C.SESSION,project.fields)].filter(Boolean).join('\n\n');
+    if(projectNotes)result.push(extracted(`${project.title||'未命名专场'} · 整体创意文字`,'创意文字',['文字描述','创意方向','场景','美术','影像','摄影'],projectNotes,[],source,'project-text'));
+    for(const topic of topics){
+      const title=topic.title||'未命名脚本',topicNotes=[C.text(topic.idea)?`原始想法\n${topic.idea.trim()}`:'',lines(C.QUICK,topic.quick?.fields)].filter(Boolean).join('\n\n');
+      if(topicNotes)result.push(extracted(`${title} · 创意文字`,'创意文字',['文字描述','创意大纲','台词','影像氛围','摄影调性'],topicNotes,[],source,'topic-text'));
+      const cover=C.ensureCover(topic),coverNotes=[C.text(cover.referenceAdvice)?`过往封面借鉴建议\n${cover.referenceAdvice.trim()}`:'',C.text(cover.recommendation)?`首选建议\n${cover.recommendation.trim()}`:'',...cover.options.map(option=>{const body=[`${option.label} · ${option.angle}`,C.text(option.headline)?`主标题：${option.headline.trim()}`:'',C.text(option.subheadline)?`辅助文案：${option.subheadline.trim()}`:'',C.text(option.description)?`构图与信息层级：${option.description.trim()}`:'',C.text(option.image?.referenceNote)?`借鉴要点：${option.image.referenceNote.trim()}`:''].filter(Boolean);return body.length>1?body.join('\n'):'';})].filter(Boolean).join('\n\n'),coverFiles=mediaFromSlots([...(cover.references||[]),...cover.options.map(option=>option.image)]);
+      if(coverNotes||coverFiles.length)result.push(extracted(`${title} · 封面样式`,'封面参考',['封面样式','标题层级','构图','视觉钩子'],coverNotes,coverFiles,source,'topic-cover'));
+      const visualSlots=[...(topic.quick?.images||[]),...(topic.deep?.shots||[]).map(shot=>shot.image)],visualFiles=mediaFromSlots(visualSlots),visualNotes=(topic.quick?.images||[]).map(slot=>[slot.label,slot.referenceNote,slot.prompt].filter(C.text).join('\n')).filter(Boolean).join('\n\n');
+      if(visualFiles.length)result.push(extracted(`${title} · 视觉图片`,'摄影参考',['视觉参考','摄影','画面氛围','分镜'],visualNotes,visualFiles,source,'topic-images'));
+    }
+    return result;
+  }
+  function mergeExtracted(items,candidates){
+    if(!Array.isArray(items)||!Array.isArray(candidates))throw Error('审美库数据格式异常');
+    const next=C.clone(items),added=[];
+    for(const candidate of candidates){if(next.some(item=>item.extractedSignature===candidate.extractedSignature))continue;next.push(C.clone(candidate));added.push(candidate);}
+    return {items:next,added};
+  }
   function splitLegacy(items,folders,dataByScope={}){
     const scopes=['xinxuan','personal'],folderScopes=new Map((folders||[]).map(f=>[f.id,new Set()]));
     for(const scope of scopes)for(const item of [...(dataByScope[scope]?.projects||[]),...(dataByScope[scope]?.topics||[]),...(dataByScope[scope]?.assets||[])])
@@ -35,5 +64,5 @@
     }
     return result;
   }
-  return {CATEGORIES,link,tags,entry,normalize,migrate,filter,image,forProject,trashItem,restoreItem,splitLegacy};
+  return {CATEGORIES,link,tags,entry,normalize,migrate,filter,image,forProject,trashItem,restoreItem,projectReferences,mergeExtracted,splitLegacy};
 });

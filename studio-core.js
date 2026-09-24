@@ -13,7 +13,7 @@
   function selected(slot){return slot?.versions?.find(v=>v.id===slot.selectedId)||null;}
   function slot(label,prompt=''){return {id:uid(),label,prompt,versions:[],selectedId:null,locked:false,task:null,error:''};}
   function coverOption(label,angle){return {id:uid(),label,angle,headline:'',subheadline:'',description:'',image:slot(label+'封面图')};}
-  function cover(){const options=[coverOption('A','情绪钩子'),coverOption('B','人物识别'),coverOption('C','信息转化')];return {recommendation:'',selectedId:options[0].id,ratio:'3:4',options};}
+  function cover(){const options=[coverOption('A','情绪钩子'),coverOption('B','人物识别'),coverOption('C','信息转化')];return {recommendation:'',referenceAdvice:'',references:Array.from({length:3},(_,i)=>slot('过往封面参考 '+(i+1))),selectedId:options[0].id,ratio:'3:4',options};}
   function ensureCover(t){
     if(!t.quick)t.quick={};
     if(!t.quick.cover||typeof t.quick.cover!=='object')t.quick.cover=cover();
@@ -23,6 +23,10 @@
     while(c.options.length<3){const [label,angle]=defaults[c.options.length];c.options.push(coverOption(label,angle));}
     c.options=c.options.slice(0,3).map((o,i)=>{const [label,angle]=defaults[i];return {id:o?.id||uid(),label:o?.label||label,angle:o?.angle||angle,headline:o?.headline||'',subheadline:o?.subheadline||'',description:o?.description||'',image:o?.image&&typeof o.image==='object'?o.image:slot(label+'封面图')};});
     if(!text(c.recommendation))c.recommendation=c.recommendation||'';
+    if(typeof c.referenceAdvice!=='string')c.referenceAdvice='';
+    if(!Array.isArray(c.references))c.references=[];
+    while(c.references.length<3)c.references.push(slot('过往封面参考 '+(c.references.length+1)));
+    c.references=c.references.slice(0,3).map((s,i)=>s&&typeof s==='object'?{...slot('过往封面参考 '+(i+1)),...s,label:s.label||'过往封面参考 '+(i+1)}:slot('过往封面参考 '+(i+1)));
     if(!['3:4','9:16'].includes(c.ratio))c.ratio='3:4';
     if(!c.options.some(o=>o.id===c.selectedId))c.selectedId=c.options[0].id;
     return c;
@@ -31,7 +35,7 @@
   function project(title){return {id:uid(),title,idea:'',date:'',targetCount:0,stage:'direction',fields:Object.fromEntries(SESSION.map(([k])=>[k,''])),topicIds:[],assetIds:[],createdAt:new Date().toISOString()};}
   // A project can be reported before any scripts are planned. Missing legacy
   // counts still preserve the former six-item starting point.
-  function sessionTarget(p){return Number.isInteger(p.targetCount)&&p.targetCount>=0&&p.targetCount<=100?p.targetCount:Math.max(6,new Set(p.topicIds||[]).size);}
+  function sessionTarget(p){const linked=new Set(p.topicIds||[]).size;return Number.isInteger(p.targetCount)&&p.targetCount>=0&&p.targetCount<=100?Math.max(p.targetCount,linked):Math.max(6,linked);}
   function setSessionTarget(p,value){const n=Number(value);if(!Number.isInteger(n)||n<0||n>100)throw Error('计划内容数须为0–100的整数');if(n<new Set(p.topicIds||[]).size)throw Error('计划内容数不能少于已关联脚本；请先调整关联，不会自动删除脚本');p.targetCount=n;return n;}
   function projectOverviewStatus(item){
     const missing=[];

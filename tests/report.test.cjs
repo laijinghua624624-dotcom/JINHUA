@@ -24,3 +24,10 @@ test('导出文件名区分模式，并兼容旧成果',()=>{
   assert.equal(P.filename({title:'冠军篇',mode:'decision',draft:true}),'冠军篇_老板决策版_方向讨论稿.pptx');assert.equal(P.filename({title:'旧成果'}),'旧成果.pptx');
   assert.equal(P.reportStatus(C.project('专场'),'project',[],'execution').ready,false);
 });
+test('过往封面参考是可选PPT建议，不影响完整交付状态',()=>{
+  const t=C.topic('参考测试');const c=C.ensureCover(t);c.referenceAdvice='借鉴人物近景与短标题，不照搬具体文案';
+  C.putVersion(c.references[0],{kind:'image',localId:'history.jpg',verified:true,source:'uploaded'});
+  const plan=P.planDeck(t,'topic',[],'decision'),slide=plan.slides.find(s=>s.type==='cover-reference');
+  assert.ok(slide);assert.equal(slide.entries.length,1);assert.match(slide.advice,/人物近景/);assert.ok(!C.quickStatus(t).missing.some(x=>x.includes('过往封面')));
+  const blank=C.topic('空白参考');C.ensureCover(blank).referenceAdvice='只有文字不应增加PPT页';assert.ok(!P.planDeck(blank,'topic',[],'decision').slides.some(s=>s.type==='cover-reference'));
+});
