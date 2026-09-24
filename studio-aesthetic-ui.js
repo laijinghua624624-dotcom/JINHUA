@@ -18,6 +18,7 @@ function aestheticCover(a){
   const files=Array.isArray(a?.files)?a.files:[],preferred=files.find(f=>f.localId===a.coverId&&f.kind==='image'),image=preferred||files.find(f=>f.kind==='image'),video=files.find(f=>f.kind==='video');
   if(image)return `<img src="${mediaURL(image)}" alt="${esc(a.name||'审美参考')}" loading="lazy">`;
   if(a?.legacyImage)return `<img src="${esc(a.legacyImage)}" alt="${esc(a.name||'旧版审美参考')}" loading="lazy">`;
+  if(a?.externalPreview){const base=location.hostname.endsWith('github.io')?'https://lance-content-studio.onrender.com':'';return `<img src="${esc(`${base}/api/radar-preview?url=${encodeURIComponent(a.externalPreview)}`)}" alt="${esc(a.name||'来源预览')}" loading="lazy" onerror="this.remove()">`;}
   if(video)return `<video src="${mediaURL(video)}" muted playsinline preload="metadata"></video>`;
   return `<span class="aesthetic-placeholder"><span aria-hidden="true">${a?.isProjectAsset?(a.kind==='scene'?'◫':'◇'):(a?.link?'↗':'▣')}</span><small>${esc(a?.category||'待添加封面')}</small></span>`;
 }

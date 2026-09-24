@@ -41,6 +41,11 @@ LOCK = threading.Lock()
 RATE_LOCK = threading.Lock()
 RATE_HITS = defaultdict(deque)
 PAID_PATHS = {'/api/chat','/api/image','/api/video','/api/transcribe','/api/reference/search'}
+RADAR_PREVIEW_HOSTS = {
+    'file.digitaling.com','images.ctfassets.net','img.redbull.com','www.tomorrowland.com',
+    'aiff.runwayml.com','directorslibrary.com','www.directorslibrary.com','framerusercontent.com',
+    'cdn.shopify.com','images.squarespace-cdn.com'
+}
 
 def paid_request_allowed(handler):
     """Keep an accidentally shared public URL from creating an unlimited bill."""
@@ -339,6 +344,17 @@ def parse_public_link(url):
     else:notice+='；未取得可直接下载的公开视频，请手动上传原片。'
     return {'url':url,'finalUrl':final,'title':html.unescape(title)[:500],'description':html.unescape(description)[:4000],'siteName':html.unescape(site or '')[:200],'asset':asset,'notice':notice,'mediaNotice':reason[:300]}
 
+def radar_preview(url):
+    """Fetch only curated radar thumbnails; never expose a general-purpose proxy."""
+    url=public_url(str(url or '').strip())
+    host=(urllib.parse.urlparse(url).hostname or '').lower()
+    if host not in RADAR_PREVIEW_HOSTS:raise ValueError('预览图片来源不在案例雷达允许列表')
+    data,content_type,final,_=read_public(url,8*1024*1024)
+    final_host=(urllib.parse.urlparse(final).hostname or '').lower()
+    if final_host not in RADAR_PREVIEW_HOSTS:raise ValueError('预览图片跳转到了未允许来源')
+    if content_type not in {'image/jpeg','image/png','image/webp','image/avif'}:raise ValueError('案例预览不是可显示的图片')
+    return data,content_type
+
 def download_generated(url,ext):
     MEDIA.mkdir(parents=True,exist_ok=True)
     path=MEDIA/(uuid.uuid4().hex+ext)
@@ -572,6 +588,12 @@ class Handler(BaseHTTPRequestHandler):
         if origin and self.allowed():self.send_header('Access-Control-Allow-Origin',origin)
         self.end_headers();self.wfile.write(data)
 
+    def send_preview(self,data,content_type):
+        self.send_response(200);self.send_header('Content-Type',content_type);self.send_header('Content-Length',str(len(data)));self.send_header('Cache-Control','public, max-age=21600');self.send_header('X-Content-Type-Options','nosniff')
+        origin=self.headers.get('Origin')
+        if origin and self.allowed():self.send_header('Access-Control-Allow-Origin',origin)
+        self.end_headers();self.wfile.write(data)
+
     def do_OPTIONS(self):
         if not self.allowed(): return self.send_json({'error':'来源不被允许'},403)
         self.send_response(204);self.send_header('Access-Control-Allow-Origin',self.headers.get('Origin',''));self.send_header('Access-Control-Allow-Methods','GET,POST,OPTIONS');self.send_header('Access-Control-Allow-Headers','Content-Type,Authorization,X-File-Name');self.end_headers()
@@ -583,6 +605,9 @@ class Handler(BaseHTTPRequestHandler):
             if path=='/api/health':
                 routes=model_routes();routes['director']['model']=routes['director']['model'] or os.environ.get('ARK_TEXT_MODEL','')
                 return self.send_json({'ok':True,'keyConfigured':bool(os.environ.get('ARK_API_KEY')),'routes':routes,'models':{'text':routes['director']['model'],'image':routes['image']['model'],'video':routes['video']['model']},'speechConfigured':bool(os.environ.get('SPEECH_API_KEY') or os.environ.get('SPEECH_APP_ID') and os.environ.get('SPEECH_ACCESS_TOKEN')),'ffmpeg':bool(shutil.which('ffmpeg') and shutil.which('ffprobe')),'pdfText':bool(document_binary('pdftotext')),'ocr':bool(document_binary('pdftoppm') and document_binary('tesseract'))})
+            if path=='/api/radar-preview':
+                url=urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query).get('url',[''])[0]
+                data,content_type=radar_preview(url);return self.send_preview(data,content_type)
             if path=='/api/profile-seed':
                 seed=DATA/'profile-seed.json'
                 selected_scope=urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query).get('scope',[''])[0]

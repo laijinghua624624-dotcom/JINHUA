@@ -6,10 +6,12 @@ const assert=require('node:assert/strict');
   const page=await browser.newPage({viewport:{width:1440,height:1000}}),errors=[];
   page.on('pageerror',error=>errors.push(error.message));
   await page.goto('http://127.0.0.1:8787/');
-  await page.getByRole('button',{name:'案例雷达'}).click();
+  await page.getByRole('button',{name:/更多工具/}).click();
+  await page.getByRole('button',{name:/案例雷达/}).click();
   await page.getByRole('heading',{name:'案例雷达'}).waitFor();
   assert.equal(await page.getByRole('heading',{name:'今天先看 3 个'}).count(),1);
   assert.equal(await page.locator('.radar-start .radar-case').count(),3);
+  assert.equal(await page.locator('.radar-start .radar-case-visual img').count(),3);
 
   await page.locator('.radar-start').getByRole('button',{name:'收藏到审美库'}).first().click();
   const stored=await page.evaluate(()=>JSON.parse(localStorage.getItem('lance_studio_aesthetic_xinxuan')));

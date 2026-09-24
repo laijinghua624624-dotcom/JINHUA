@@ -67,4 +67,13 @@ class ServerTests(unittest.TestCase):
             status,data=self.request('POST','/api/link/import',json.dumps({'url':'https://example.com/work'}),{'Content-Type':'application/json'})
         self.assertEqual(status,200);self.assertEqual(json.loads(data)['title'],'Mock')
 
+    def test_radar_preview_is_image_only_and_not_an_open_proxy(self):
+        image=b'preview-bytes'
+        with patch.object(s,'public_url',side_effect=lambda value:value),patch.object(s,'read_public',return_value=(image,'image/jpeg','https://images.ctfassets.net/example.jpg','utf-8')):
+            data,content_type=s.radar_preview('https://images.ctfassets.net/example.jpg')
+        self.assertEqual(data,image);self.assertEqual(content_type,'image/jpeg')
+        with self.assertRaises(ValueError):s.radar_preview('https://example.com/private.jpg')
+        with patch.object(s,'public_url',side_effect=lambda value:value),patch.object(s,'read_public',return_value=(b'<svg/>','image/svg+xml','https://images.ctfassets.net/example.svg','utf-8')):
+            with self.assertRaises(ValueError):s.radar_preview('https://images.ctfassets.net/example.svg')
+
 if __name__=='__main__':unittest.main()

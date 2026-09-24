@@ -9,11 +9,13 @@ test('案例雷达固定覆盖八类工作来源',()=>{
   for(const item of [...Radar.SOURCES,...Radar.CASES])assert.match(item.url,/^https:\/\//);
   assert.equal(new Set(Radar.SOURCES.map(x=>x.id)).size,Radar.SOURCES.length);
   assert.equal(new Set(Radar.CASES.map(x=>x.id)).size,Radar.CASES.length);
+  for(const item of Radar.CASES)assert.match(item.poster,/^https:\/\//,'每条案例必须有可判断价值的预览图片');
 });
 
 test('案例收藏进入现有审美库，不伪造网页图片或授权',()=>{
   const a=Radar.caseToAesthetic(Radar.CASES[0],()=> 'id-1','xinxuan');
   assert.equal(a.id,'id-1');assert.equal(a.sourceUsage,'link-only');assert.deepEqual(a.files,[]);assert.equal(a.favorite,true);
+  assert.equal(a.externalPreview,Radar.CASES[0].poster);
   assert.match(a.notes,/打开来源看片后请核对/);assert.match(a.notes,/辛选工作/);assert.equal(a.radarKind,'case');
 });
 
