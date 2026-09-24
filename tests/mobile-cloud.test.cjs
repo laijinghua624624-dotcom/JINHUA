@@ -36,8 +36,10 @@ test('full workbench snapshot and private media use the authenticated user',asyn
   const calls=[];global.fetch=async(url,options={})=>{calls.push({url,options});if(url.includes('/workbench_snapshots')&&options.method==='POST')return new Response(JSON.stringify([{workspace:'personal',revision:9}]),{status:201});if(url.includes('/workbench_snapshots'))return new Response(JSON.stringify([]),{status:200});if(url.includes('/object/sign/'))return new Response(JSON.stringify({signedURL:'/object/sign/workbench-media/user-1/personal/a.jpg?token=x'}),{status:200});return new Response('',{status:200});};
   await Cloud.putWorkbench('personal',{version:1},9,'device-1');
   await Cloud.uploadWorkbenchMedia('personal','../a.jpg',new Blob(['x'],{type:'image/jpeg'}));
+  await Cloud.backupWorkbench('personal',{version:1},9,'device-1');
   const signed=await Cloud.signedWorkbenchMedia('user-1/personal/a.jpg');
   const row=JSON.parse(calls.find(x=>x.url.includes('/workbench_snapshots')&&x.options.method==='POST').options.body);
   assert.equal(row.user_id,'user-1');assert.equal(row.workspace,'personal');assert.match(signed,/\/storage\/v1\/object\/sign\/workbench-media\//);
   const upload=calls.find(x=>x.url.includes('/storage/v1/object/workbench-media/'));assert.equal(upload.options.headers['x-upsert'],'true');assert.equal(upload.options.headers.Authorization,'Bearer user-token');
+  const backup=calls.find(x=>x.url.includes('/personal/backups/'));assert.equal(backup.options.headers['x-upsert'],'false');assert.match(backup.options.headers['Content-Type'],/^text\/plain/);
 });

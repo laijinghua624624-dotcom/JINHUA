@@ -9,7 +9,7 @@ const key=scope=>'lance_studio_v2_'+scope;
 let scope=localStorage.getItem('lance_studio_scope')||'xinxuan';
 let route={view:'home',id:null,tab:'quick'},db,settings,job=null,stop=false,health=null,search='';
 let exportURL=null;
-let workspaceReady=false,cloudState={session:null,remote:null,busy:false,status:'未登录',error:'',timer:null};
+let workspaceReady=false,workbenchSyncPromise=null,cloudState={session:null,remote:null,busy:false,status:'未登录',error:'',timer:null};
 const CLOUD_META_PREFIX='jinhua_workbench_sync_v1_';
 try{settings=JSON.parse(localStorage.getItem('lance_studio_settings')||'{}');}catch{settings={};}
 settings={server:settings.server||''}; // Model routes and credentials are server-only.
@@ -33,7 +33,7 @@ function cloudMeta(space=scope){try{return JSON.parse(localStorage.getItem(CLOUD
 function setCloudMeta(value,space=scope){localStorage.setItem(CLOUD_META_PREFIX+space,JSON.stringify(value));return value;}
 function markWorkspaceDirty(space=scope){
   if(!workspaceReady)return;const meta=cloudMeta(space);meta.dirtyAt=new Date().toISOString();setCloudMeta(meta,space);
-  if(space===scope&&cloudState.session&&meta.paired){cloudState.status='待同步';clearTimeout(cloudState.timer);cloudState.timer=setTimeout(()=>uploadWorkbench(false).catch(error=>{cloudState.status='同步需处理';cloudState.error=error.message;render();}),1800);}
+  if(space===scope&&cloudState.session&&meta.paired){cloudState.status='待同步';clearTimeout(cloudState.timer);cloudState.timer=setTimeout(()=>uploadWorkspace(space,false).catch(error=>{cloudState.status='同步需处理';cloudState.error=friendlySyncError(error);render();}),1800);}
 }
 window.markWorkspaceDirty=markWorkspaceDirty;
 function save(mark=true){
@@ -42,6 +42,13 @@ function save(mark=true){
   if(mark)markWorkspaceDirty();
 }
 function notify(message,tone='info'){const n=$('#notification');n.textContent=message;n.dataset.tone=tone;n.setAttribute('role',tone==='error'?'alert':'status');n.style.display='block';clearTimeout(notify.timer);notify.timer=setTimeout(()=>n.style.display='none',6500);}
+function friendlySyncError(error){
+  const message=error?.message||String(error);
+  if(/fetch|network|网络|Failed to fetch|timeout/i.test(message))return '网络暂时无法连接云端。本机内容已保留，联网后会自动重试。';
+  if(/jwt|token|登录|auth|refresh/i.test(message))return '同步登录已过期。本机和云端内容都没有删除，请重新登录一次。';
+  if(/conflict|都有新修改|需要选择/i.test(message))return '本机和云端都有新修改，系统已停止覆盖。请在同步面板选择要保留的版本。';
+  return message;
+}
 function showError(error){const message=error?.message||String(error),d=$('#dialog'),box=$('#dialog-error');if(d?.open&&box){box.textContent=message;box.hidden=false;const invalid=d.querySelector('input:invalid,textarea:invalid,select:invalid')||d.querySelector('input:not([type="hidden"]),textarea,select');if(invalid){invalid.setAttribute('aria-invalid','true');invalid.focus();}}else notify(message,'error');}
 const btn=(label,action,extra='',primary=false)=>{const cls=extra.match(/class="([^"]*)"/)?.[1]||'';return `<button class="${primary?'primary ':''}${cls}" data-action="${action}" ${extra.replace(/class="[^"]*"/,'')}>${label}</button>`;};
 const upload=(label,action,extra='',accept='image/*')=>`<label class="upload">${label}<input type="file" data-upload="${action}" ${extra} accept="${accept}"></label>`;
@@ -107,27 +114,32 @@ async function uploadWorkspace(space=scope,force=false){
   const session=cloudState.session||await StudioCloud.session();if(!session)throw Error('请先登录同步账号');
   cloudState.busy=true;cloudState.status='正在同步';cloudState.error='';render();
   try{
-    const latest=await StudioCloud.getWorkbench(space),meta=cloudMeta(space);
-    if(!force&&latest&&WC.newer(latest.revision,meta.lastRevision)&&meta.dirtyAt)throw Error('云端和本机都有新修改，已停止自动覆盖。请在同步面板选择保留哪一版。');
-    const payload=workspacePayload(space),groups=WC.mediaGroups(payload.data,payload.aesthetic,payload.trash);
+    const latest=await StudioCloud.getWorkbench(space),meta=cloudMeta(space),payload=workspacePayload(space),decision=WC.syncDecision(payload,latest,meta);
+    if(latest&&!WC.empty(latest.payload)&&WC.empty(payload))throw Error('当前设备是空白的，系统已禁止它覆盖云端成果。请使用“从云端恢复当前空间”。');
+    if(!force&&decision.action==='pull')throw Error('云端版本更新，系统已停止本机覆盖并将自动恢复云端版本。');
+    if(!force&&decision.action==='conflict')throw Error(decision.reason);
+    const groups=WC.mediaGroups(payload.data,payload.aesthetic,payload.trash);
     for(const [localId,items]of groups){
       const sample=items[0];
       if(!sample.cloudPath){const response=await fetch(mediaURL(sample));if(!response.ok)throw Error(`素材 ${localId} 在本机无法读取，已停止本轮云端覆盖`);const blob=await response.blob(),path=await StudioCloud.uploadWorkbenchMedia(space,localId,new Blob([blob],{type:blob.type||'application/octet-stream'}));WC.setCloudInfo(groups,localId,path);}
     }
     for(const note of payload.data.fragments||[])if(note.audioKey&&!note.cloudAudioPath){const blob=await StudioPpt.getExport(note.audioKey);if(!blob)throw Error('语音灵感原录音缺失，已停止本轮同步');note.cloudAudioPath=await StudioCloud.uploadWorkbenchMedia(space,note.audioKey+(blob.type.includes('mp4')?'.m4a':'.webm'),blob);}
     await addSignedMedia(payload);
-    const revision=Math.max(Date.now(),Number(latest?.revision||0)+1),row=await StudioCloud.putWorkbench(space,C.clone(payload),revision,workbenchDeviceId());
+    const deviceId=workbenchDeviceId(),revision=Math.max(Date.now(),Number(latest?.revision||0)+1);
+    if(latest?.payload)await StudioCloud.backupWorkbench(space,C.clone(latest.payload),latest.revision,latest.device_id||'cloud-current');
+    await StudioCloud.backupWorkbench(space,C.clone(payload),revision,deviceId);
+    const row=await StudioCloud.putWorkbench(space,C.clone(payload),revision,deviceId);
     persistWorkspacePayload(space,payload,row.revision);cloudState.remote=row;cloudState.status='云端已同步';return row;
   }finally{cloudState.busy=false;render();}
 }
-async function uploadAllWorkspaces(force=true){for(const space of ['xinxuan','personal'])await uploadWorkspace(space,force);await refreshCloudState();}
+async function uploadAllWorkspaces(force=false){for(const space of ['xinxuan','personal'])await uploadWorkspace(space,force);await refreshCloudState();}
 async function pullWorkspace(space=scope){
   const row=await StudioCloud.getWorkbench(space);if(!row)throw Error((space==='xinxuan'?'My·工作':'My·个人')+'云端还没有数据');
   const payload=await addSignedMedia(C.clone(row.payload));persistWorkspacePayload(space,payload,row.revision);return row;
 }
 async function pullAllWorkspaces(){cloudState.busy=true;cloudState.status='正在取回云端数据';render();try{for(const space of ['xinxuan','personal']){const row=await StudioCloud.getWorkbench(space);if(row){const payload=await addSignedMedia(C.clone(row.payload));persistWorkspacePayload(space,payload,row.revision);}}cloudState.status='云端已同步';await refreshCloudState();}finally{cloudState.busy=false;render();}}
 async function refreshCloudState(){
-  cloudState.session=await StudioCloud.session();if(!cloudState.session){cloudState.status='未登录';cloudState.remote=null;return;}
+  cloudState.error='';cloudState.session=await StudioCloud.session();if(!cloudState.session){cloudState.status='未登录';cloudState.remote=null;return;}
   const rows=await Promise.all(['xinxuan','personal'].map(space=>StudioCloud.getWorkbench(space).catch(error=>({error:error.message,workspace:space}))));cloudState.remotes=Object.fromEntries(rows.filter(r=>r&&!r.error).map(r=>[r.workspace,r]));cloudState.remote=cloudState.remotes[scope]||null;
   const meta=cloudMeta(),remote=cloudState.remote;if(rows.some(r=>r?.error)){cloudState.status='云端待开通';cloudState.error=rows.find(r=>r?.error).error;}else if(meta.dirtyAt)cloudState.status='待同步';else if(remote)cloudState.status='云端已同步';else cloudState.status='待首次同步';
 }
@@ -136,22 +148,26 @@ function showCloudSync(){
   if(!StudioCloud.configured()){dialog('完整工作台同步','<p class="missing">Supabase 尚未配置。</p>');return;}
   if(!cloudState.session){dialog('登录云端同步',`<p class="muted">使用与手机随身收件箱相同的账号。这里填的是当时注册 JINHUA 时设置的密码，不是邮箱本身的密码。</p><div class="formgrid"><label>邮箱<input id="workbench-cloud-email" type="email" autocomplete="email"></label><label>密码<input id="workbench-cloud-password" type="password" autocomplete="current-password" minlength="8"></label></div>`,btn('登录','workbench-cloud-login','',true));return;}
   const localWork=workspacePayload('xinxuan'),localPersonal=workspacePayload('personal'),remoteWork=cloudState.remotes?.xinxuan?.payload,remotePersonal=cloudState.remotes?.personal?.payload;
-  dialog('完整工作台同步',`<p class="account-line">已登录：${esc(cloudState.session.user?.email||'')}</p><div class="sync-columns"><section><h3>本机</h3>${syncSummaryHTML('My·工作',localWork)}${syncSummaryHTML('My·个人',localPersonal)}</section><section><h3>云端</h3>${remoteWork?syncSummaryHTML('My·工作',remoteWork):'<p class="muted">My·工作尚未上传</p>'}${remotePersonal?syncSummaryHTML('My·个人',remotePersonal):'<p class="muted">My·个人尚未上传</p>'}</section></div>${cloudState.error?`<p class="missing">${esc(cloudState.error)}</p>`:''}<div class="rule"><strong>首次请在保存了两条反推的这台 Mac 选择“本机上传”。</strong><br>上传成功后，iPad 登录同一账号再选择“取回云端”。</div>`,btn('本机上传到云端','workbench-cloud-push','',true)+btn('取回云端到本机','workbench-cloud-pull')+btn('退出同步账号','workbench-cloud-signout'));
+  const currentLocal=scope==='xinxuan'?localWork:localPersonal,currentRemote=scope==='xinxuan'?remoteWork:remotePersonal,currentName=scope==='xinxuan'?'My·工作':'My·个人',autoHint=WC.empty(currentLocal)&&currentRemote&&!WC.empty(currentRemote)?`<div class="rule"><strong>发现这台设备为空，云端有成果。</strong><br>系统会自动恢复 ${currentName}，不会让空白页面覆盖云端。</div>`:`<div class="rule"><strong>自动同步已开启。</strong><br>本机、公网和 iPad 登录同一账号后会使用同一份云端成果；每次覆盖前都会留下恢复备份。</div>`;
+  dialog('完整工作台同步',`<p class="account-line">已登录：${esc(cloudState.session.user?.email||'')}</p><div class="sync-columns"><section><h3>当前设备</h3>${syncSummaryHTML('My·工作',localWork)}${syncSummaryHTML('My·个人',localPersonal)}</section><section><h3>云端主版本</h3>${remoteWork?syncSummaryHTML('My·工作',remoteWork):'<p class="muted">My·工作尚无内容</p>'}${remotePersonal?syncSummaryHTML('My·个人',remotePersonal):'<p class="muted">My·个人尚无内容</p>'}</section></div>${cloudState.error?`<p class="missing">${esc(cloudState.error)}</p>`:''}${autoHint}<details class="danger-zone"><summary>高级恢复（通常不需要）</summary><p class="muted">只处理当前的 ${currentName}。系统禁止空白版本覆盖已有云端成果。</p><div class="actions">${btn('从云端重新恢复','workbench-cloud-pull')}${btn('明确以本机为主','workbench-cloud-push','class="danger"')}</div></details>`,btn('立即自动同步','workbench-cloud-sync-now','',true)+btn('退出同步账号','workbench-cloud-signout'));
 }
 function cloudBadge(){const cls=cloudState.status.includes('已同步')?'cloud-ok':cloudState.status.includes('未登录')?'':'cloud-warn';return btn(cloudState.status,'workbench-cloud-open',`class="cloud-badge ${cls}"`);}
 async function workbenchCloudAction(action){
   if(action==='workbench-cloud-open'){await refreshCloudState();showCloudSync();return;}
   if(action==='workbench-cloud-login'){
     const email=$('#workbench-cloud-email')?.value.trim(),password=$('#workbench-cloud-password')?.value||'';if(!email||password.length<8)throw Error('请输入邮箱和注册 JINHUA 时设置的至少8位密码');
-    cloudState.session=await StudioCloud.signIn(email,password);await refreshCloudState();showCloudSync();return;
+    cloudState.session=await StudioCloud.signIn(email,password);close();await resumeWorkbenchSync(false);await refreshCloudState();showCloudSync();return;
+  }
+  if(action==='workbench-cloud-sync-now'){
+    close();await resumeWorkbenchSync(false);notify(cloudState.error?cloudState.error:'已自动核对，本机与云端内容一致。',cloudState.error?'error':'info');return;
   }
   if(action==='workbench-cloud-push'){
-    if(!confirm('这将把当前 Mac 上 My·工作和 My·个人的数据、反推原片、关键帧和参考素材上传到你的 Supabase 私人空间。如果云端已有版本，将以本机版本为准。继续吗？'))return;
-    close();await uploadAllWorkspaces(true);notify('本机两个空间已同步到云端；iPad 现在可以取回。');return;
+    if(!confirm(`只把当前的 ${scope==='xinxuan'?'My·工作':'My·个人'} 设为云端主版本。系统会先保留云端恢复备份，空白本机仍不允许覆盖。确定继续吗？`))return;
+    close();await uploadWorkspace(scope,true);await refreshCloudState();notify('当前空间已保存为云端主版本，并保留了恢复备份。');return;
   }
   if(action==='workbench-cloud-pull'){
-    if(!confirm('这将用云端 My·工作和 My·个人版本更新当前设备。本机原数据会先留一份 previous 恢复副本。继续吗？'))return;
-    close();await pullAllWorkspaces();notify('云端工作台已取回到当前设备。');return;
+    if(!confirm(`从云端重新恢复当前的 ${scope==='xinxuan'?'My·工作':'My·个人'}。本机原版本会保留恢复副本。继续吗？`))return;
+    close();await pullWorkspace(scope);await refreshCloudState();render();notify('云端成果已恢复到当前设备。');return;
   }
   if(action==='workbench-cloud-signout'){StudioCloud.signOut();cloudState={session:null,remote:null,busy:false,status:'未登录',error:'',timer:null};close();render();return;}
 }
@@ -548,14 +564,28 @@ document.addEventListener('click',async event=>{
   }catch(error){showError(error);}
 });
 window.addEventListener('beforeunload',event=>{if(job||fragmentRecording||fragmentPending){event.preventDefault();event.returnValue='';}});
-async function resumeWorkbenchSync(openPanel=false){
+async function runWorkbenchSync(openPanel=false){
   try{
     await refreshCloudState();if(!cloudState.session){render();if(openPanel)showCloudSync();return;}
-    for(const space of ['xinxuan','personal']){const meta=cloudMeta(space),remote=cloudState.remotes?.[space];if(!meta.paired||!remote)continue;if(meta.dirtyAt){await uploadWorkspace(space,false);continue;}if(WC.newer(remote.revision,meta.lastRevision)){const payload=await addSignedMedia(C.clone(remote.payload));persistWorkspacePayload(space,payload,remote.revision);}else{const payload=workspacePayload(space);if(WC.mediaGroups(payload.data,payload.aesthetic,payload.trash).size){await addSignedMedia(payload);persistWorkspacePayload(space,payload,meta.lastRevision);}}}
+    for(const space of ['xinxuan','personal']){
+      const meta=cloudMeta(space),remote=cloudState.remotes?.[space],local=workspacePayload(space),decision=WC.syncDecision(local,remote,meta);
+      if(decision.action==='pull'){const payload=await addSignedMedia(C.clone(remote.payload));persistWorkspacePayload(space,payload,remote.revision);continue;}
+      if(decision.action==='push'){await uploadWorkspace(space,false);continue;}
+      if(decision.action==='pair'){setCloudMeta({paired:true,lastRevision:Number(remote?.revision)||0,dirtyAt:null,lastSyncedAt:new Date().toISOString()},space);continue;}
+      if(decision.action==='conflict')throw Error(decision.reason);
+      if(decision.action==='refresh'&&WC.mediaGroups(local.data,local.aesthetic,local.trash).size){await addSignedMedia(local);persistWorkspacePayload(space,local,meta.lastRevision);}
+    }
     cloudState.remote=cloudState.remotes?.[scope]||null;cloudState.status=cloudMeta().dirtyAt?'待同步':'云端已同步';render();if(openPanel)showCloudSync();
-  }catch(error){cloudState.status='同步需处理';cloudState.error=error.message;render();if(openPanel)showCloudSync();}
+  }catch(error){cloudState.status='同步需处理';cloudState.error=friendlySyncError(error);render();if(openPanel)showCloudSync();}
+}
+function resumeWorkbenchSync(openPanel=false){
+  if(workbenchSyncPromise)return workbenchSyncPromise;
+  workbenchSyncPromise=runWorkbenchSync(openPanel).finally(()=>{workbenchSyncPromise=null;});
+  return workbenchSyncPromise;
 }
 try{
   db=read(scope);save(false);workspaceReady=true;render();applyProfileSeed();resumeWorkbenchSync(new URLSearchParams(location.search).get('sync')==='1');
   api('health',undefined,{timeout:5000}).then(h=>{health=h;render();}).catch(()=>{});
 }catch(error){$('#app').textContent=error.message;}
+window.addEventListener('online',()=>resumeWorkbenchSync(false));
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')resumeWorkbenchSync(false);});

@@ -61,10 +61,16 @@
     await request('/storage/v1/object/'+WORKBENCH_BUCKET+'/'+encodePath(path),{method:'POST',token:s.access_token,headers:{'Content-Type':blob.type||'application/octet-stream','x-upsert':'true'},body:blob});
     return path;
   }
+  async function backupWorkbench(workspace,payload,revision,deviceId){
+    const s=await auth(),stamp=new Date().toISOString().replace(/[:.]/g,'-'),nonce=root.crypto?.randomUUID?.()||Math.random().toString(36).slice(2),name=`${Number(revision)||Date.now()}-${stamp}-${safeName(deviceId||'device')}-${nonce}.json.txt`,path=`${s.user.id}/${workspace}/backups/${name}`;
+    const body=new Blob([JSON.stringify({version:1,workspace,revision:Number(revision)||0,deviceId:String(deviceId||''),createdAt:new Date().toISOString(),payload})],{type:'text/plain;charset=utf-8'});
+    await request('/storage/v1/object/'+WORKBENCH_BUCKET+'/'+encodePath(path),{method:'POST',token:s.access_token,headers:{'Content-Type':body.type,'x-upsert':'false'},body});
+    return path;
+  }
   async function signedWorkbenchMedia(path,expiresIn=604800){
     const s=await auth(),c=config(),data=await request('/storage/v1/object/sign/'+WORKBENCH_BUCKET+'/'+encodePath(path),{method:'POST',token:s.access_token,body:{expiresIn}}),url=data?.signedURL||data?.signedUrl;
     if(!url)throw Error('云端素材地址生成失败');
     return /^https?:\/\//.test(url)?url:c.url+'/storage/v1'+url;
   }
-  return {SESSION_KEY,BUCKET,WORKBENCH_BUCKET,config,configured,readSession,saveSession,signUp,signIn,signOut,session,listInbox,createInbox,patchInbox,uploadFile,downloadFile,listProjects,publishProjects,getWorkbench,putWorkbench,uploadWorkbenchMedia,signedWorkbenchMedia,safeName};
+  return {SESSION_KEY,BUCKET,WORKBENCH_BUCKET,config,configured,readSession,saveSession,signUp,signIn,signOut,session,listInbox,createInbox,patchInbox,uploadFile,downloadFile,listProjects,publishProjects,getWorkbench,putWorkbench,uploadWorkbenchMedia,backupWorkbench,signedWorkbenchMedia,safeName};
 });
