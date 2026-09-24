@@ -1,0 +1,28 @@
+// Isolated browser storage: a running AI task only locks its own content.
+const {chromium}=require('playwright-core'),assert=require('node:assert/strict'),C=require('../studio-core');
+(async()=>{const browser=await chromium.launch({headless:true,executablePath:'/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'});try{
+  const page=await browser.newPage({viewport:{width:1440,height:1000}}),errors=[];let releaseResponse;
+  page.on('pageerror',error=>errors.push(error.message));
+  await page.goto('http://127.0.0.1:8787/');
+  await page.evaluate(()=>{const topic=StudioCore.topic('正在生成的脚本');localStorage.setItem('lance_studio_scope','xinxuan');localStorage.setItem('lance_studio_v2_xinxuan',JSON.stringify({version:2,topics:[topic],projects:[],assets:[],exports:[],preferences:'',imported:false}));});
+  await page.reload();
+  await page.route('**/api/chat',async route=>{await new Promise(resolve=>{releaseResponse=resolve;});const fields=Object.fromEntries(C.QUICK.map(([key])=>[key,'生成结果 '+key]));await route.fulfill({json:{text:JSON.stringify({fields,cover:{recommendation:'首选A',recommendedIndex:0,options:['A','B','C'].map(label=>({headline:label,subheadline:'副标题',description:'构图',prompt:'无字画面'}))},imagePrompts:['图1','图2','图3'],videoPrompts:{opening:'开场',middle:'中间',ending:'结尾'}})}});});
+  await page.getByRole('button',{name:'项目',exact:true}).click();
+  await page.getByRole('button',{name:'打开编辑',exact:true}).click();
+  await page.getByRole('button',{name:'AI补全文字方案',exact:true}).click();
+  await page.locator('.job').waitFor({state:'visible'});
+  await page.getByRole('button',{name:'项目',exact:true}).click();
+  await page.getByRole('button',{name:'新建单条',exact:true}).click();
+  await page.locator('#new-title').fill('生成期间编辑的另一条');
+  await page.getByRole('button',{name:'创建并开始',exact:true}).click();
+  const outline=page.locator('[data-field="topics.1.quick.fields.outline"]');
+  await outline.fill('这段文字应在后台生成完成后仍然保留');await outline.press('Tab');
+  assert.equal(await page.evaluate(()=>JSON.parse(localStorage.getItem('lance_studio_v2_xinxuan')).topics[1].quick.fields.outline),'这段文字应在后台生成完成后仍然保留');
+  releaseResponse();
+  await page.waitForFunction(()=>!document.querySelector('.job'));
+  const stored=await page.evaluate(()=>JSON.parse(localStorage.getItem('lance_studio_v2_xinxuan')));
+  assert.equal(stored.topics[0].quick.fields.outline,'生成结果 outline');
+  assert.equal(stored.topics[1].quick.fields.outline,'这段文字应在后台生成完成后仍然保留');
+  assert.deepEqual(errors,[]);
+  console.log('PASS: background generation preserves unrelated navigation and editing');
+}finally{await browser.close();}})().catch(error=>{console.error(error);process.exit(1);});
