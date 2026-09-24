@@ -19,13 +19,13 @@
   }
   function approvedTopic(t){
     const a=t.quick.approved;if(!a)return null;
-    return {...t,report:a.report||t.report,quick:{...a,fields:a.fields||{},videos:a.videos||{},images:(a.images||[]).map((image,i)=>image?.versions?image:{id:'approved-'+i,referenceNote:image?.referenceNote||'',versions:image?[image]:[],selectedId:image?.id}),cover:a.cover||C.cover()}};
+    return {...t,report:a.report||t.report,wardrobeSuggestion:a.wardrobeSuggestion||t.wardrobeSuggestion||'',quick:{...a,fields:a.fields||{},videos:a.videos||{},images:(a.images||[]).map((image,i)=>image?.versions?image:{id:'approved-'+i,referenceNote:image?.referenceNote||'',versions:image?[image]:[],selectedId:image?.id}),cover:a.cover||C.cover()}};
   }
   function reverseStatus(item){
     const missing=[];
     if(!C.text(item?.title))missing.push('视频标题');
     if(!item?.analysis?.fields)missing.push('反推分析');
-    else for(const key of ['intent','concept','outline','description','script','reuse'])if(!C.text(item.analysis.fields[key]))missing.push('反推分析：'+key);
+    else for(const key of ['origin','fit','intent','concept','outline','description','script','landing','reuse'])if(!C.text(item.analysis.fields[key]))missing.push('反推分析：'+key);
     const evidence=(item?.analysis?.shots||[]).filter(shot=>C.assetOK(item.frames?.[shot.frameIndex],'image'));
     if(!evidence.length)missing.push('至少1张可核对的关键画面证据');
     return {ready:missing.length===0,missing,evidence:evidence.length};
@@ -90,6 +90,8 @@
       if(!list.length)overview('故事脚本分工',[{label:'待规划',body:`本专场尚未关联故事脚本，计划${C.sessionTarget(item)}条。`}]);
       overview('场景搭建与美术',[{label:'场景搭建',body:f.scene||'待补充场地与搭建方向'},{label:'美术制景',body:f.art||'待补充美术与材质方向'}]);
     }else overview('故事与人物表达',[{label:'故事摘要',body:f.script||f.description},{label:'关键台词摘要',body:f.dialogue}]);
+    const wardrobeBody=kind==='project'?item.wardrobeSuggestion:list[0]?.wardrobeSuggestion;
+    overview('服装搭配建议',[{label:'主推服装',body:wardrobeBody||'待结合初瑞雪现有衣橱、人物气质与本次创意补充'}]);
     overview('影像与摄影方向',[{label:'影像氛围',body:f.atmosphere||'待补充影像氛围'},{label:'摄影调性',body:f.camera||'待补充摄影方向'}]);
     const mainReference=list.flatMap(t=>t.quick.images||[]).find(slot=>C.assetOK(C.selected(slot),'image'));
     if(mainReference)slides.push({type:'image',title:'主视觉参考',asset:C.selected(mainReference),caption:mainReference.referenceNote||mainReference.label||'借鉴要点待补充'});
@@ -112,6 +114,7 @@
     for(const [index,t]of list.entries()){
       if(kind==='project')slides.push({type:'divider',title:(index+1)+' / '+list.length+'  '+t.title,body:excerpt(t.report?.role||t.idea,150)});
       for(const[k,label]of C.QUICK)textPage(label,t.quick.fields[k],t.title);
+      textPage('服装搭配建议',t.wardrobeSuggestion,t.title);
       const c=C.ensureCover(t);
       if(kind==='project')slides.push({type:'covers',title:'A/B/C封面比较',subtitle:t.title,entries:c.options.map(o=>({topic:t.title,option:o,ratio:c.ratio,selected:o.id===c.selectedId}))});
       for(const o of c.options){

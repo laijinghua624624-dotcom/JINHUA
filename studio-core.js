@@ -31,8 +31,8 @@
     if(!c.options.some(o=>o.id===c.selectedId))c.selectedId=c.options[0].id;
     return c;
   }
-  function topic(title='未命名脚本',projectId=null){return {id:uid(),title,projectId,idea:'',createdAt:new Date().toISOString(),revision:1,quick:{fields:Object.fromEntries(QUICK.map(([k])=>[k,''])),cover:cover(),images:[slot('主视觉'),slot('关键动作'),slot('结尾情绪')],videos:Object.fromEntries(PHASES.map(([k,label])=>[k,slot(label+'8秒')])),approved:null},deep:{fields:Object.fromEntries(DEEP.map(([k])=>[k,''])),shots:[],film:null,bgm:null},feedback:[],snapshots:[]};}
-  function project(title){return {id:uid(),title,idea:'',date:'',targetCount:0,stage:'direction',fields:Object.fromEntries(SESSION.map(([k])=>[k,''])),topicIds:[],assetIds:[],createdAt:new Date().toISOString()};}
+  function topic(title='未命名脚本',projectId=null){return {id:uid(),title,projectId,idea:'',wardrobeSuggestion:'',createdAt:new Date().toISOString(),revision:1,quick:{fields:Object.fromEntries(QUICK.map(([k])=>[k,''])),cover:cover(),images:[slot('主视觉'),slot('关键动作'),slot('结尾情绪')],videos:Object.fromEntries(PHASES.map(([k,label])=>[k,slot(label+'8秒')])),approved:null},deep:{fields:Object.fromEntries(DEEP.map(([k])=>[k,''])),shots:[],film:null,bgm:null},feedback:[],snapshots:[]};}
+  function project(title){return {id:uid(),title,idea:'',wardrobeSuggestion:'',date:'',targetCount:0,stage:'direction',fields:Object.fromEntries(SESSION.map(([k])=>[k,''])),topicIds:[],assetIds:[],createdAt:new Date().toISOString()};}
   // A project can be reported before any scripts are planned. Missing legacy
   // counts still preserve the former six-item starting point.
   function sessionTarget(p){const linked=new Set(p.topicIds||[]).size;return Number.isInteger(p.targetCount)&&p.targetCount>=0&&p.targetCount<=100?Math.max(p.targetCount,linked):Math.max(6,linked);}

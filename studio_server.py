@@ -682,6 +682,14 @@ class Handler(BaseHTTPRequestHandler):
                 from studio_pdf import project_overview_pdf
                 data=project_overview_pdf(body)
                 return self.send_binary(data,'application/pdf',str(body.get('title') or '专场')+'_整体方向_不含脚本.pdf')
+            if self.path=='/api/reverse/pdf':
+                from studio_pdf import reverse_story_pdf
+                def reverse_frame(local_id):
+                    path=media_path(local_id)
+                    if describe(path).get('kind')!='image':raise ValueError('反推PDF只能引用原视频提取的图片帧')
+                    return path
+                data=reverse_story_pdf(body,reverse_frame)
+                return self.send_binary(data,'application/pdf',str(body.get('title') or '视频')+'_反推故事脚本.pdf')
             token=os.environ.get('ARK_API_KEY','')
             if self.path=='/api/chat':
                 purpose=body.get('purpose','director')
@@ -692,7 +700,7 @@ class Handler(BaseHTTPRequestHandler):
                 # Seed 2.1 Pro enables deep thinking by default. For this workbench the
                 # model must return bounded structured JSON; leaving thinking enabled can
                 # spend the whole HTTP timeout before producing a single response byte.
-                result=ark_request('/chat/completions',{'model':model,'messages':[{'role':'system','content':'你是Lance的内容总监助理。只输出完整JSON，严格遵守用户结构。区分已知事实与待确认事项，不编造场地尺寸、服装品牌、预算报价或产品性能。'}, {'role':'user','content':content}],'thinking':{'type':'disabled'},'max_tokens':8000 if purpose=='director' else 4000,'temperature':0.65},token)
+                result=ark_request('/chat/completions',{'model':model,'messages':[{'role':'system','content':'你是Lance的内容总监助理。只输出完整JSON，严格遵守用户结构。区分已知事实与待确认事项，不编造场地尺寸、服装品牌、预算报价或产品性能。'}, {'role':'user','content':content}],'thinking':{'type':'disabled'},'max_tokens':10000 if purpose=='director' else 4000,'temperature':0.65},token)
                 return self.send_json({'text':result.get('choices',[{}])[0].get('message',{}).get('content',''),'purpose':purpose,'model':model,'usage':result.get('usage',{})})
             if self.path=='/api/image':
                 model=route_model('image')
