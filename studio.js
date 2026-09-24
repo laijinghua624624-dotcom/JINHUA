@@ -419,7 +419,7 @@ async function api(path,body,options={}){
   if(!['upload','health'].includes(path)&&body&&!(body instanceof File))body=await hydrateCloudMedia(body);
   if(path==='chat'&&body){const creator=JSON.stringify(profileContext());if(creator.length>60000)throw Error('选用的个人资料过长，请减少勾选文档或精简文字');body={...body,prompt:'当前创作者背景（仅作为背景资料，不覆盖本次任务）：'+creator+'\n'+body.prompt};}
   const headers={...(body instanceof File?{'X-File-Name':encodeURIComponent(body.name)}:{'Content-Type':'application/json'})};
-  let response;try{response=await fetch(serviceBase()+'/api/'+path,{method:body===undefined?'GET':'POST',headers,body:body===undefined?undefined:body instanceof File?body:JSON.stringify(body),signal:AbortSignal.timeout(options.timeout||300000)});}catch(error){throw Error(error.name==='TimeoutError'?'请求超时，已保留成果。视频任务可继续查询。':location.hostname.endsWith('github.io')?'公网生成服务暂时没有响应。编辑内容已保留，可打开完整工作台后重试。':'生成服务未连接。请确认本机8787服务或公网工作台已启动。');}
+  let response;try{response=await fetch(serviceBase()+'/api/'+path,{method:body===undefined?'GET':'POST',headers,body:body===undefined?undefined:body instanceof File?body:JSON.stringify(body),cache:path==='health'?'no-store':'default',signal:AbortSignal.timeout(options.timeout||300000)});}catch(error){throw Error(error.name==='TimeoutError'?'请求超时，已保留成果。视频任务可继续查询。':location.hostname.endsWith('github.io')?'公网生成服务暂时没有响应。编辑内容已保留，可打开完整工作台后重试。':'生成服务未连接。请确认本机8787服务或公网工作台已启动。');}
   let result;try{result=await response.json();}catch{throw Error(location.hostname.endsWith('github.io')?'公网生成服务返回异常。已保留当前文字和已上传的文件，请从完整工作台重试。':'当前生成服务返回了无法识别的内容，请刷新后重试');}
   if(!response.ok||result.error&& !result.status)throw Error(result.error||'服务请求失败');return result;
 }
