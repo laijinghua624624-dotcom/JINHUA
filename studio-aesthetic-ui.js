@@ -15,12 +15,28 @@ function ensureScopedLibraries(){
   localStorage.setItem('lance_studio_scope_split_v1',new Date().toISOString());
 }
 function aestheticCover(a){
+  const wardrobe=a?.isProjectAsset&&a.kind==='wardrobe'?usableWardrobeOutfits(a):[];
+  const wardrobeImages=wardrobe.map(o=>a.frames?.[o.frameIndex]).filter(f=>C.assetOK(f,'image'));
+  if(wardrobeImages.length)return `<span class="wardrobe-cover-grid wardrobe-cover-${Math.min(wardrobeImages.length,3)}">${wardrobeImages.slice(0,3).map((image,i)=>`<img src="${mediaURL(image)}" alt="${esc(wardrobe[i]?.name||a.name||'服装全身参考')}" loading="lazy">`).join('')}</span>`;
   const files=Array.isArray(a?.files)?a.files:[],preferred=files.find(f=>f.localId===a.coverId&&f.kind==='image'),image=preferred||files.find(f=>f.kind==='image'),video=files.find(f=>f.kind==='video');
   if(image)return `<img src="${mediaURL(image)}" alt="${esc(a.name||'审美参考')}" loading="lazy">`;
   if(a?.legacyImage)return `<img src="${esc(a.legacyImage)}" alt="${esc(a.name||'旧版审美参考')}" loading="lazy">`;
   if(a?.externalPreview){const base=location.hostname.endsWith('github.io')?'https://lance-content-studio.onrender.com':'';return `<img src="${esc(`${base}/api/radar-preview?url=${encodeURIComponent(a.externalPreview)}`)}" alt="${esc(a.name||'来源预览')}" loading="lazy" onerror="this.remove()">`;}
   if(video)return `<video src="${mediaURL(video)}" muted playsinline preload="metadata"></video>`;
   return `<span class="aesthetic-placeholder"><span aria-hidden="true">${a?.isProjectAsset?(a.kind==='scene'?'◫':'◇'):(a?.link?'↗':'▣')}</span><small>${esc(a?.category||'待添加封面')}</small></span>`;
+}
+function conciseWardrobeText(value,fallback='适合的场景与搭配说明待补充'){
+  const text=String(value||fallback).replace(/\s+/g,' ').trim(),first=text.split(/[。；\n]/).find(Boolean)||text;
+  return first.length>58?first.slice(0,58)+'…':first;
+}
+function aestheticCard(a,coverFolders){
+  const wardrobe=a?.isProjectAsset&&a.kind==='wardrobe',outfits=wardrobe?usableWardrobeOutfits(a):[];
+  if(wardrobe){
+    const title=outfits.map(o=>o.name).filter(Boolean).join(' / ')||a.name;
+    const description=conciseWardrobeText(outfits[0]?.recommendation||outfits[0]?.description||a.requirements);
+    return `<article class="aesthetic-card wardrobe-library-card"><button class="aesthetic-cover" data-action="aesthetic-open" data-id="${esc(a.id)}">${aestheticCover(a)}<span class="aesthetic-category">${esc(A.categoryOf(a,coverFolders))}</span></button><div class="aesthetic-info"><div class="aesthetic-title"><h3>${esc(title)}</h3>${btn(a.favorite?'★':'☆','aesthetic-star',`data-id="${esc(a.id)}" aria-label="${a.favorite?'取消收藏':'收藏'} ${esc(a.name)}"`)}</div><p>${esc(description)}</p><div class="actions"><small>${outfits.length?`${outfits.length} 套全身参考`:'待添加全身照'}</small>${btn('查看服装','aesthetic-open',`data-id="${esc(a.id)}"`)}</div></div></article>`;
+  }
+  return `<article class="aesthetic-card"><button class="aesthetic-cover" data-action="aesthetic-open" data-id="${esc(a.id)}">${aestheticCover(a)}<span class="aesthetic-category">${esc(A.categoryOf(a,coverFolders))}</span></button><div class="aesthetic-info"><div class="aesthetic-title"><h3>${esc(a.name)}</h3>${btn(a.favorite?'★':'☆','aesthetic-star',`data-id="${esc(a.id)}" aria-label="${a.favorite?'取消收藏':'收藏'} ${esc(a.name)}"`)}</div><div class="aesthetic-tags">${a.tags.slice(0,5).map(t=>`<span>${esc(t)}</span>`).join('')}</div><p>${esc(a.notes||'记录喜欢的光线、构图、材质或节奏')}</p><div class="actions"><small>${a.files.length} 个附件${a.link?' · 有来源链接':''}</small>${btn('查看／编辑','aesthetic-open',`data-id="${esc(a.id)}"`)}</div></div></article>`;
 }
 function loadAesthetic(){
   ensureScopedLibraries();const store=aestheticStoreKey(),raw=localStorage.getItem(store)||'[]';
@@ -38,7 +54,7 @@ function renderAesthetic(){
   const pages=Math.max(1,Math.ceil(items.length/24));q.page=Math.max(1,Math.min(q.page,pages));
   return hero('REFERENCE LIBRARY','参考库','摄影、美术、场景、服装、舞台和AI参考都放在这里，再按项目文件夹组合。',btn(q.category==='封面参考'?'添加封面参考':'添加参考','aesthetic-new','',true))+folderToolbar()+
     `<details class="library-tools"><summary>批量、AI检索与回收站</summary><div class="actions">${btn(q.category==='封面参考'?'批量导入封面':'批量上传','aesthetic-batch')}${btn('AI语义检索','aesthetic-semantic')}${btn(`回收站${trashCount?' · '+trashCount:''}`,'aesthetic-trash')}</div></details><details class="library-filters" ${q.search||q.category!=='全部'||q.tag!=='全部'||q.favorite?'open':''}><summary>搜索与筛选${q.category!=='全部'?' · '+esc(q.category):''}</summary><div class="aesthetic-toolbar"><label>搜索标题、标签、备注或来源<input data-aesthetic-search value="${esc(q.search)}" placeholder="例如：低饱和、追光、长镜头"></label><label>标签<select data-aesthetic-filter="tag"><option>全部</option>${tags.map(t=>`<option ${q.tag===t?'selected':''}>${esc(t)}</option>`).join('')}</select></label>${btn(q.favorite?'★ 只看收藏':'☆ 只看收藏','aesthetic-favorite-filter')}</div><div class="aesthetic-filters">${['全部',...categories].map(c=>btn(`${esc(c)} <small>${c==='全部'?all.length:all.filter(a=>A.categoryOf(a,coverFolders)===c).length}</small>`,'aesthetic-category',`data-category="${esc(c)}" class="${q.category===c?'active':''}"`)).join('')}</div>${q.category==='封面参考'?coverReferenceSubnav(all,q,coverFolders):''}</details>
-    <div class="aesthetic-grid">${items.slice((q.page-1)*24,q.page*24).map(a=>`<article class="aesthetic-card"><button class="aesthetic-cover" data-action="aesthetic-open" data-id="${esc(a.id)}">${aestheticCover(a)}<span class="aesthetic-category">${esc(A.categoryOf(a,coverFolders))}</span></button><div class="aesthetic-info"><div class="aesthetic-title"><h3>${esc(a.name)}</h3>${btn(a.favorite?'★':'☆','aesthetic-star',`data-id="${esc(a.id)}" aria-label="${a.favorite?'取消收藏':'收藏'} ${esc(a.name)}"`)}</div><div class="aesthetic-tags">${a.tags.slice(0,5).map(t=>`<span>${esc(t)}</span>`).join('')}</div><p>${esc(a.notes||'记录喜欢的光线、构图、材质或节奏')}</p><div class="actions"><small>${a.files.length} 个附件${a.link?' · 有来源链接':''}</small>${btn('查看／编辑','aesthetic-open',`data-id="${esc(a.id)}"`)}</div></div></article>`).join('')||empty('还没有匹配的参考','添加素材，或调整分类和搜索条件。')}</div>
+    <div class="aesthetic-grid">${items.slice((q.page-1)*24,q.page*24).map(a=>aestheticCard(a,coverFolders)).join('')||empty('还没有匹配的参考','添加素材，或调整分类和搜索条件。')}</div>
     <div class="actions" style="margin-top:20px">${btn('上一页','aesthetic-page',`data-page="${q.page-1}" ${q.page===1?'disabled':''}`)}<span>${items.length} 条 · ${q.page}/${pages} 页</span>${btn('下一页','aesthetic-page',`data-page="${q.page+1}" ${q.page===pages?'disabled':''}`)}</div>`;
 }
 function aestheticDialog(a){
