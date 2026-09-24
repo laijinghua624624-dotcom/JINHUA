@@ -12,7 +12,7 @@ function harness(){
     btn:(l,a,e)=>'<button '+e+'>'+l+'</button>',aestheticCover:()=>'<img alt="fixture">',dialog:(title,body,actions)=>{c.dialogResult={title,body,actions};}
   };
   vm.createContext(c);vm.runInContext(fs.readFileSync(require.resolve('../studio-folders-ui.js'),'utf8'),c);
-  return {c,inputs,cards,getShared:()=>shared};
+  return {c,inputs,cards,storage,getShared:()=>shared};
 }
 test('项目内新建可从完整总库挑选，自动关联且不搬走素材，取消不会写入',async()=>{
   const {c,inputs,getShared}=harness(),before=JSON.stringify(c.db);
@@ -49,4 +49,13 @@ test('关键词、分类与收藏筛选保留被隐藏的勾选并更新计数',
   inputs['#folder-picker-search'].value='隧道 逆光';inputs['#folder-picker-category'].value='摄影';inputs['#folder-picker-favorite'].checked=true;
   c.updateFolderPicker();assert.equal(cards[0].hidden,false);assert.equal(cards[1].hidden,true);
   inputs['#folder-picker-category'].value='美术';c.updateFolderPicker();assert.equal(inputs['#folder-picker-empty'].hidden,false);
+});
+test('封面专用文件夹不占项目文件夹一级入口',()=>{
+  const {c,storage}=harness();storage.set('lance_studio_folders_xinxuan',JSON.stringify([
+    {id:'project',name:'秋冬大秀项目参考',description:''},
+    {id:'cover-all',name:'初瑞雪过往封面全集',description:''},
+    {id:'cover-text',name:'历史参考｜纯字体模板',description:''},
+    {id:'cover-new',name:'增量优化｜封面建议',description:''}
+  ]));
+  const html=c.folderToolbar();assert.match(html,/秋冬大秀项目参考/);assert.doesNotMatch(html,/初瑞雪过往封面全集|历史参考｜纯字体模板|增量优化｜封面建议/);assert.match(html,/封面资料统一在下方“封面参考”分类/);
 });

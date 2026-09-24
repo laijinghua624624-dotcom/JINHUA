@@ -7,3 +7,4 @@
 .folder-picker-cover img,.folder-picker-cover video{width:100%;height:100%;object-fit:cover}
 .folder-picker-label,.folder-picker-card small{overflow-wrap:anywhere}
 .folder-picker-card small{color:var(--muted)}
+.cover-reference-subnav{display:grid;gap:12px;margin:0 16px 16px;padding:15px 16px;border-top:1px solid var(--line);background:#121610;border-radius:8px}.cover-reference-subnav>div:first-child{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap}.cover-reference-subnav strong{color:#e6d0a8}.cover-reference-subnav small{color:var(--muted)}.cover-reference-subnav button{border-radius:20px;font-size:12px;padding:7px 12px}.cover-reference-subnav button.active{color:#18200f;background:var(--lime);border-color:var(--lime)}

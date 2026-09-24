@@ -7,6 +7,21 @@
   function normalize(a){return {...entry(a.name||a.title||'未命名参考'),...a,kind:'aesthetic',name:a.name||a.title||'未命名参考',category:a.category||a.type||'其他',tags:tags(a.tags),notes:a.notes??a.requirements??a.note??'',files:Array.isArray(a.files)?a.files:[],usedIn:Array.isArray(a.usedIn)?a.usedIn:[]};}
   function migrate(current,old){if(!Array.isArray(current)||!Array.isArray(old))throw Error('审美库数据格式异常，原始数据已保留');const out=current.map(normalize);for(const item of old){if(!item||item.id==null||out.some(a=>a.legacyVisualId===String(item.id)))continue;const a=normalize({...entry(item.title),category:item.type||'其他',tags:item.tags,notes:item.note||item.description||'',createdAt:item.createdAt||new Date().toISOString()});a.legacyVisualId=String(item.id);a.legacy=C.clone(item);try{a.link=link(item.url);}catch{a.link='';}a.legacyImage=/^data:image\/(?:png|jpeg|webp|gif);base64,[A-Za-z0-9+/=\s]+$/.test(item.image||'')?item.image:null;out.push(a);}return out;}
   function filter(items,q={}){const search=(q.search||'').toLowerCase();return items.filter(a=>(!q.category||q.category==='全部'||a.category===q.category)&&(!q.tag||q.tag==='全部'||a.tags.includes(q.tag))&&(!q.favorite||a.favorite)&&(`${a.name} ${a.category} ${a.tags.join(' ')} ${a.notes} ${a.link} ${a.sourceSite||''}`.toLowerCase().includes(search))).sort((a,b)=>String(b.createdAt).localeCompare(String(a.createdAt)));}
+  function coverReference(a,folders=[]){const ids=new Set((folders||[]).map(folder=>folder.id));return a?.category==='封面参考'||/^历史参考｜(?:人物照片封面|纯字体模板)$/.test(a?.category||'')||(a?.folderIds||[]).some(id=>ids.has(id));}
+  function categoryOf(a,folders=[]){return coverReference(a,folders)?'封面参考':a?.category||'其他';}
+  function coverSubtypeMatch(a,type='全部',folders=[]){
+    if(type==='全部')return coverReference(a,folders);
+    const tags=new Set(a?.tags||[]),linked=(folders||[]).filter(folder=>(a?.folderIds||[]).includes(folder.id)).map(folder=>folder.name).join(' '),text=[a?.name,a?.category,linked,...tags].join(' ');
+    if(type==='过往封面')return tags.has('历史封面')||/过往封面|历史参考/.test(text);
+    if(type==='人物照片')return tags.has('人物照片')||/人物照片封面/.test(text);
+    if(type==='纯字体')return tags.has('纯字体')||/纯字体模板/.test(text);
+    if(type==='增量优化')return tags.has('增量优化')||tags.has('封面建议')||/增量优化|审美升级|新封面参考/.test(text);
+    return false;
+  }
+  function viewFilter(items,q={}){const folders=q.coverFolders||[],search=(q.search||'').toLowerCase();return items.filter(a=>{
+    const category=categoryOf(a,folders),categoryOK=!q.category||q.category==='全部'||category===q.category,subtypeOK=q.category!=='封面参考'||coverSubtypeMatch(a,q.coverType||'全部',folders);
+    return categoryOK&&subtypeOK&&(!q.tag||q.tag==='全部'||a.tags.includes(q.tag))&&(!q.favorite||a.favorite)&&(`${a.name} ${category} ${a.category} ${a.tags.join(' ')} ${a.notes} ${a.link} ${a.sourceSite||''}`.toLowerCase().includes(search));
+  }).sort((a,b)=>String(b.createdAt).localeCompare(String(a.createdAt)));}
   function image(a){return a.files.find(f=>f.localId===a.coverId&&f.kind==='image')||a.files.find(f=>f.kind==='image')||null;}
   function forProject(items,scope,id){return id?items.filter(a=>a.usedIn.some(p=>p.scope===scope&&p.id===id)):[];}
   function trashItem(items,id,deletedAt=new Date().toISOString()){
@@ -64,5 +79,5 @@
     }
     return result;
   }
-  return {CATEGORIES,link,tags,entry,normalize,migrate,filter,image,forProject,trashItem,restoreItem,projectReferences,mergeExtracted,splitLegacy};
+  return {CATEGORIES,link,tags,entry,normalize,migrate,filter,coverReference,categoryOf,coverSubtypeMatch,viewFilter,image,forProject,trashItem,restoreItem,projectReferences,mergeExtracted,splitLegacy};
 });
