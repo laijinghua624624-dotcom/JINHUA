@@ -28,10 +28,17 @@
     return c;
   }
   function topic(title='未命名脚本',projectId=null){return {id:uid(),title,projectId,idea:'',createdAt:new Date().toISOString(),revision:1,quick:{fields:Object.fromEntries(QUICK.map(([k])=>[k,''])),cover:cover(),images:[slot('主视觉'),slot('关键动作'),slot('结尾情绪')],videos:Object.fromEntries(PHASES.map(([k,label])=>[k,slot(label+'8秒')])),approved:null},deep:{fields:Object.fromEntries(DEEP.map(([k])=>[k,''])),shots:[],film:null,bgm:null},feedback:[],snapshots:[]};}
-  function project(title){return {id:uid(),title,idea:'',date:'',targetCount:6,stage:'direction',fields:Object.fromEntries(SESSION.map(([k])=>[k,''])),topicIds:[],assetIds:[],createdAt:new Date().toISOString()};}
-  // Six is only a starting value for new projects, never a delivery constraint.
-  function sessionTarget(p){return Number.isInteger(p.targetCount)&&p.targetCount>=1&&p.targetCount<=100?p.targetCount:Math.max(6,new Set(p.topicIds||[]).size);}
-  function setSessionTarget(p,value){const n=Number(value);if(!Number.isInteger(n)||n<1||n>100)throw Error('计划片数须为1–100的整数');if(n<new Set(p.topicIds||[]).size)throw Error('计划片数不能少于已关联脚本；请先调整关联，不会自动删除脚本');p.targetCount=n;return n;}
+  function project(title){return {id:uid(),title,idea:'',date:'',targetCount:0,stage:'direction',fields:Object.fromEntries(SESSION.map(([k])=>[k,''])),topicIds:[],assetIds:[],createdAt:new Date().toISOString()};}
+  // A project can be reported before any scripts are planned. Missing legacy
+  // counts still preserve the former six-item starting point.
+  function sessionTarget(p){return Number.isInteger(p.targetCount)&&p.targetCount>=0&&p.targetCount<=100?p.targetCount:Math.max(6,new Set(p.topicIds||[]).size);}
+  function setSessionTarget(p,value){const n=Number(value);if(!Number.isInteger(n)||n<0||n>100)throw Error('计划内容数须为0–100的整数');if(n<new Set(p.topicIds||[]).size)throw Error('计划内容数不能少于已关联脚本；请先调整关联，不会自动删除脚本');p.targetCount=n;return n;}
+  function projectOverviewStatus(item){
+    const missing=[];
+    if(!text(item?.title))missing.push('专场名称');
+    for(const[k,label]of SESSION)if(!text(item?.fields?.[k]))missing.push(label);
+    return {ready:missing.length===0,missing,stage:'overview'};
+  }
   function directionStatus(item,kind='topic',topics=[]){
     const f=kind==='project'?item.fields:item.quick.fields,r=item.report||{},missing=[];
     if(!text(r.recommendation)&&!text(f.outline))missing.push('一句话主推方向或创意大纲');
@@ -109,5 +116,5 @@
   function validateShots(raw){if(!Array.isArray(raw.shots)||raw.shots.length!==25)throw Error('必须返回25个完整分镜，原分镜已保留');return raw.shots.map((s,i)=>{if(!text(s.visual)||!text(s.camera)||!Number.isInteger(s.duration)||s.duration<2||s.duration>12)throw Error(`第${i+1}镜画面、摄影或时长不完整（2–12秒）`);return {id:uid(),number:i+1,visual:s.visual,dialogue:s.dialogue||'无台词',camera:s.camera,duration:s.duration,image:slot(`第${i+1}镜`,s.imagePrompt||s.visual),video:slot(`第${i+1}镜视频`,s.videoPrompt||s.visual)};});}
   function snapshot(t,note){const data=clone(t);delete data.snapshots;t.snapshots.push({id:uid(),time:new Date().toISOString(),note,data});t.revision++;}
   function importLegacy(old){const t=topic(old.title);const current=old.versions?.find(v=>v.version===old.currentVersion)?.data||old;const val=k=>current[k]||old[k]||'';t.id='legacy-'+old.id;t.idea=old.hook||'';t.legacyId=old.id;t.legacy=clone(old);const mapping={outline:'creativeOutline',meaning:'creativeMeaning',description:'creativeDescription',dialogue:'narrationDescription',atmosphere:'visualAtmosphere',camera:'cinematographyStyle',script:'script'};for(const[k,v]of Object.entries(mapping))t.quick.fields[k]=val(v);return t;}
-  return {QUICK,SESSION,DEEP,PHASES,COST,uid,clone,text,assetOK,selected,slot,cover,ensureCover,topic,project,sessionTarget,setSessionTarget,directionStatus,quickStatus,sessionStatus,deepStatus,budgetPlan,monthlyCostRange,quickGenerationCost,deepGenerationCost,shotFingerprint,putVersion,parseJSON,validateFields,validateQuick,validateShots,snapshot,importLegacy};
+  return {QUICK,SESSION,DEEP,PHASES,COST,uid,clone,text,assetOK,selected,slot,cover,ensureCover,topic,project,sessionTarget,setSessionTarget,projectOverviewStatus,directionStatus,quickStatus,sessionStatus,deepStatus,budgetPlan,monthlyCostRange,quickGenerationCost,deepGenerationCost,shotFingerprint,putVersion,parseJSON,validateFields,validateQuick,validateShots,snapshot,importLegacy};
 });

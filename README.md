@@ -4,10 +4,12 @@
 
 ## 启动
 
-需要 Python 3.10+ 和 FFmpeg（含 ffprobe）。PDF 文本提取建议安装 Poppler，扫描件 OCR 建议安装 Tesseract 与中文语言包；macOS 可执行 `brew install poppler tesseract tesseract-lang`。在项目目录运行：
+需要 Python 3.10+ 和 FFmpeg（含 ffprobe）。PDF 文本提取建议安装 Poppler，扫描件 OCR 建议安装 Tesseract 与中文语言包；macOS 可执行 `brew install poppler tesseract tesseract-lang`。首次在项目目录安装依赖并启动：
 
 ```bash
-python3 studio_server.py
+python3 -m venv .venv
+.venv/bin/pip install -r requirements.txt
+.venv/bin/python studio_server.py
 ```
 
 打开 http://127.0.0.1:8787 。该端口专用于 JINHUA；`8000` 留给其他项目，`8765` 留给旧版即梦代理。不能用普通静态服务器替代，也不要直接双击 HTML。默认只监听本机。前端依赖包已构建，可直接使用；修改 PPT 依赖后执行 `npm ci && npm run build`。当前服务已启动；本机登录自启动未通过验收，已撤回该配置。关机或进程退出后需重新运行，不能当作云服务器。

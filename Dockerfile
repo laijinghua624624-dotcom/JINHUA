@@ -9,7 +9,7 @@ RUN sed -i \
         /etc/apt/sources.list.d/debian.sources \
     && apt-get -o Acquire::Retries=5 -o Acquire::ForceIPv4=true update \
     && apt-get -o Acquire::Retries=5 -o Acquire::ForceIPv4=true install -y --no-install-recommends \
-        ca-certificates curl ffmpeg libcap2-bin poppler-utils tesseract-ocr tesseract-ocr-chi-sim \
+        ca-certificates curl ffmpeg fonts-wqy-zenhei libcap2-bin poppler-utils tesseract-ocr tesseract-ocr-chi-sim \
     && rm -rf /var/lib/apt/lists/*
 COPY --from=caddy /usr/bin/caddy /usr/bin/caddy
 RUN setcap -r /usr/bin/caddy
@@ -17,7 +17,9 @@ RUN useradd --create-home --uid 10001 studio \
     && mkdir -p /app /data /tmp/caddy-config /tmp/caddy-data \
     && chown -R studio:studio /app /data /tmp/caddy-config /tmp/caddy-data
 WORKDIR /app
-COPY index.html studio*.js studio*.css studio_server.py ./
+COPY requirements.txt ./
+RUN pip install --no-cache-dir -r requirements.txt
+COPY index.html studio*.js studio*.css studio_server.py studio_pdf.py ./
 COPY vendor/presentation.js ./vendor/presentation.js
 COPY api-guide.html tutorial.html lance_qrcode_public.png lance_qrcode.png lance_intro.mp4 ./
 COPY mobile.html mobile.js mobile.css mobile-config.js mobile-icon.svg mobile-sw.js mobile.webmanifest ./
