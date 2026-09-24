@@ -1,5 +1,5 @@
 const {test}=require('node:test');const assert=require('node:assert/strict');const fs=require('node:fs');const path=require('node:path');const cp=require('node:child_process');
-const C=require('../studio-core');const P=require('../studio-ppt');const PptxGenJS=require('pptxgenjs');const JSZip=require('jszip');
+const C=require('../studio-core');const R=require('../studio-reverse');const P=require('../studio-ppt');const PptxGenJS=require('pptxgenjs');const JSZip=require('jszip');
 const dir=path.resolve(__dirname,'../test-output');fs.mkdirSync(dir,{recursive:true});
 test('实际PPT文件：可编辑文字、3张内嵌图、3段原生8秒视频',async()=>{
  cp.execFileSync('ffmpeg',['-v','error','-f','lavfi','-i','testsrc2=size=320x240:rate=24','-f','lavfi','-i','sine=frequency=440:sample_rate=48000','-t','8','-c:v','libx264','-preset','ultrafast','-c:a','aac','-pix_fmt','yuv420p','-y',path.join(dir,'fixture.mp4')]);
@@ -14,3 +14,13 @@ test('实际PPT文件：可编辑文字、3张内嵌图、3段原生8秒视频',
  t.quick.approved={fields:C.clone(t.quick.fields),cover:C.clone(t.quick.cover),images:t.quick.images.map(s=>C.clone(C.selected(s))),videos:C.clone(t.quick.videos)};t.quick.fields.script='不应出现在执行版的未确认改稿';for(const[k]of C.DEEP)t.deep.fields[k]='执行内容';t.deep.shots=C.validateShots({shots:Array.from({length:25},()=>({visual:'测试画面',camera:'中景',duration:2}))});for(const s of t.deep.shots)C.putVersion(s.image,{kind:'image',localId:'fixture.png',source:'ai',verified:true});t.deep.film={kind:'video',localId:'fixture.mp4',source:'ai-assembly',verified:true,duration:50,fingerprint:C.shotFingerprint(t.deep.shots),bgmId:null};const dp=await P.buildDeck(PptxGenJS,t,'deep',[],a=>a.kind==='image'?image:video);const dz=await JSZip.loadAsync(await dp.write({outputType:'nodebuffer'}));const dxml=(await Promise.all(Object.keys(dz.files).filter(n=>/^ppt\/slides\/slide\d+\.xml$/.test(n)).map(n=>dz.file(n).async('string')))).join('');assert.equal(Object.keys(dz.files).filter(n=>n.endsWith('.mp4')).length,4);assert.match(dxml,/镜 25/);assert.match(dxml,/完整AI成片参考/);assert.ok(!dxml.includes('不应出现在执行版的未确认改稿'));
 });
 test('未齐备汇报阻止导出',async()=>assert.rejects(P.buildDeck(PptxGenJS,C.topic(),'topic',[],()=>''),/不能导出/));
+test('视频反推可导出带真实关键帧的可编辑PPT',async()=>{
+ const pngPath=path.join(dir,'reverse-frame.png');
+ cp.execFileSync('ffmpeg',['-v','error','-f','lavfi','-i','color=c=0x29321f:s=320x240','-frames:v','1','-y',pngPath]);
+ const image='data:image/png;base64,'+fs.readFileSync(pngPath).toString('base64'),r=R.create('视频反推汇报验收');
+ r.frames=[{kind:'image',localId:'reverse-frame.png',verified:true,source:'video-frame',width:320,height:240,timestamp:2.5}];
+ R.accept(r,{fields:Object.fromEntries(R.FIELDS.map(([k,label])=>[k,label+'：测试内容，仅用于导出结构验收。'])),shots:[{frameIndex:0,visual:'人物站在舞台中央',camera:'中景，正面固定机位',dialogue:'声音待核对',note:'仅依据采样画面'}]});
+ const ppt=await P.buildDeck(PptxGenJS,r,'reverse',[],()=>image,'reverse'),bytes=await ppt.write({outputType:'nodebuffer'});fs.writeFileSync(path.join(dir,'视频反推汇报验收.pptx'),bytes);
+ const zip=await JSZip.loadAsync(bytes),slides=Object.keys(zip.files).filter(n=>/^ppt\/slides\/slide\d+\.xml$/.test(n)),xml=(await Promise.all(slides.map(n=>zip.file(n).async('string')))).join('');
+ assert.match(xml,/视频反推报告/);assert.match(xml,/创意结论/);assert.match(xml,/关键画面证据/);assert.match(xml,/依据与未确认事项/);assert.ok(Object.keys(zip.files).some(n=>/ppt\/media\/.*png/.test(n)));
+});

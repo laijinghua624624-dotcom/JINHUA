@@ -1,7 +1,7 @@
 (function(root,factory){if(typeof module==='object')module.exports=factory(require('./studio-core.js'));else root.StudioPpt=factory(root.StudioCore);})(globalThis,function(C){
   'use strict';
   const THEME={bg:'14121A',ink:'F6F2E9',muted:'B7AE9F',accent:'C4A96B'};
-  const MODES={decision:'老板决策版',full:'完整策划版',execution:'单条执行版'};
+  const MODES={decision:'老板决策版',full:'完整策划版',execution:'单条执行版',reverse:'视频反推报告'};
   const REPORT_FIELDS=[['recommendation','一句话主推方向'],['reason','推荐理由／为什么适合这个人物与项目'],['confirmed','已确认事实（只填写已核实的信息）'],['pending','待确认信息与假设'],['alternatives','备选方向及取舍（可留空）'],['production','拍摄安排、预算与资源边界'],['decisions','本次需要拍板的事项']];
   const ensureReport=item=>{if(!item.report||typeof item.report!=='object')item.report={};for(const[k]of REPORT_FIELDS)if(typeof item.report[k]!=='string')item.report[k]='';return item.report;};
   const modeFor=(kind,mode)=>mode||(kind==='deep'?'execution':'full');
@@ -21,7 +21,38 @@
     const a=t.quick.approved;if(!a)return null;
     return {...t,report:a.report||t.report,quick:{...a,fields:a.fields||{},videos:a.videos||{},images:(a.images||[]).map((image,i)=>image?.versions?image:{id:'approved-'+i,referenceNote:image?.referenceNote||'',versions:image?[image]:[],selectedId:image?.id}),cover:a.cover||C.cover()}};
   }
+  function reverseStatus(item){
+    const missing=[];
+    if(!C.text(item?.title))missing.push('视频标题');
+    if(!item?.analysis?.fields)missing.push('反推分析');
+    else for(const key of ['intent','concept','outline','description','script','reuse'])if(!C.text(item.analysis.fields[key]))missing.push('反推分析：'+key);
+    const evidence=(item?.analysis?.shots||[]).filter(shot=>C.assetOK(item.frames?.[shot.frameIndex],'image'));
+    if(!evidence.length)missing.push('至少1张可核对的关键画面证据');
+    return {ready:missing.length===0,missing,evidence:evidence.length};
+  }
+  function planReverseDeck(source){
+    const item=C.clone(source),status=reverseStatus(item),f=item.analysis?.fields||{},slides=[];
+    const overview=(title,sections)=>{const rows=sections.filter(section=>C.text(section.body));if(rows.length)slides.push({type:'summary',title,sections:rows.map(section=>({...section,display:excerpt(section.body,88)}))});};
+    const textPage=(title,body,subtitle='')=>splitText(body).forEach((text,i)=>slides.push({type:'text',title:title+(i?'（续）':''),body:text,subtitle}));
+    slides.push({type:'cover',title:item.title,subtitle:MODES.reverse,body:excerpt(f.concept||f.intent||'从原片证据重建创作方法',110)});
+    overview('创意结论',[{label:'创作意图',body:f.intent},{label:'核心概念',body:f.concept},{label:'创意寓意',body:f.meaning}]);
+    overview('叙事结构',[{label:'创意大纲',body:f.outline},{label:'叙事与表达',body:f.description},{label:'台词依据',body:f.dialogue||item.transcript}]);
+    textPage('重建故事脚本',f.script,item.title);
+    const seen=new Set(),evidence=[];
+    for(const shot of item.analysis?.shots||[]){
+      const frame=item.frames?.[shot.frameIndex];
+      if(!C.assetOK(frame,'image')||seen.has(shot.frameIndex))continue;
+      seen.add(shot.frameIndex);evidence.push({frame,shot});if(evidence.length===12)break;
+    }
+    for(const [i,entries]of chunks(evidence,3).entries())slides.push({type:'evidence',title:'关键画面证据'+(evidence.length>3?' '+(i+1):''),entries});
+    overview('场景与美术',[{label:'场景',body:f.scene},{label:'场地',body:f.location},{label:'美术与道具',body:[f.art,f.props].filter(C.text).join('\n')}]);
+    overview('影像与声音',[{label:'影像氛围',body:f.atmosphere},{label:'摄影调性',body:f.camera},{label:'配乐与声音',body:f.music},{label:'服装造型',body:f.costume}]);
+    overview('可复用方法',[{label:'可借鉴机制',body:f.reuse},{label:'资料沉淀',body:f.archive}]);
+    overview('依据与未确认事项',[{label:'分析依据',body:item.analysis?.basis||'依据原视频关键帧与已补充资料进行推断'},{label:'待核对',body:f.uncertainties||'未确认信息需结合原始策划、完整音轨与主创访谈继续核对'}]);
+    return {mode:'reverse',label:MODES.reverse,draft:false,status,slides,overviewCount:slides.length};
+  }
   function reportStatus(item,kind,topics=[],mode){
+    if(kind==='reverse'||mode==='reverse')return reverseStatus(item);
     mode=modeFor(kind,mode);if(!MODES[mode])throw Error('未知PPT版本');
     if(mode==='execution'){
       if(kind==='project')return {ready:false,missing:['请进入一条脚本，再导出单条执行版']};
@@ -34,6 +65,7 @@
     return {...C.directionStatus(item,kind,topics),draft:!full.ready,deliveryMissing:full.missing};
   }
   function planDeck(source,kind,topics=[],mode){
+    if(kind==='reverse'||mode==='reverse')return planReverseDeck(source);
     mode=modeFor(kind,mode);
     const item=C.clone(source),all=C.clone(topics),status=reportStatus(item,kind,all,mode);
     if(mode==='execution'&&item.quick?.approved?.report)item.report=C.clone(item.quick.approved.report);
@@ -148,6 +180,16 @@
         if(count){const areaW=7.7,gap=.25,w=(areaW-gap*(count-1))/count;for(const [i,entry]of p.entries.entries()){const x=.72+i*(w+gap);txt(s,excerpt(entry.topic,18),x,2.42,w,.34,12,THEME.muted);await addImage(s,entry.asset,{x,y:2.85,w,h:3.9});}}
         txt(s,'建议',8.75,2.5,3.8,.4,17,THEME.accent,true);txt(s,p.advice,8.75,3.05,3.75,3.55,21,THEME.ink);
         notes='过往封面仅作为参考建议，不等同于高点击结论。\n'+p.advice+p.entries.map(entry=>'\n'+entry.topic+'：'+(entry.note||'未填写单图借鉴要点')+'\n素材来源：'+(entry.asset.source||'上传')).join('');
+      }else if(p.type==='evidence'){
+        const gap=.3,w=(11.9-gap*(p.entries.length-1))/Math.max(p.entries.length,1);
+        for(const [i,entry]of p.entries.entries()){
+          const x=.7+i*(w+gap),shot=entry.shot;
+          await addImage(s,entry.frame,{x,y:2.42,w,h:2.75});
+          txt(s,Number(shot.timestamp??entry.frame.timestamp??0).toFixed(2)+'秒',x,5.31,w,.3,13,THEME.accent,true);
+          txt(s,excerpt(shot.visual,42),x,5.68,w,.62,16,THEME.ink,true);
+          txt(s,excerpt(shot.camera,55),x,6.34,w,.48,13,THEME.muted);
+          notes+='\n证据 '+(i+1)+' · '+Number(shot.timestamp??entry.frame.timestamp??0).toFixed(2)+'秒\n画面：'+shot.visual+'\n摄影：'+shot.camera+'\n台词依据：'+shot.dialogue+'\n依据与限制：'+shot.note+'\n素材来源：'+(entry.frame.source||'原片提帧')+'\n';
+        }
       }else if(p.type==='image'){
         if(p.cover)await drawCover(s,p.cover,.8,2.42,11.7,3.95);else await addImage(s,p.asset,{x:.8,y:2.42,w:11.7,h:3.95});
         txt(s,excerpt(p.caption,96),.8,6.45,11.7,.57,16,THEME.muted);
@@ -166,16 +208,16 @@
   async function putExport(id,blob){const db=await store();return new Promise((resolve,reject)=>{const tx=db.transaction('exports','readwrite');tx.objectStore('exports').put(blob,id);tx.oncomplete=()=>{db.close();resolve();};tx.onerror=()=>{db.close();reject(Error('成果存储空间不足，未标记导出成功'));};});}
   async function getExport(id){const db=await store();return new Promise((resolve,reject)=>{const req=db.transaction('exports').objectStore('exports').get(id);req.onsuccess=()=>{db.close();resolve(req.result);};req.onerror=()=>{db.close();reject(Error('无法读取成果'));};});}
   function dataURI(blob){return new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(reader.result);reader.onerror=()=>reject(Error('媒体读取失败'));reader.readAsDataURL(blob);});}
-  function filename(record){return record.filename||record.title+(record.mode?'_'+MODES[record.mode]+(record.draft?'_方向讨论稿':''):'')+'.pptx';}
+  function filename(record){return record.filename||record.title+(record.mode?'_'+(MODES[record.mode]||record.mode)+(record.draft?'_方向讨论稿':''):'')+'.pptx';}
   async function exportReport(item,kind,env,mode){
     if(!window.PptxGenJS)throw Error('PPT组件未加载，请刷新或运行 npm run build');
     // Freeze the source while verification and packaging await network/media reads.
-    item=C.clone(item);const topics=C.clone(env.db.topics),plan=planDeck(item,kind,topics,mode),cache=new Map();
+    item=C.clone(item);const topics=C.clone(env.db.topics||[]),plan=planDeck(item,kind,topics,mode),cache=new Map();
     const getData=async a=>{if(!a)throw Error('素材缺失');if(!cache.has(a.localId)){const checked=await env.api('verify',{localId:a.localId,source:a.source});if(checked.kind!==a.kind||!checked.verified||a.kind==='video'&&Math.abs(checked.duration-a.duration)>.15)throw Error('素材类型或时长已变化，请重新核验');const response=await fetch(env.mediaURL(a));if(!response.ok)throw Error('素材不可读取，导出已停止');cache.set(a.localId,await dataURI(await response.blob()));}return cache.get(a.localId);};
     const ppt=await buildDeck(window.PptxGenJS,item,kind,topics,getData,plan.mode),blob=await ppt.write({outputType:'blob'});
     const id=C.uid();await putExport(id,blob);
     const record={id,title:item.title,kind,mode:plan.mode,draft:plan.draft,slideCount:plan.slides.length,sourceId:item.id,time:new Date().toISOString()};
     record.filename=filename(record);env.db.exports.push(record);env.save();env.downloadBlob(blob,record.filename);env.progress(plan.label+'已生成并存入“成果与备份”，可重复下载');
   }
-  return {MODES,REPORT_FIELDS,ensureReport,reportStatus,planDeck,approvedTopic,filename,buildDeck,splitText,exportReport,getExport,putExport};
+  return {MODES,REPORT_FIELDS,ensureReport,reportStatus,reverseStatus,planDeck,planReverseDeck,approvedTopic,filename,buildDeck,splitText,exportReport,getExport,putExport};
 });
