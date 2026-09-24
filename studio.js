@@ -11,6 +11,7 @@ let route={view:'home',id:null,tab:'quick'},db,settings,job=null,stop=false,heal
 let exportURL=null;
 let workspaceReady=false,workbenchSyncPromise=null,cloudState={session:null,remote:null,busy:false,status:'未登录',error:'',timer:null};
 const CLOUD_META_PREFIX='jinhua_workbench_sync_v1_';
+const AUTO_SYNC_INTERVAL_MS=30*60*1000;
 try{settings=JSON.parse(localStorage.getItem('lance_studio_settings')||'{}');}catch{settings={};}
 settings={server:settings.server||''}; // Model routes and credentials are server-only.
 localStorage.setItem('lance_studio_settings',JSON.stringify(settings));
@@ -40,7 +41,7 @@ function cloudMeta(space=scope){try{return JSON.parse(localStorage.getItem(CLOUD
 function setCloudMeta(value,space=scope){localStorage.setItem(CLOUD_META_PREFIX+space,JSON.stringify(value));return value;}
 function markWorkspaceDirty(space=scope){
   if(!workspaceReady)return;const meta=cloudMeta(space);meta.dirtyAt=new Date().toISOString();setCloudMeta(meta,space);
-  if(space===scope&&cloudState.session&&meta.paired){cloudState.status='待同步';clearTimeout(cloudState.timer);cloudState.timer=setTimeout(()=>uploadWorkspace(space,false).catch(error=>{cloudState.status='同步需处理';cloudState.error=friendlySyncError(error);render();}),1800);}
+  if(space===scope&&cloudState.session&&meta.paired){cloudState.status='待同步';clearTimeout(cloudState.timer);cloudState.timer=setTimeout(()=>uploadWorkspace(space,false).catch(error=>{cloudState.status='同步需处理';cloudState.error=friendlySyncError(error);refreshSyncUI();}),1800);}
 }
 window.markWorkspaceDirty=markWorkspaceDirty;
 function save(mark=true){
@@ -119,7 +120,7 @@ async function addSignedMedia(payload){
 async function uploadWorkspace(space=scope,force=false){
   if(cloudState.busy)throw Error('同步正在进行');
   const session=cloudState.session||await StudioCloud.session();if(!session)throw Error('请先登录同步账号');
-  cloudState.busy=true;cloudState.status='正在同步';cloudState.error='';render();
+  cloudState.busy=true;cloudState.status='正在同步';cloudState.error='';refreshSyncUI();
   try{
     const latest=await StudioCloud.getWorkbench(space),meta=cloudMeta(space),payload=workspacePayload(space),decision=WC.syncDecision(payload,latest,meta);
     if(latest&&!WC.empty(latest.payload)&&WC.empty(payload))throw Error('当前设备是空白的，系统已禁止它覆盖云端成果。请使用“从云端恢复当前空间”。');
@@ -137,14 +138,14 @@ async function uploadWorkspace(space=scope,force=false){
     await StudioCloud.backupWorkbench(space,C.clone(payload),revision,deviceId);
     const row=await StudioCloud.putWorkbench(space,C.clone(payload),revision,deviceId);
     persistWorkspacePayload(space,payload,row.revision);cloudState.remote=row;cloudState.status='云端已同步';return row;
-  }finally{cloudState.busy=false;render();}
+  }finally{cloudState.busy=false;refreshSyncUI();}
 }
 async function uploadAllWorkspaces(force=false){for(const space of ['xinxuan','personal'])await uploadWorkspace(space,force);await refreshCloudState();}
 async function pullWorkspace(space=scope){
   const row=await StudioCloud.getWorkbench(space);if(!row)throw Error((space==='xinxuan'?'My·工作':'My·个人')+'云端还没有数据');
   const payload=await addSignedMedia(C.clone(row.payload));persistWorkspacePayload(space,payload,row.revision);return row;
 }
-async function pullAllWorkspaces(){cloudState.busy=true;cloudState.status='正在取回云端数据';render();try{for(const space of ['xinxuan','personal']){const row=await StudioCloud.getWorkbench(space);if(row){const payload=await addSignedMedia(C.clone(row.payload));persistWorkspacePayload(space,payload,row.revision);}}cloudState.status='云端已同步';await refreshCloudState();}finally{cloudState.busy=false;render();}}
+async function pullAllWorkspaces(){cloudState.busy=true;cloudState.status='正在取回云端数据';refreshSyncUI();try{for(const space of ['xinxuan','personal']){const row=await StudioCloud.getWorkbench(space);if(row){const payload=await addSignedMedia(C.clone(row.payload));persistWorkspacePayload(space,payload,row.revision);}}cloudState.status='云端已同步';await refreshCloudState();}finally{cloudState.busy=false;refreshSyncUI();}}
 async function refreshCloudState(){
   cloudState.error='';cloudState.session=await StudioCloud.session();if(!cloudState.session){cloudState.status='未登录';cloudState.remote=null;return;}
   const rows=await Promise.all(['xinxuan','personal'].map(space=>StudioCloud.getWorkbench(space).catch(error=>({error:error.message,workspace:space}))));cloudState.remotes=Object.fromEntries(rows.filter(r=>r&&!r.error).map(r=>[r.workspace,r]));cloudState.remote=cloudState.remotes[scope]||null;
@@ -162,6 +163,12 @@ function cloudBadge(){
   const synced=cloudState.status.includes('已同步'),offline=cloudState.status.includes('未登录'),saving=cloudState.status.includes('待同步')||cloudState.status.includes('正在');
   const label=synced?'已自动保存':offline?'仅本机保存':saving?'正在保存…':'保存需处理';
   return btn(label,'workbench-cloud-open',`class="cloud-badge ${synced?'cloud-ok':offline?'':'cloud-warn'}"`);
+}
+function refreshSyncUI(){
+  const editing=document.activeElement?.matches?.('input,textarea,select,[contenteditable="true"]');
+  if(!editing){render();return;}
+  const badge=document.querySelector('[data-action="workbench-cloud-open"]');if(badge)badge.outerHTML=cloudBadge();
+  const state=$('.save-state');if(state)state.textContent=cloudState.status==='云端已同步'?'已保存到云端':cloudState.status;
 }
 async function workbenchCloudAction(action){
   if(action==='workbench-cloud-open'){await refreshCloudState();showCloudSync();return;}
@@ -515,7 +522,8 @@ document.addEventListener('change',async event=>{
   }catch(error){showError(error);if(!$('#dialog')?.open)render();}
 });
 let fieldSaveTimer=null;
-document.addEventListener('input',event=>{const e=event.target;if(e.dataset.field){set(e.dataset.field,e.hasAttribute('data-number')?Number(e.value):e.value);clearTimeout(fieldSaveTimer);fieldSaveTimer=setTimeout(()=>{save();refreshReadiness();},220);}if(e.id==='search'){search=e.value;const pos=e.selectionStart;render();$('#search')?.focus();$('#search')?.setSelectionRange(pos,pos);}});
+function flushPendingFieldSave(){if(!fieldSaveTimer)return;clearTimeout(fieldSaveTimer);fieldSaveTimer=null;save();refreshReadiness();}
+document.addEventListener('input',event=>{const e=event.target;if(e.dataset.field){set(e.dataset.field,e.hasAttribute('data-number')?Number(e.value):e.value);clearTimeout(fieldSaveTimer);fieldSaveTimer=setTimeout(()=>{fieldSaveTimer=null;save();refreshReadiness();},220);}if(e.id==='search'){search=e.value;const pos=e.selectionStart;render();$('#search')?.focus();$('#search')?.setSelectionRange(pos,pos);}});
 document.addEventListener('input',event=>{if(event.target.hasAttribute('data-reverse-search')){route.query=event.target.value;const pos=event.target.selectionStart;render();$('[data-reverse-search]')?.focus();$('[data-reverse-search]')?.setSelectionRange(pos,pos);}});
 document.addEventListener('click',async event=>{
   const e=event.target.closest('[data-action]');if(!e)return;const action=e.dataset.action;const t=db.topics.find(t=>t.id===e.dataset.id);const p=db.projects.find(p=>p.id===e.dataset.id);const a=db.assets.find(a=>a.id===e.dataset.id);
@@ -588,7 +596,7 @@ document.addEventListener('click',async event=>{
 window.addEventListener('beforeunload',event=>{if(job||fragmentRecording||fragmentPending){event.preventDefault();event.returnValue='';}});
 async function runWorkbenchSync(openPanel=false){
   try{
-    await refreshCloudState();if(!cloudState.session){render();if(openPanel)showCloudSync();return;}
+    await refreshCloudState();if(!cloudState.session){refreshSyncUI();if(openPanel)showCloudSync();return;}
     const recovered=[];
     for(const space of ['xinxuan','personal']){
       const meta=cloudMeta(space),remote=cloudState.remotes?.[space],local=workspacePayload(space),decision=WC.syncDecision(local,remote,meta);
@@ -598,8 +606,8 @@ async function runWorkbenchSync(openPanel=false){
       if(decision.action==='conflict')throw Error(decision.reason);
       if(decision.action==='refresh'&&WC.mediaGroups(local.data,local.aesthetic,local.trash).size){await addSignedMedia(local);persistWorkspacePayload(space,local,meta.lastRevision);}
     }
-    cloudState.remote=cloudState.remotes?.[scope]||null;cloudState.status=cloudMeta().dirtyAt?'待同步':'云端已同步';render();if(recovered.length)notify(recovered.join('，')+'。');if(openPanel)showCloudSync();
-  }catch(error){cloudState.status='同步需处理';cloudState.error=friendlySyncError(error);render();if(openPanel)showCloudSync();}
+    cloudState.remote=cloudState.remotes?.[scope]||null;cloudState.status=cloudMeta().dirtyAt?'待同步':'云端已同步';refreshSyncUI();if(recovered.length)notify(recovered.join('，')+'。');if(openPanel)showCloudSync();
+  }catch(error){cloudState.status='同步需处理';cloudState.error=friendlySyncError(error);refreshSyncUI();if(openPanel)showCloudSync();}
 }
 function resumeWorkbenchSync(openPanel=false){
   if(workbenchSyncPromise)return workbenchSyncPromise;
@@ -611,4 +619,6 @@ try{
   api('health',undefined,{timeout:5000}).then(h=>{health=h;render();}).catch(()=>{});
 }catch(error){$('#app').textContent=error.message;}
 window.addEventListener('online',()=>resumeWorkbenchSync(false));
-document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')resumeWorkbenchSync(false);});
+setInterval(()=>{if(!job&&!fragmentRecording&&!fragmentPending)resumeWorkbenchSync(false);},AUTO_SYNC_INTERVAL_MS);
+document.addEventListener('visibilitychange',()=>{flushPendingFieldSave();if(!job&&!fragmentRecording&&!fragmentPending)resumeWorkbenchSync(false);});
+window.addEventListener('pagehide',()=>{flushPendingFieldSave();if(!job&&!fragmentRecording&&!fragmentPending)resumeWorkbenchSync(false);});
