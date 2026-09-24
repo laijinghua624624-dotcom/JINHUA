@@ -11,6 +11,10 @@ const {chromium}=require('playwright-core'),assert=require('node:assert/strict')
   await page.getByRole('button',{name:'打开编辑',exact:true}).click();
   await page.getByRole('button',{name:'AI补全文字方案',exact:true}).click();
   await page.locator('.job').waitFor({state:'visible'});
+  const activeOutline=page.locator('[data-field="topics.0.quick.fields.outline"]');
+  await activeOutline.fill('生成进行中仍可编辑本条文字');
+  await page.waitForTimeout(300);
+  assert.equal(await page.evaluate(()=>JSON.parse(localStorage.getItem('lance_studio_v2_xinxuan')).topics[0].quick.fields.outline),'生成进行中仍可编辑本条文字');
   await page.getByRole('button',{name:'项目',exact:true}).click();
   await page.getByRole('button',{name:'新建单条',exact:true}).click();
   await page.locator('#new-title').fill('生成期间编辑的另一条');
@@ -21,8 +25,8 @@ const {chromium}=require('playwright-core'),assert=require('node:assert/strict')
   releaseResponse();
   await page.waitForFunction(()=>!document.querySelector('.job'));
   const stored=await page.evaluate(()=>JSON.parse(localStorage.getItem('lance_studio_v2_xinxuan')));
-  assert.equal(stored.topics[0].quick.fields.outline,'生成结果 outline');
+  assert.equal(stored.topics[0].quick.fields.outline,'生成进行中仍可编辑本条文字');
   assert.equal(stored.topics[1].quick.fields.outline,'这段文字应在后台生成完成后仍然保留');
   assert.deepEqual(errors,[]);
-  console.log('PASS: background generation preserves unrelated navigation and editing');
+  console.log('PASS: background generation preserves same-record and unrelated editing');
 }finally{await browser.close();}})().catch(error=>{console.error(error);process.exit(1);});

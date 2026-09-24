@@ -1,6 +1,7 @@
 import os
 import unittest
 from unittest.mock import patch
+from types import SimpleNamespace
 import studio_server as s
 
 class DeploymentTests(unittest.TestCase):
@@ -21,3 +22,12 @@ class DeploymentTests(unittest.TestCase):
         env={'RENDER_EXTERNAL_URL':'https://lance-content-studio.onrender.com','LANCE_BIND_HOST':'0.0.0.0','LANCE_TRUSTED_PROXY':'1','LANCE_PORT':'8000','PORT':'10000'}
         with patch.dict(os.environ,env,clear=True):
             self.assertEqual(s.server_binding(),('0.0.0.0',8000))
+
+    def test_public_service_accepts_only_its_own_and_owner_pages_origins(self):
+        handler=object.__new__(s.Handler)
+        handler.server=SimpleNamespace(server_port=8000)
+        with patch.dict(os.environ,{'LANCE_PUBLIC_ORIGIN':'https://lance-content-studio.onrender.com'},clear=True):
+            handler.headers={'Host':'lance-content-studio.onrender.com','Origin':'https://laijinghua624624-dotcom.github.io'}
+            self.assertTrue(handler.allowed())
+            handler.headers={'Host':'lance-content-studio.onrender.com','Origin':'https://evil.example.com'}
+            self.assertFalse(handler.allowed())

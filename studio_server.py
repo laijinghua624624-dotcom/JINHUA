@@ -545,11 +545,15 @@ class Handler(BaseHTTPRequestHandler):
         else:
             allowed_hosts={'127.0.0.1','localhost'}
             permitted={'http://127.0.0.1','http://localhost'}
+        allowed_hosts.add('lance-content-studio.onrender.com')
         permitted.update(filter(None,os.environ.get('LANCE_ALLOWED_ORIGINS','').split(',')))
+        permitted.add('https://laijinghua624624-dotcom.github.io')
         public_origin=os.environ.get('LANCE_PUBLIC_ORIGIN','').rstrip('/')
         if public_origin:
-            # Public deployment is same-origin behind an authenticated proxy.
-            permitted={public_origin}
+            # Public deployment is same-origin behind Render's proxy; the
+            # owner's GitHub Pages may also call this API for full features.
+            permitted.add(public_origin)
+            allowed_hosts.add(urllib.parse.urlparse(public_origin).netloc)
         return host in allowed_hosts and (not origin or origin in permitted)
 
     def send_json(self,value,status=200):
