@@ -12,6 +12,14 @@ test('案例雷达固定覆盖八类工作来源',()=>{
   for(const item of Radar.CASES)assert.match(item.poster,/^https:\/\//,'每条案例必须有可判断价值的预览图片');
 });
 
+test('中文运镜词典可独立进入参考库，不复制第三方媒体',()=>{
+  assert.ok(Radar.SOURCES.some(item=>item.id==='frameset'));
+  assert.ok(Radar.MOTIONS.length>=18);
+  for(const item of Radar.MOTIONS){assert.ok(item.name&&item.en&&item.description&&item.effect&&item.execution&&item.use&&item.avoid);}
+  const record=Radar.motionToAesthetic(Radar.MOTIONS[0],()=> 'motion-1');
+  assert.equal(record.category,'分镜参考');assert.equal(record.radarKind,'motion-guide');assert.equal(record.files.length,0);assert.equal(record.link,'');assert.match(record.notes,/中文运镜参考卡/);
+});
+
 test('案例收藏进入现有审美库，不伪造网页图片或授权',()=>{
   const a=Radar.caseToAesthetic(Radar.CASES[0],()=> 'id-1','xinxuan');
   assert.equal(a.id,'id-1');assert.equal(a.sourceUsage,'link-only');assert.deepEqual(a.files,[]);assert.equal(a.favorite,true);

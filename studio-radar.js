@@ -8,6 +8,7 @@
     {id:'eventmarketer',name:'Event Marketer',url:'https://www.eventmarketer.com/campaign-finder/',categories:['活动预热'],note:'线下活动与体验营销案例。'},
     {id:'directorslibrary',name:"Directors’ Library",url:'https://directorslibrary.com/',categories:['活动预热','AI短片叙事'],note:'导演视角的影片策展，适合练叙事与镜头语言。'},
     {id:'shotdeck',name:'ShotDeck',url:'https://shotdeck.com/',categories:['AI镜头实验','AI制作方法'],note:'电影镜头检索库，适合定义摄影、灯光、色彩和构图。'},
+    {id:'frameset',name:'Frame Set · Motions',url:'https://frameset.app/search',categories:['活动预热','AI镜头实验','AI制作方法'],note:'运镜、转场和剪辑技法检索。系统只保存来源链接与自己的中文观察，不整站复制第三方影片和文字。'},
     {id:'stash',name:'Stash',url:'https://www.stashmedia.tv/',categories:['AI商业成片','AI镜头实验','AI制作方法'],note:'动画、VFX与新型影像作品。'},
     {id:'momentfactory',name:'Moment Factory',url:'https://momentfactory.com/',categories:['演唱会预热','AI舞台预演'],note:'沉浸式体验、舞台与声光电项目。'},
     {id:'treatmentstudio',name:'Treatment Studio',url:'https://www.treatmentstudio.com/work/',categories:['演唱会预热','AI舞台预演'],note:'演出视觉、巡演舞台与大屏幕内容。'},
@@ -20,6 +21,27 @@
     {id:'vjshi',name:'光厂 AIGC 案例',url:'https://www.vjshi.com/cases/so/aigc',categories:['AI商业成片','AI镜头实验'],note:'国内AIGC影像案例索引，需区分商业交付和纯效果测试。'},
     {id:'deepshow',name:'Deepshow',url:'https://deepshow.tech/duanju.html',categories:['AI短片叙事','AI制作方法'],note:'AI短剧与制作流程线索。'},
     {id:'krea',name:'Krea',url:'https://www.krea.run/features/ai-video-generator',categories:['AI镜头实验','AI制作方法'],note:'AI视频工具与效果测试，不等同于真实商业交付。'}
+  ];
+  const MOTIONS=[
+    {id:'motion-locked',name:'固定镜头',en:'Locked-off',symbol:'●',description:'机位完全不动，让人物、场面调度和画内变化承担注意力。',effect:'克制、观察、庄重，也能让突发动作更有冲击。',execution:'三脚架锁死云台；先确定画内运动路线和构图层次。',use:'自述、仪式开场、对称舞台、情绪停顿。',avoid:'画面没有内部变化时容易僵；不要把“稳定”误当成“没有设计”。'},
+    {id:'motion-push-in',name:'推进',en:'Push-in / Dolly-in',symbol:'→ ●',description:'摄影机真实靠近主体，透视和前后景关系同时发生变化。',effect:'加强关注、进入人物内心、揭示关键信息。',execution:'轨道、滑轨、稳定器或手持缓慢前进；提前设计焦点与停点。',use:'人物决定、情绪转折、产品揭晓、口号前蓄力。',avoid:'速度必须服务情绪；不能用数码放大冒充真实推进的空间感。'},
+    {id:'motion-pull-out',name:'拉远',en:'Pull-out / Dolly-out',symbol:'● →',description:'摄影机离开主体，逐步显露环境、关系或人物的处境。',effect:'孤独、释然、结束感，也适合从细节揭示大场面。',execution:'先锁定起幅重点，再确保退路、焦点和最终构图准确。',use:'片尾、舞台全貌、人物被环境吞没、反转揭示。',avoid:'只退不揭示新信息会显得空；结尾画面要有明确落点。'},
+    {id:'motion-truck',name:'横向移动',en:'Truck / Lateral move',symbol:'← ● →',description:'摄影机与主体平行横移，用前景遮挡和背景位移制造层次。',effect:'流动、巡视、节奏感，适合展示空间和队伍关系。',execution:'轨道、车拍、稳定器或滑轨；寻找可形成视差的前中后景。',use:'走场、货架、团队集结、时装展示、连续动作。',avoid:'背景太平会失去运动感；横移方向要匹配人物视线和剪辑轴线。'},
+    {id:'motion-follow',name:'跟拍',en:'Tracking / Follow',symbol:'● ⇢ 人',description:'摄影机跟随人物移动，让观众与角色共享路径和即时发现。',effect:'陪伴、代入、紧迫、真实现场感。',execution:'先排人物速度、转弯和遮挡，再选择手持、稳定器或车辆。',use:'主播入场、幕后纪实、任务推进、长廊与通道。',avoid:'不能只顾追人而丢失空间信息；注意跟焦、脚步和安全路线。'},
+    {id:'motion-pan',name:'水平摇摄',en:'Pan',symbol:'↔',description:'机位不移动，镜头水平旋转，连接两个信息点或追随横向动作。',effect:'发现、交代关系、转移注意力，也可制造速度。',execution:'确定起幅、落幅和旋转速度；让动作触发摇摄而不是无目的扫景。',use:'人物对看、舞台左右区、空间揭示、动作接力。',avoid:'中途没有视觉动机会像监控；过快易模糊，过慢易泄气。'},
+    {id:'motion-tilt',name:'垂直摇摄',en:'Tilt',symbol:'↕',description:'机位不移动，镜头上下旋转，用高度关系完成揭示或强调。',effect:'建立量级、敬畏、压迫，或从细节转向人物。',execution:'设计明确的上下信息关系；控制建筑垂直线和人物头部安全区。',use:'舞台装置、人物全身、服装细节、奖杯或灯阵揭晓。',avoid:'不要从脚到头机械扫描；落幅必须比起幅提供更重要的信息。'},
+    {id:'motion-orbit',name:'环绕',en:'Orbit / Arc',symbol:'↻ ●',description:'摄影机围绕主体走弧线，使背景连续变化并强化主体中心。',effect:'英雄化、浪漫、关系变化、时间被拉长。',execution:'明确圆心、半径、速度和焦段；人物可静止或反向转身增强变化。',use:'主角登场、双人关系、产品英雄镜头、高潮定格。',avoid:'空间狭窄或背景杂乱时容易穿帮；不要无意义绕满一圈。'},
+    {id:'motion-pedestal',name:'升降',en:'Pedestal / Boom',symbol:'⇅ ●',description:'摄影机整体上下移动，机位高度改变但观看方向相对稳定。',effect:'从遮挡中出现、建立地位、连接地面与舞台。',execution:'升降台、摇臂、稳定器或人工抬升；预先核对顶部和地面安全。',use:'人物站起、舞台亮相、商品陈列、空间纵深揭示。',avoid:'不同于垂直摇摄；升降时要处理视差、焦点和设备承重。'},
+    {id:'motion-crane',name:'摇臂大升降',en:'Crane / Jib',symbol:'⌒ ↑',description:'以机械臂完成大范围空间位移，可同时升降、前后和转向。',effect:'宏大、庆典、收束、从个人扩展到群体。',execution:'先画运动轨迹和安全区，明确开头、高潮与落点三个关键位置。',use:'专场开场、全场集结、舞台转场、结尾烟火。',avoid:'设备感不能代替情绪；吊臂路线、人员和灯具必须安全隔离。'},
+    {id:'motion-handheld',name:'手持',en:'Handheld',symbol:'≈ ●',description:'保留身体传递给摄影机的微小不稳定，形成在场和呼吸感。',effect:'真实、紧张、亲密、纪录性。',execution:'用身体而不是手腕吸收震动；先规定晃动幅度、距离和跟随对象。',use:'幕后、冲突、奔跑、纪录式自述、拥挤现场。',avoid:'手持不是随便晃；过度抖动会破坏信息和观看舒适度。'},
+    {id:'motion-steadicam',name:'稳定器长镜头',en:'Gimbal / Steadicam',symbol:'—●—',description:'在人物与空间之间连续穿行，同时保持相对平滑的观看体验。',effect:'沉浸、流畅、精心调度、一次完成的现场感。',execution:'按秒排走位、焦点、灯光和隐藏工作人员；准备可剪切的遮挡点。',use:'入场、后台到舞台、空间漫游、多人接力。',avoid:'长并不等于好；每一段必须产生新信息，不能为了炫技拖时长。'},
+    {id:'motion-slider',name:'短距滑移',en:'Slider / Parallax',symbol:'| ⇆ ●',description:'在很短距离内横移或斜移，用前景制造精致视差。',effect:'细腻、产品感、轻微揭示、画面呼吸。',execution:'前景要靠近镜头，主体保持明确；控制滑轨端点和起停缓动。',use:'产品、服装细节、桌面、美术陈设、人物静态肖像。',avoid:'没有前景层次时几乎看不出运动；不要每个镜头都同速滑动。'},
+    {id:'motion-zoom',name:'光学变焦',en:'Zoom',symbol:'[ ● ]',description:'机位不动，通过改变焦距放大或缩小画面，空间透视不会像真实位移那样变化。',effect:'观察、突发强调、复古电视感，也能制造不安。',execution:'选择有顺滑变焦环的镜头，设计速度与焦点补偿。',use:'舞台直播、喜剧反应、远处细节、快速信息强调。',avoid:'不要把所有推进都用变焦替代；数码裁切会损失画质。'},
+    {id:'motion-dolly-zoom',name:'推拉变焦',en:'Dolly Zoom',symbol:'→ [ ] ←',description:'摄影机位移与反向变焦同时发生，让主体大小近似不变、背景透视剧烈改变。',effect:'眩晕、世界失衡、人物顿悟或危机。',execution:'先确定主体尺寸，标记轨道距离与对应焦段，跟焦员同步。',use:'心理冲击、重大揭示、夸张喜剧节点。',avoid:'技术要求高且语义强烈；普通情绪不要滥用。'},
+    {id:'motion-whip-pan',name:'甩镜',en:'Whip Pan',symbol:'⇝',description:'高速摇摄产生运动模糊，可连接方向相似的两个场景或动作。',effect:'突然、加速、喜剧、无缝转场。',execution:'两端都要设计清晰起落幅；以相同方向、速度和模糊量匹配剪辑。',use:'人物切换、地点跳转、口号节奏、动作接力。',avoid:'只有模糊没有匹配逻辑会显得廉价；注意观众眩晕。'},
+    {id:'motion-roll',name:'翻滚',en:'Camera Roll',symbol:'⟳',description:'摄影机绕镜头轴旋转，改变地平线方向。',effect:'失重、疯狂、梦境、世界规则被打破。',execution:'确定旋转中心、角度与恢复时机；美术线条越明确效果越强。',use:'梦境、AI段落、心理崩塌、特殊转场。',avoid:'语义过强，不适合普通叙事；必须考虑竖屏观看和字幕方向。'},
+    {id:'motion-drone',name:'航拍穿越',en:'Drone / FPV',symbol:'⌁ ⇢',description:'从空中或狭窄路径完成大尺度移动，把地理、速度和空间关系一次交代。',effect:'规模、自由、冲击、不可替代的路径体验。',execution:'常规航拍重构图，FPV重路径；都要先勘景、报批并设计失控预案。',use:'场馆外观、城市开场、建筑穿越、户外活动。',avoid:'天气、禁飞区、人员安全和画面抖动优先于炫技。'},
+    {id:'motion-pov',name:'主观运动',en:'POV',symbol:'◎ ⇢',description:'让镜头代表人物眼睛或身体位置，把观看者直接放进动作。',effect:'代入、压迫、游戏感、第一人称发现。',execution:'明确“谁在看”、视线高度、呼吸节奏和手部/身体证据。',use:'任务片、体验式直播预热、追逐、开门揭示。',avoid:'没有人物线索会变成无主视角；快速运动要控制眩晕。'}
   ];
   const CASES=[
     {id:'duxiaoman-521',title:'度小满521答谢音乐会',url:'https://www.digitaling.com/projects/346030.html',poster:'https://file.digitaling.com/eImg/cover/20250730/20250730191359_78719.png',site:'数英',category:'演唱会预热',type:'商业交付案例',goal:'情感造势、活动预约',mechanism:'把品牌答谢转化为一场有情感仪式的音乐事件。',hook:'从一个可感知的感谢瞬间或人物关系切入，具体画面待看片核对。',arc:'个人情感—集体回应—活动期待。',craft:'重点拆舞台仪式、人物近景和现场氛围的关系。',cover:'人物情绪+音乐会名称+日期信息。',transfer:'把“卖货前的预热”转成“用户与主播互相赶赴”。',avoid:'不照搬演出规模和品牌语言。',ai:'可用AI预演舞台气氛、灯光节奏和封面方向。',risk:'演出授权、音乐版权、嘉宾肖像需单独确认。'},
@@ -63,6 +85,10 @@
   function sourceToAesthetic(item,uid){
     const now=new Date().toISOString();return {id:uid(),name:item.name,kind:'aesthetic',category:item.categories.some(c=>c.startsWith('AI'))?'AI参考':'其他',tags:[...item.categories,'案例网站','案例雷达'],notes:`【案例来源】${item.note}\n使用时请手动打开链接、挑选单个作品，再将成片截图、参考重点和不可照搬部分补齐。本系统不会自动登录或抓取网站。`,requirements:'',link:normalizedURL(item.url),sourceSite:item.name,sourceUsage:'link-only',files:[],coverId:null,favorite:true,usedIn:[],folderIds:[],radarSourceId:item.id,radarKind:'source',createdAt:now,updatedAt:now};
   }
+  function motionToAesthetic(item,uid){
+    const now=new Date().toISOString(),text=[`【中文运镜参考卡·${item.en}】`,`定义：${item.description}`,`画面感受：${item.effect}`,`拍摄执行：${item.execution}`,`适合：${item.use}`,`避免：${item.avoid}`,'案例入口：Frame Set · Motions（请在原站内搜索英文运镜名，具体影片与GIF仅作私人创意参考）'].join('\n');
+    return {id:uid(),name:`运镜｜${item.name} · ${item.en}`,kind:'aesthetic',category:'分镜参考',tags:['运镜参考','摄影调性',item.name,item.en,'Frame Set入口'],notes:text,requirements:text,link:'',sourceSite:'Frame Set · Motions',sourceUsage:'description-only',files:[],coverId:null,favorite:true,usedIn:[],folderIds:[],radarSourceId:item.id,radarKind:'motion-guide',createdAt:now,updatedAt:now};
+  }
   function caseToTopic(item,topicFactory,scope='personal'){
     const t=topicFactory(item.title+' · 我的转化');t.idea=[`来源：${item.title}`,`可迁移机制：${item.transfer||item.mechanism||'待拆解'}`,scope==='xinxuan'?'改写要求：转化为当前主播、商品机制、直播日期和真实资源可支撑的新创意。':'改写要求：只保留方法，转化为自己真正想表达的人物和命题。'].join('\n');t.inspirationSource=normalizedURL(item.url);t.form=item.category;t.motif=item.mechanism||'';t.exploration=item.avoid||'';t.quick.fields.outline=item.mechanism||'';t.radarSource={id:item.id,title:item.title,url:normalizedURL(item.url),category:item.category};return t;
   }
@@ -77,5 +103,5 @@
     if(out.length<target)out.push(...rank(available.filter(item=>!out.some(value=>value.id===item.id))).slice(0,target-out.length));
     const nextSeen=[...seen,...out.map(item=>item.id)];return {items:out,seen:nextSeen,reset,remaining:Math.max(0,unique.length-nextSeen.length)};
   }
-  return {CATEGORIES,SOURCES,CASES,normalizedURL,duplicate,notes,caseToAesthetic,sourceToAesthetic,caseToTopic,daily,mobileDaily,mobileBatch};
+  return {CATEGORIES,SOURCES,MOTIONS,CASES,normalizedURL,duplicate,notes,caseToAesthetic,sourceToAesthetic,motionToAesthetic,caseToTopic,daily,mobileDaily,mobileBatch};
 });
