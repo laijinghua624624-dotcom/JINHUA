@@ -10,7 +10,7 @@ test('快速收藏会从一句直觉中自动给出初始分类',()=>{
 
 test('收藏助手只传当前来源、标题和用户选中文字',()=>{
   const code=Capture.bookmarklet();
-  assert.match(code,/location\.href/);assert.match(code,/document\.title/);assert.match(code,/getSelection/);assert.match(code,/lance-content-studio\.onrender\.com/);
+  assert.match(code,/location\.href/);assert.match(code,/og:title/);assert.match(code,/og:image/);assert.match(code,/video\[poster\]/);assert.match(code,/capturePreview/);assert.match(code,/getSelection/);assert.match(code,/lance-content-studio\.onrender\.com/);
   assert.doesNotMatch(code,/password|cookie|localStorage/i);
 });
 
