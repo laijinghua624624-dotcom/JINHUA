@@ -18,10 +18,18 @@
     if(type==='增量优化')return tags.has('增量优化')||tags.has('封面建议')||/增量优化|审美升级|新封面参考/.test(text);
     return false;
   }
+  function visualWeight(a){
+    const files=Array.isArray(a?.files)?a.files:[],frames=Array.isArray(a?.frames)?a.frames:[];
+    if(files.some(file=>file?.localId===a?.coverId&&file.kind==='image'))return 5;
+    if(files.some(file=>file?.kind==='image')||frames.some(file=>file?.kind==='image'))return 4;
+    if(files.some(file=>file?.kind==='video')||frames.some(file=>file?.kind==='video'))return 3;
+    if(a?.legacyImage||a?.externalPreview)return 2;
+    return 0;
+  }
   function viewFilter(items,q={}){const folders=q.coverFolders||[],search=(q.search||'').toLowerCase();return items.filter(a=>{
     const category=categoryOf(a,folders),categoryOK=!q.category||q.category==='全部'||category===q.category,subtypeOK=q.category!=='封面参考'||coverSubtypeMatch(a,q.coverType||'全部',folders);
     return categoryOK&&subtypeOK&&(!q.tag||q.tag==='全部'||a.tags.includes(q.tag))&&(!q.favorite||a.favorite)&&(`${a.name} ${category} ${a.category} ${a.tags.join(' ')} ${a.notes} ${a.link} ${a.sourceSite||''}`.toLowerCase().includes(search));
-  }).sort((a,b)=>String(b.createdAt).localeCompare(String(a.createdAt)));}
+  }).sort((a,b)=>visualWeight(b)-visualWeight(a)||String(b.createdAt).localeCompare(String(a.createdAt)));}
   function image(a){return a.files.find(f=>f.localId===a.coverId&&f.kind==='image')||a.files.find(f=>f.kind==='image')||null;}
   function forProject(items,scope,id){return id?items.filter(a=>a.usedIn.some(p=>p.scope===scope&&p.id===id)):[];}
   function trashItem(items,id,deletedAt=new Date().toISOString()){
@@ -79,5 +87,5 @@
     }
     return result;
   }
-  return {CATEGORIES,link,tags,entry,normalize,migrate,filter,coverReference,categoryOf,coverSubtypeMatch,viewFilter,image,forProject,trashItem,restoreItem,projectReferences,mergeExtracted,splitLegacy};
+  return {CATEGORIES,link,tags,entry,normalize,migrate,filter,coverReference,categoryOf,coverSubtypeMatch,visualWeight,viewFilter,image,forProject,trashItem,restoreItem,projectReferences,mergeExtracted,splitLegacy};
 });

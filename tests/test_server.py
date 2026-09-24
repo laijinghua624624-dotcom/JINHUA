@@ -67,6 +67,24 @@ class ServerTests(unittest.TestCase):
             status,data=self.request('POST','/api/link/import',json.dumps({'url':'https://example.com/work'}),{'Content-Type':'application/json'})
         self.assertEqual(status,200);self.assertEqual(json.loads(data)['title'],'Mock')
 
+    def test_metadata_only_link_keeps_preview_without_downloading_video(self):
+        page=b'<html><head><meta property="og:title" content="Visual Work"><meta property="og:image" content="https://cdn.example/cover.jpg"><meta property="og:video" content="https://cdn.example/movie.mp4"></head></html>'
+        with patch.object(s,'public_url',side_effect=lambda value:value),patch.object(s,'read_public',return_value=(page,'text/html','https://example.com/work','utf-8')):
+            parsed=s.parse_public_metadata('https://example.com/work')
+        self.assertEqual(parsed['previewImage'],'https://cdn.example/cover.jpg');self.assertEqual(parsed['mediaKind'],'video');self.assertIsNone(parsed['asset'])
+
+    def test_pinterest_status_never_exposes_credentials(self):
+        with patch.dict(os.environ,{'PINTEREST_APP_ID':'app','PINTEREST_APP_SECRET':'DO-NOT-EXPOSE','PINTEREST_ACCESS_TOKEN':''},clear=False),patch.object(s,'pinterest_token',return_value=None):
+            status=s.pinterest_status()
+        self.assertTrue(status['oauthConfigured']);self.assertFalse(status['connected']);self.assertNotIn('DO-NOT-EXPOSE',json.dumps(status))
+
+    def test_pinterest_sync_normalizes_saved_pins(self):
+        response={'items':[{'id':'42','title':'Stage Light','description':'A moving spotlight','link':'https://example.com/work','media':{'media_type':'image','images':{'600x':{'url':'https://cdn.example/42.jpg'}}}}]}
+        def pinterest(path,token,params=None):return {'items':[{'id':'board','name':'My Saves'}]} if path=='/boards' else response
+        with patch.object(s,'pinterest_token',return_value={'access_token':'token'}),patch.object(s,'pinterest_request',side_effect=pinterest):
+            result=s.pinterest_sync(10)
+        self.assertEqual(result['count'],1);self.assertEqual(result['items'][0]['previewImage'],'https://cdn.example/42.jpg');self.assertEqual(result['items'][0]['boardName'],'My Saves');self.assertNotIn('token',json.dumps(result))
+
     def test_radar_preview_is_image_only_and_not_an_open_proxy(self):
         image=b'preview-bytes'
         with patch.object(s,'public_url',side_effect=lambda value:value),patch.object(s,'read_public',return_value=(image,'image/jpeg','https://images.ctfassets.net/example.jpg','utf-8')):
@@ -75,5 +93,13 @@ class ServerTests(unittest.TestCase):
         with self.assertRaises(ValueError):s.radar_preview('https://example.com/private.jpg')
         with patch.object(s,'public_url',side_effect=lambda value:value),patch.object(s,'read_public',return_value=(b'<svg/>','image/svg+xml','https://images.ctfassets.net/example.svg','utf-8')):
             with self.assertRaises(ValueError):s.radar_preview('https://images.ctfassets.net/example.svg')
+
+    def test_reference_download_only_serves_public_raster_images(self):
+        with patch.object(s,'read_public',return_value=(b'image','image/jpeg','https://cdn.example/cover.jpg','utf-8')):
+            status,data=self.request('GET','/api/reference-download?url='+urllib.parse.quote('https://cdn.example/cover.jpg'))
+        self.assertEqual(status,200);self.assertEqual(data,b'image')
+        with patch.object(s,'read_public',return_value=(b'<html>','text/html','https://example.com/','utf-8')):
+            status,_=self.request('GET','/api/reference-download?url='+urllib.parse.quote('https://example.com/'))
+        self.assertEqual(status,400)
 
 if __name__=='__main__':unittest.main()

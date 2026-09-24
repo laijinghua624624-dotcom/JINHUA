@@ -15,6 +15,7 @@ import mimetypes
 import os
 from pathlib import Path
 import re
+import secrets
 import shutil
 import socket
 import subprocess
@@ -40,6 +41,7 @@ JOBS = {}
 LOCK = threading.Lock()
 RATE_LOCK = threading.Lock()
 RATE_HITS = defaultdict(deque)
+PINTEREST_STATES = {}
 PAID_PATHS = {'/api/chat','/api/image','/api/video','/api/transcribe','/api/reference/search'}
 RADAR_PREVIEW_HOSTS = {
     'file.digitaling.com','images.ctfassets.net','img.redbull.com','www.tomorrowland.com',
@@ -332,6 +334,12 @@ def parse_public_link(url):
     meta=parser.meta;title=meta.get('og:title') or meta.get('twitter:title') or ''.join(parser.title).strip()
     description=meta.get('og:description') or meta.get('twitter:description') or meta.get('description') or ''
     site=meta.get('og:site_name') or urllib.parse.urlparse(final).hostname
+    preview=''
+    for key in ('og:image:secure_url','og:image','twitter:image:src','twitter:image'):
+        candidate=urllib.parse.urljoin(final,html.unescape(meta.get(key,''))) if meta.get(key) else ''
+        parsed=urllib.parse.urlparse(candidate)
+        if parsed.scheme=='https' and parsed.hostname and not parsed.username and not parsed.password:
+            preview=candidate;break
     asset=None;reason=''
     candidates=[]
     for key in ('og:video:secure_url','og:video:url','og:video','twitter:player:stream'):
@@ -342,7 +350,79 @@ def parse_public_link(url):
     notice='已解析页面信息'
     if asset:notice+='，并保存页面公开视频。'
     else:notice+='；未取得可直接下载的公开视频，请手动上传原片。'
-    return {'url':url,'finalUrl':final,'title':html.unescape(title)[:500],'description':html.unescape(description)[:4000],'siteName':html.unescape(site or '')[:200],'asset':asset,'notice':notice,'mediaNotice':reason[:300]}
+    media_kind='video' if candidates or 'video' in meta.get('og:type','').lower() else ('image' if preview else 'webpage')
+    return {'url':url,'finalUrl':final,'title':html.unescape(title)[:500],'description':html.unescape(description)[:4000],'siteName':html.unescape(site or '')[:200],'previewImage':preview,'mediaKind':media_kind,'asset':asset,'notice':notice,'mediaNotice':reason[:300]}
+
+def parse_public_metadata(url):
+    """Read a public page without downloading its full video payload."""
+    url=public_url(str(url or '').strip())
+    data,content_type,final,charset=read_public(url,2*1024*1024)
+    if content_type.startswith(('image/','video/','audio/')):
+        kind=content_type.split('/',1)[0]
+        return {'url':url,'finalUrl':final,'title':Path(urllib.parse.urlparse(final).path).name or '来源素材','description':'','siteName':urllib.parse.urlparse(final).hostname,'previewImage':final if kind=='image' else '','mediaKind':kind,'asset':None,'notice':'已识别公开素材直链；收藏不会自动下载原文件。'}
+    if content_type not in {'text/html','application/xhtml+xml'}:raise ValueError('链接不是可读取的公开网页或媒体')
+    parser=LinkMetadataParser();parser.feed(data.decode(charset,'replace'));meta=parser.meta
+    title=meta.get('og:title') or meta.get('twitter:title') or ''.join(parser.title).strip()
+    description=meta.get('og:description') or meta.get('twitter:description') or meta.get('description') or ''
+    site=meta.get('og:site_name') or urllib.parse.urlparse(final).hostname
+    preview=''
+    for key in ('og:image:secure_url','og:image','twitter:image:src','twitter:image'):
+        candidate=urllib.parse.urljoin(final,html.unescape(meta.get(key,''))) if meta.get(key) else ''
+        parsed=urllib.parse.urlparse(candidate)
+        if parsed.scheme=='https' and parsed.hostname and not parsed.username and not parsed.password:
+            preview=candidate;break
+    video=any(meta.get(key) for key in ('og:video:secure_url','og:video:url','og:video','twitter:player:stream')) or 'video' in meta.get('og:type','').lower()
+    audio=any(meta.get(key) for key in ('og:audio:secure_url','og:audio','twitter:player:stream:content_type') if 'audio' in str(meta.get(key,'')))
+    return {'url':url,'finalUrl':final,'title':html.unescape(title)[:500],'description':html.unescape(description)[:4000],'siteName':html.unescape(site or '')[:200],'previewImage':preview,'mediaKind':'video' if video else 'audio' if audio else 'image' if preview else 'webpage','asset':None,'notice':'已读取公开标题、说明和预览；没有自动下载原文件。'}
+
+def pinterest_token_path():
+    return DATA/'integrations'/'pinterest.json'
+
+def pinterest_token():
+    env=os.environ.get('PINTEREST_ACCESS_TOKEN','').strip()
+    if env:return {'access_token':env,'source':'environment'}
+    path=pinterest_token_path()
+    if not path.is_file():return None
+    try:return json.loads(path.read_text())
+    except Exception:return None
+
+def pinterest_status():
+    connected=bool((pinterest_token() or {}).get('access_token'))
+    oauth=bool(os.environ.get('PINTEREST_APP_ID') and os.environ.get('PINTEREST_APP_SECRET'))
+    return {'available':oauth or connected,'oauthConfigured':oauth,'connected':connected,'message':'已连接 Pinterest，可导入收藏。' if connected else '需要先配置 Pinterest 开发者应用并完成一次官方授权。'}
+
+def pinterest_request(path,token,params=None):
+    query=('?'+urllib.parse.urlencode(params)) if params else ''
+    request=urllib.request.Request('https://api.pinterest.com/v5'+path+query,headers={'Authorization':'Bearer '+token,'Accept':'application/json'})
+    try:
+        with urllib.request.urlopen(request,timeout=45) as response:return json.loads(response.read())
+    except urllib.error.HTTPError as error:
+        detail=error.read().decode('utf-8','replace')[:300]
+        raise ValueError('Pinterest 授权或接口返回异常：'+detail)
+
+def pinterest_sync(limit=100):
+    token=(pinterest_token() or {}).get('access_token')
+    if not token:raise ValueError('Pinterest 尚未连接，请先完成官方授权')
+    limit=max(1,min(int(limit or 100),250));pins=[];boards=pinterest_request('/boards',token,{'page_size':100}).get('items',[])
+    for board in boards:
+        if len(pins)>=limit:break
+        bookmark=None
+        while len(pins)<limit:
+            params={'page_size':min(100,limit-len(pins))}
+            if bookmark:params['bookmark']=bookmark
+            payload=pinterest_request('/boards/'+urllib.parse.quote(str(board.get('id','')),'')+'/pins',token,params)
+            for pin in payload.get('items',[]):
+                pin['_board_name']=board.get('name') or ''
+                pins.append(pin)
+            bookmark=payload.get('bookmark')
+            if not bookmark or not payload.get('items'):break
+    normalized=[]
+    for pin in pins[:limit]:
+        media=pin.get('media') or {};images=media.get('images') or {};preview=''
+        for key in ('1200x','600x','400x300','150x150'):
+            if isinstance(images.get(key),dict) and images[key].get('url'):preview=images[key]['url'];break
+        normalized.append({'id':str(pin.get('id','')),'title':pin.get('title') or pin.get('alt_text') or 'Pinterest 收藏','description':pin.get('description') or pin.get('alt_text') or '','link':pin.get('link') or ('https://www.pinterest.com/pin/'+str(pin.get('id',''))+'/'),'previewImage':preview,'mediaKind':str(media.get('media_type') or 'image').lower(),'sourceSite':'Pinterest','boardName':pin.get('_board_name','')})
+    return {'items':normalized,'count':len(normalized),'boards':len(boards)}
 
 def radar_preview(url):
     """Fetch only curated radar thumbnails; never expose a general-purpose proxy."""
@@ -594,6 +674,9 @@ class Handler(BaseHTTPRequestHandler):
         if origin and self.allowed():self.send_header('Access-Control-Allow-Origin',origin)
         self.end_headers();self.wfile.write(data)
 
+    def redirect(self,url):
+        self.send_response(302);self.send_header('Location',url);self.send_header('Cache-Control','no-store');self.end_headers()
+
     def do_OPTIONS(self):
         if not self.allowed(): return self.send_json({'error':'来源不被允许'},403)
         self.send_response(204);self.send_header('Access-Control-Allow-Origin',self.headers.get('Origin',''));self.send_header('Access-Control-Allow-Methods','GET,POST,OPTIONS');self.send_header('Access-Control-Allow-Headers','Content-Type,Authorization,X-File-Name');self.end_headers()
@@ -605,9 +688,40 @@ class Handler(BaseHTTPRequestHandler):
             if path=='/api/health':
                 routes=model_routes();routes['director']['model']=routes['director']['model'] or os.environ.get('ARK_TEXT_MODEL','')
                 return self.send_json({'ok':True,'keyConfigured':bool(os.environ.get('ARK_API_KEY')),'routes':routes,'models':{'text':routes['director']['model'],'image':routes['image']['model'],'video':routes['video']['model']},'speechConfigured':bool(os.environ.get('SPEECH_API_KEY') or os.environ.get('SPEECH_APP_ID') and os.environ.get('SPEECH_ACCESS_TOKEN')),'ffmpeg':bool(shutil.which('ffmpeg') and shutil.which('ffprobe')),'pdfText':bool(document_binary('pdftotext')),'ocr':bool(document_binary('pdftoppm') and document_binary('tesseract'))})
+            if path=='/api/pinterest/status':return self.send_json(pinterest_status())
+            if path=='/api/pinterest/connect':
+                app_id=os.environ.get('PINTEREST_APP_ID','').strip();secret=os.environ.get('PINTEREST_APP_SECRET','').strip()
+                if not app_id or not secret:return self.send_json({'error':'服务端尚未配置 Pinterest 开发者应用'},503)
+                state=secrets.token_urlsafe(24);PINTEREST_STATES[state]=time.time()+600
+                redirect_uri=os.environ.get('PINTEREST_REDIRECT_URI','').strip() or ((os.environ.get('LANCE_PUBLIC_ORIGIN') or os.environ.get('RENDER_EXTERNAL_URL') or f'http://127.0.0.1:{server_binding()[1]}').rstrip('/')+'/api/pinterest/callback')
+                query=urllib.parse.urlencode({'response_type':'code','client_id':app_id,'redirect_uri':redirect_uri,'scope':'boards:read,pins:read,user_accounts:read','state':state})
+                return self.redirect('https://www.pinterest.com/oauth/?'+query)
+            if path=='/api/pinterest/callback':
+                query=urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query);state=query.get('state',[''])[0];code=query.get('code',[''])[0]
+                if not code or PINTEREST_STATES.pop(state,0)<time.time():raise ValueError('Pinterest 授权已过期，请重新连接')
+                app_id=os.environ.get('PINTEREST_APP_ID','').strip();secret=os.environ.get('PINTEREST_APP_SECRET','').strip();redirect_uri=os.environ.get('PINTEREST_REDIRECT_URI','').strip() or ((os.environ.get('LANCE_PUBLIC_ORIGIN') or os.environ.get('RENDER_EXTERNAL_URL') or f'http://127.0.0.1:{server_binding()[1]}').rstrip('/')+'/api/pinterest/callback')
+                form=urllib.parse.urlencode({'grant_type':'authorization_code','code':code,'redirect_uri':redirect_uri}).encode();basic=base64.b64encode((app_id+':'+secret).encode()).decode()
+                request=urllib.request.Request('https://api.pinterest.com/v5/oauth/token',data=form,headers={'Authorization':'Basic '+basic,'Content-Type':'application/x-www-form-urlencoded'})
+                try:
+                    with urllib.request.urlopen(request,timeout=45) as response:token=json.loads(response.read())
+                except urllib.error.HTTPError as error:raise ValueError('Pinterest 授权失败：'+error.read().decode('utf-8','replace')[:300])
+                if not token.get('access_token'):raise ValueError('Pinterest 未返回访问授权')
+                target=pinterest_token_path();target.parent.mkdir(parents=True,exist_ok=True);target.write_text(json.dumps(token));target.chmod(0o600)
+                origin=(os.environ.get('LANCE_PUBLIC_ORIGIN') or os.environ.get('RENDER_EXTERNAL_URL') or f'http://127.0.0.1:{server_binding()[1]}').rstrip('/')
+                return self.redirect(origin+'/?pinterest=connected')
+            if path=='/api/pinterest/sync':
+                limit=urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query).get('limit',['100'])[0]
+                return self.send_json(pinterest_sync(limit))
             if path=='/api/radar-preview':
                 url=urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query).get('url',[''])[0]
                 data,content_type=radar_preview(url);return self.send_preview(data,content_type)
+            if path=='/api/reference-download':
+                url=urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query).get('url',[''])[0]
+                data,content_type,final,_=read_public(url,12*1024*1024)
+                if content_type not in {'image/jpeg','image/png','image/webp','image/avif'}:raise ValueError('这个链接不是可直接下载的公开图片；请到原网站按其规则下载')
+                suffix={'image/jpeg':'.jpg','image/png':'.png','image/webp':'.webp','image/avif':'.avif'}[content_type]
+                name=Path(urllib.parse.urlparse(final).path).stem or 'JINHUA参考图'
+                return self.send_binary(data,content_type,name+suffix)
             if path=='/api/profile-seed':
                 seed=DATA/'profile-seed.json'
                 selected_scope=urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query).get('scope',[''])[0]
@@ -617,7 +731,7 @@ class Handler(BaseHTTPRequestHandler):
             if path.startswith('/media/'): target=media_path(path[7:])
             else:
                 name='index.html' if path=='/' else path.lstrip('/')
-                if name not in {'index.html','studio.js','studio-security.js','studio.css','studio-core.js','studio-reverse.js','studio-aesthetic.js','studio-aesthetic-ui.js','studio-folders.js','studio-folders-ui.js','studio-aesthetic.css','studio-radar.js','studio-radar-ui.js','studio-radar.css','studio-profile.js','studio-inspiration.js','studio-fragments.js','studio-fragments-ui.js','studio-ppt.js','studio-cloud.js','studio-workspace-cloud.js','studio-mobile-inbox.js','mobile.html','mobile.css','mobile.js','mobile-config.js','mobile.webmanifest','mobile-sw.js','mobile-icon.svg','vendor/presentation.js','lance_qrcode_public.png','lance_qrcode.png','lance_intro.mp4','api-guide.html','tutorial.html','deliverables/Lance专场整体汇报模板_v1.pptx','deliverables/Lance单条剧本汇报模板_v1.pptx'}:
+                if name not in {'index.html','studio.js','studio-security.js','studio.css','studio-core.js','studio-reverse.js','studio-aesthetic.js','studio-capture.js','studio-aesthetic-ui.js','studio-folders.js','studio-folders-ui.js','studio-aesthetic.css','studio-radar.js','studio-radar-ui.js','studio-radar.css','studio-profile.js','studio-inspiration.js','studio-fragments.js','studio-fragments-ui.js','studio-ppt.js','studio-cloud.js','studio-workspace-cloud.js','studio-mobile-inbox.js','mobile.html','mobile.css','mobile.js','mobile-config.js','mobile.webmanifest','mobile-sw.js','mobile-icon.svg','vendor/presentation.js','lance_qrcode_public.png','lance_qrcode.png','lance_intro.mp4','api-guide.html','tutorial.html','deliverables/Lance专场整体汇报模板_v1.pptx','deliverables/Lance单条剧本汇报模板_v1.pptx'}:
                     return self.send_json({'error':'文件不存在'},404)
                 target=ROOT/name
             if not target.is_file(): return self.send_json({'error':'文件不存在'},404)
@@ -677,7 +791,7 @@ class Handler(BaseHTTPRequestHandler):
                 route_model('embedding')
                 return self.send_json(run_job(semantic_search,body))
             if self.path=='/api/document/text':return self.send_json(document_text(body.get('localId')))
-            if self.path=='/api/link/import':return self.send_json(parse_public_link(body.get('url')))
+            if self.path=='/api/link/import':return self.send_json(parse_public_metadata(body.get('url')) if body.get('metadataOnly') else parse_public_link(body.get('url')))
             if self.path=='/api/project/pdf':
                 from studio_pdf import project_overview_pdf
                 data=project_overview_pdf(body)

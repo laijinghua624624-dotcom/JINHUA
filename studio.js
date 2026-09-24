@@ -678,7 +678,7 @@ function resumeWorkbenchSync(openPanel=false){
   return workbenchSyncPromise;
 }
 try{
-  db=read(scope);save(false);workspaceReady=true;render();applyProfileSeed();resumeWorkbenchSync(new URLSearchParams(location.search).get('sync')==='1');
+  db=read(scope);save(false);workspaceReady=true;render();applyProfileSeed();resumeWorkbenchSync(new URLSearchParams(location.search).get('sync')==='1');StudioCapture.handleIncoming();
   api('health',undefined,{timeout:5000}).then(h=>{health=h;render();}).catch(()=>{});
 }catch(error){$('#app').textContent=error.message;}
 window.addEventListener('online',()=>resumeWorkbenchSync(false));

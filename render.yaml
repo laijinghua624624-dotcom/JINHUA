@@ -19,5 +19,13 @@ services:
         sync: false
       - key: ARK_EMBEDDING_MODEL
         sync: false
+      - key: PINTEREST_APP_ID
+        sync: false
+      - key: PINTEREST_APP_SECRET
+        sync: false
+      - key: PINTEREST_REDIRECT_URI
+        sync: false
+      - key: PINTEREST_ACCESS_TOKEN
+        sync: false
       - key: SPEECH_RESOURCE_ID
         value: volc.seedasr.auc

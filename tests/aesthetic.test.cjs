@@ -17,3 +17,4 @@ test('项目文字、封面样式和图片可提取为不关联项目的独立�
   for(const item of result){assert.deepEqual(item.usedIn,[]);assert.deepEqual(item.folderIds,[]);assert.equal('projectId' in item,false);}
 });
 test('相同内容重复提取不会形成重复参考卡',()=>{const project=C.project('参考源');project.fields.outline='一段内容';const extracted=A.projectReferences(project,[]),first=A.mergeExtracted([],extracted),second=A.mergeExtracted(first.items,extracted);assert.equal(first.added.length,1);assert.equal(second.added.length,0);assert.equal(second.items.length,1);});
+test('视觉参考排在纯文字资料之前',()=>{const text=A.entry('新建纯文字'),image=A.entry('较早图片'),video=A.entry('更早视频');text.createdAt='2026-09-25';image.createdAt='2026-09-20';video.createdAt='2026-09-19';image.files=[{kind:'image',localId:'visual.jpg'}];video.files=[{kind:'video',localId:'motion.mp4'}];assert.deepEqual(A.viewFilter([text,video,image]).map(item=>item.name),['较早图片','更早视频','新建纯文字']);});
