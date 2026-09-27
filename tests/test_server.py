@@ -81,6 +81,12 @@ class ServerTests(unittest.TestCase):
             parsed=s.parse_public_metadata('https://example.com/work')
         self.assertEqual(parsed['previewImage'],'https://cdn.example/cover.jpg');self.assertEqual(parsed['mediaKind'],'video');self.assertIsNone(parsed['asset'])
 
+    def test_metadata_falls_back_to_json_ld_h1_and_page_image(self):
+        page=b'''<html><head><script type="application/ld+json">{"@type":"VideoObject","name":"Official Film","description":"A visual story","thumbnailUrl":"/cover.jpg"}</script></head><body><h1>Fallback heading</h1><img src="/small.jpg" width="100" height="100"></body></html>'''
+        with patch.object(s,'public_url',side_effect=lambda value:value),patch.object(s,'read_public',return_value=(page,'text/html','https://example.com/work','utf-8')):
+            parsed=s.parse_public_metadata('https://example.com/work')
+        self.assertEqual(parsed['title'],'Official Film');self.assertEqual(parsed['description'],'A visual story');self.assertEqual(parsed['previewImage'],'https://example.com/cover.jpg');self.assertEqual(parsed['mediaKind'],'video')
+
     def test_pinterest_status_never_exposes_credentials(self):
         with patch.dict(os.environ,{'PINTEREST_APP_ID':'app','PINTEREST_APP_SECRET':'DO-NOT-EXPOSE','PINTEREST_ACCESS_TOKEN':''},clear=False),patch.object(s,'pinterest_token',return_value=None):
             status=s.pinterest_status()

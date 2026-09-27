@@ -298,17 +298,74 @@ class PublicRedirect(urllib.request.HTTPRedirectHandler):
 
 class LinkMetadataParser(HTMLParser):
     def __init__(self):
-        super().__init__();self.title=[];self.in_title=False;self.meta={}
+        super().__init__();self.title=[];self.h1=[];self.in_title=False;self.in_h1=False;self.meta={};self.images=[];self.ldjson=[];self.in_ldjson=False;self.ldjson_buffer=[]
     def handle_starttag(self,tag,attrs):
         attrs={str(k).lower():v for k,v in attrs if v is not None}
         if tag.lower()=='meta':
             key=(attrs.get('property') or attrs.get('name') or '').lower()
             if key and key not in self.meta:self.meta[key]=attrs.get('content','').strip()
         if tag.lower()=='title':self.in_title=True
+        if tag.lower()=='h1':self.in_h1=True
+        if tag.lower()=='script' and attrs.get('type','').lower().split(';',1)[0].strip()=='application/ld+json':self.in_ldjson=True;self.ldjson_buffer=[]
+        if tag.lower()=='img':
+            src=next((attrs.get(key,'').strip() for key in ('src','data-src','data-original','data-lazy-src') if attrs.get(key)), '')
+            if src:
+                try:score=max(1,int(str(attrs.get('width','0')).rstrip('px') or 0))*max(1,int(str(attrs.get('height','0')).rstrip('px') or 0))
+                except ValueError:score=1
+                self.images.append((score,src))
     def handle_endtag(self,tag):
         if tag.lower()=='title':self.in_title=False
+        if tag.lower()=='h1':self.in_h1=False
+        if tag.lower()=='script' and self.in_ldjson:
+            self.in_ldjson=False;text=''.join(self.ldjson_buffer).strip()
+            if text:self.ldjson.append(text)
     def handle_data(self,data):
         if self.in_title:self.title.append(data)
+        if self.in_h1:self.h1.append(data)
+        if self.in_ldjson:self.ldjson_buffer.append(data)
+
+def page_metadata(parser,final):
+    meta=parser.meta;objects=[]
+    def add(value):
+        if isinstance(value,list):
+            for item in value:add(item)
+        elif isinstance(value,dict):
+            objects.append(value);add(value.get('@graph',[]))
+    for raw in parser.ldjson:
+        try:add(json.loads(raw))
+        except (TypeError,ValueError,json.JSONDecodeError):pass
+    def first(keys):
+        for obj in objects:
+            for key in keys:
+                value=obj.get(key)
+                if isinstance(value,str) and value.strip():return value.strip()
+        return ''
+    def media_url(value):
+        if isinstance(value,str):return value
+        if isinstance(value,dict):return value.get('url') or value.get('contentUrl') or ''
+        if isinstance(value,list):
+            for item in value:
+                candidate=media_url(item)
+                if candidate:return candidate
+        return ''
+    title=meta.get('og:title') or meta.get('twitter:title') or first(('headline','name')) or ''.join(parser.h1).strip() or ''.join(parser.title).strip()
+    description=meta.get('og:description') or meta.get('twitter:description') or meta.get('description') or first(('description','abstract'))
+    site=meta.get('og:site_name') or urllib.parse.urlparse(final).hostname
+    candidates=[meta.get(key,'') for key in ('og:image:secure_url','og:image','twitter:image:src','twitter:image')]
+    candidates.extend(media_url(obj.get(key)) for obj in objects for key in ('thumbnailUrl','image'))
+    candidates.extend(src for _,src in sorted(parser.images,key=lambda item:item[0],reverse=True))
+    preview=''
+    for raw in candidates:
+        if not str(raw or '').strip():
+            continue
+        candidate=urllib.parse.urljoin(final,html.unescape(str(raw or '').strip()))
+        parsed=urllib.parse.urlparse(candidate)
+        if parsed.scheme=='https' and parsed.hostname and not parsed.username and not parsed.password:
+            preview=candidate;break
+    kinds={str(obj.get('@type','')).lower() for obj in objects}
+    video=any(meta.get(key) for key in ('og:video:secure_url','og:video:url','og:video','twitter:player:stream')) or 'video' in meta.get('og:type','').lower() or any('videoobject' in kind for kind in kinds)
+    audio=any(meta.get(key) for key in ('og:audio:secure_url','og:audio','twitter:player:stream:content_type') if 'audio' in str(meta.get(key,''))) or any('audioobject' in kind for kind in kinds)
+    return {'title':html.unescape(str(title or ''))[:500],'description':html.unescape(str(description or ''))[:4000],'siteName':html.unescape(str(site or ''))[:200],'previewImage':preview,'mediaKind':'video' if video else 'audio' if audio else 'image' if preview else 'webpage'}
 
 def normalize_video(path,source='upload'):
     meta=describe(path,source)
@@ -352,16 +409,7 @@ def parse_public_link(url):
         asset=save_public_video(data,content_type,final)
         return {'url':url,'finalUrl':final,'title':Path(urllib.parse.urlparse(final).path).name or '链接视频','description':'','siteName':urllib.parse.urlparse(final).hostname,'asset':asset,'notice':'已解析并保存公开视频。'}
     if content_type not in {'text/html','application/xhtml+xml'}:raise ValueError('链接不是网页或可支持的视频直链')
-    parser=LinkMetadataParser();parser.feed(data.decode(charset,'replace'))
-    meta=parser.meta;title=meta.get('og:title') or meta.get('twitter:title') or ''.join(parser.title).strip()
-    description=meta.get('og:description') or meta.get('twitter:description') or meta.get('description') or ''
-    site=meta.get('og:site_name') or urllib.parse.urlparse(final).hostname
-    preview=''
-    for key in ('og:image:secure_url','og:image','twitter:image:src','twitter:image'):
-        candidate=urllib.parse.urljoin(final,html.unescape(meta.get(key,''))) if meta.get(key) else ''
-        parsed=urllib.parse.urlparse(candidate)
-        if parsed.scheme=='https' and parsed.hostname and not parsed.username and not parsed.password:
-            preview=candidate;break
+    parser=LinkMetadataParser();parser.feed(data.decode(charset,'replace'));page=page_metadata(parser,final);meta=parser.meta
     asset=None;reason=''
     candidates=[]
     for key in ('og:video:secure_url','og:video:url','og:video','twitter:player:stream'):
@@ -372,8 +420,8 @@ def parse_public_link(url):
     notice='已解析页面信息'
     if asset:notice+='，并保存页面公开视频。'
     else:notice+='；未取得可直接下载的公开视频，请手动上传原片。'
-    media_kind='video' if candidates or 'video' in meta.get('og:type','').lower() else ('image' if preview else 'webpage')
-    return {'url':url,'finalUrl':final,'title':html.unescape(title)[:500],'description':html.unescape(description)[:4000],'siteName':html.unescape(site or '')[:200],'previewImage':preview,'mediaKind':media_kind,'asset':asset,'notice':notice,'mediaNotice':reason[:300]}
+    media_kind='video' if candidates else page['mediaKind']
+    return {'url':url,'finalUrl':final,**page,'mediaKind':media_kind,'asset':asset,'notice':notice,'mediaNotice':reason[:300]}
 
 def parse_public_metadata(url):
     """Read a public page without downloading its full video payload."""
@@ -383,19 +431,8 @@ def parse_public_metadata(url):
         kind=content_type.split('/',1)[0]
         return {'url':url,'finalUrl':final,'title':Path(urllib.parse.urlparse(final).path).name or '来源素材','description':'','siteName':urllib.parse.urlparse(final).hostname,'previewImage':final if kind=='image' else '','mediaKind':kind,'asset':None,'notice':'已识别公开素材直链；收藏不会自动下载原文件。'}
     if content_type not in {'text/html','application/xhtml+xml'}:raise ValueError('链接不是可读取的公开网页或媒体')
-    parser=LinkMetadataParser();parser.feed(data.decode(charset,'replace'));meta=parser.meta
-    title=meta.get('og:title') or meta.get('twitter:title') or ''.join(parser.title).strip()
-    description=meta.get('og:description') or meta.get('twitter:description') or meta.get('description') or ''
-    site=meta.get('og:site_name') or urllib.parse.urlparse(final).hostname
-    preview=''
-    for key in ('og:image:secure_url','og:image','twitter:image:src','twitter:image'):
-        candidate=urllib.parse.urljoin(final,html.unescape(meta.get(key,''))) if meta.get(key) else ''
-        parsed=urllib.parse.urlparse(candidate)
-        if parsed.scheme=='https' and parsed.hostname and not parsed.username and not parsed.password:
-            preview=candidate;break
-    video=any(meta.get(key) for key in ('og:video:secure_url','og:video:url','og:video','twitter:player:stream')) or 'video' in meta.get('og:type','').lower()
-    audio=any(meta.get(key) for key in ('og:audio:secure_url','og:audio','twitter:player:stream:content_type') if 'audio' in str(meta.get(key,'')))
-    return {'url':url,'finalUrl':final,'title':html.unescape(title)[:500],'description':html.unescape(description)[:4000],'siteName':html.unescape(site or '')[:200],'previewImage':preview,'mediaKind':'video' if video else 'audio' if audio else 'image' if preview else 'webpage','asset':None,'notice':'已读取公开标题、说明和预览；没有自动下载原文件。'}
+    parser=LinkMetadataParser();parser.feed(data.decode(charset,'replace'));page=page_metadata(parser,final)
+    return {'url':url,'finalUrl':final,**page,'asset':None,'notice':'已读取公开标题、说明和预览；没有自动下载原文件。'}
 
 def pinterest_token_path():
     return DATA/'integrations'/'pinterest.json'

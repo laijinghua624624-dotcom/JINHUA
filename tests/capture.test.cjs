@@ -10,8 +10,14 @@ test('快速收藏会从一句直觉中自动给出初始分类',()=>{
 
 test('收藏助手只传当前来源、标题和用户选中文字',()=>{
   const code=Capture.bookmarklet();
-  assert.match(code,/location\.href/);assert.match(code,/og:title/);assert.match(code,/og:image/);assert.match(code,/video\[poster\]/);assert.match(code,/capturePreview/);assert.match(code,/getSelection/);assert.match(code,/lance-content-studio\.onrender\.com/);
+  assert.match(code,/location\.href/);assert.match(code,/og:title/);assert.match(code,/og:image/);assert.match(code,/video\[poster\]/);assert.match(code,/capturePreview/);assert.match(code,/captureDescription/);assert.match(code,/captureSite/);assert.match(code,/getSelection/);assert.match(code,/lance-content-studio\.onrender\.com/);
   assert.doesNotMatch(code,/password|cookie|localStorage/i);
+});
+
+test('域名占位标题和缺少封面的链接会被识别为待自动补全',()=>{
+  const record={link:'https://www.xinpianchang.com/a123',name:'www.xinpianchang.com',externalPreview:''};
+  assert.equal(Capture.meaningfulTitle(record.name,record.link),'');assert.equal(Capture.needsEnrichment(record),true);
+  record.name='真正的作品标题';record.externalPreview='https://cdn.example/cover.jpg';assert.equal(Capture.needsEnrichment(record),false);
 });
 
 test('只有AI需要读取媒体时才提示补原文件',()=>{
