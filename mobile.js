@@ -338,4 +338,12 @@ addEventListener('focus',()=>ensureDailyRadar(true));
 document.addEventListener('visibilitychange',()=>{if(!document.hidden)ensureDailyRadar(true);});
 if('serviceWorker'in navigator)navigator.serviceWorker.register('./mobile-sw.js').catch(()=>{});
 
-(async()=>{readShareIntent();ensureDailyRadar();await updatePending();render();if(Cloud.configured())await loadCloud();})();
+(async()=>{
+  try{
+    readShareIntent();ensureDailyRadar();render();
+    await updatePending();render();
+    if(Cloud.configured())await loadCloud();
+  }catch(error){
+    render();show(`初始化未完成：${error.message||'请重新打开页面'}`,'error',null,9000);
+  }
+})();
