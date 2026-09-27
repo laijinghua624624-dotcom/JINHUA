@@ -16,6 +16,14 @@ class ModelRoutesTests(unittest.TestCase):
             self.assertNotIn('private-test-value',s.safe_error('failed private-test-value'))
             self.assertNotIn('secret=123',s.safe_error('failed https://example.com/?secret=123'))
 
+    def test_deepseek_text_routes_and_secret_redaction(self):
+        with patch.dict(os.environ,{'LANCE_TEXT_PROVIDER':'deepseek','DEEPSEEK_API_KEY':'deepseek-private','DEEPSEEK_DIRECTOR_MODEL':'deepseek-v4-pro','DEEPSEEK_REFINE_MODEL':'deepseek-flash'},clear=True):
+            self.assertEqual(s.route_model('director'),'deepseek-v4-pro')
+            self.assertEqual(s.route_model('refine'),'deepseek-flash')
+            self.assertEqual(s.model_routes()['director']['provider'],'deepseek')
+            self.assertNotIn('deepseek-private',s.safe_error('failed deepseek-private'))
+        with patch.dict(os.environ,{'LANCE_TEXT_PROVIDER':'unknown'},clear=True),self.assertRaises(ValueError):s.model_routes()
+
     def test_speech_auth_is_separate_and_no_credentials_in_results(self):
         with patch.dict(os.environ,{'ARK_API_KEY':'ark-only'},clear=True):
             with self.assertRaises(ValueError):s.speech_headers()

@@ -7,6 +7,14 @@ services:
     plan: free
     autoDeployTrigger: commit
     envVars:
+      - key: LANCE_TEXT_PROVIDER
+        value: deepseek
+      - key: DEEPSEEK_API_KEY
+        sync: false
+      - key: DEEPSEEK_DIRECTOR_MODEL
+        value: deepseek-v4-pro
+      - key: DEEPSEEK_REFINE_MODEL
+        value: deepseek-flash
       - key: ARK_API_KEY
         sync: false
       - key: ARK_DIRECTOR_MODEL

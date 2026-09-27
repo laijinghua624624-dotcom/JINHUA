@@ -14,7 +14,7 @@
 
 1. 用 GitHub 登录 Render，打开 `https://render.com/deploy?repo=https://github.com/laijinghua624624-dotcom/JINHUA`。
 2. 确认免费计算规格。免费实例不提供持久盘，请只用副本测试真实素材；重要文件及时下载。
-3. 在创建页填写所有标记为 `sync: false` 的秘密环境变量。不要将密钥粘贴到 GitHub、聊天或前端。
+3. 在创建页填写所有标记为 `sync: false` 的秘密环境变量。文字生成默认使用 `DEEPSEEK_API_KEY`，图片、视频和向量检索仍需 `ARK_API_KEY`。不要将密钥粘贴到 GitHub、聊天或前端。
 4. 创建成功后，Render 会提供 `https://lance-content-studio-....onrender.com`。根地址是完整工作台；`/mobile.html` 是轻量随身版。GitHub Pages 只作为静态展示。
 
 Render 会在运行时自动提供 `RENDER_EXTERNAL_URL` 和 `PORT`；启动脚本会把公网 URL 作为同源安全边界，内部 Python 端口仍为 8000，不直接暴露。

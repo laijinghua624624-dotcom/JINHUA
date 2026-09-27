@@ -29,11 +29,19 @@ class ServerTests(unittest.TestCase):
             if target.is_file():self.assertEqual(self.request('GET','/'+urllib.parse.quote(name))[0],200)
         self.assertEqual(self.request('GET','/studio-security.js')[0],200)
     def test_client_cannot_supply_credentials_or_override_model(self):
-        with patch.dict(os.environ,{'ARK_API_KEY':'server-test-key','ARK_DIRECTOR_MODEL':'director-test','ARK_REFINE_MODEL':'refine-test'}),patch.object(s,'ark_request',return_value={'choices':[{'message':{'content':'{}'}}]}) as call:
+        with patch.dict(os.environ,{'LANCE_TEXT_PROVIDER':'ark','ARK_API_KEY':'server-test-key','ARK_DIRECTOR_MODEL':'director-test','ARK_REFINE_MODEL':'refine-test'}),patch.object(s,'ark_request',return_value={'choices':[{'message':{'content':'{}'}}]}) as call:
             status,data=self.request('POST','/api/chat',json.dumps({'prompt':'test','purpose':'refine','model':'client-model'}),{'Authorization':'Bearer client-secret','Content-Type':'application/json'})
             self.assertEqual(status,200);self.assertEqual(call.call_args.args[1]['model'],'refine-test');self.assertEqual(call.call_args.args[1]['thinking'],{'type':'disabled'});self.assertEqual(call.call_args.args[1]['max_tokens'],4000);self.assertEqual(call.call_args.args[2],'server-test-key')
             self.assertNotIn(b'server-test-key',data);self.assertNotIn(b'client-secret',data)
             status,_=self.request('POST','/api/chat',json.dumps({'purpose':'embedding'}));self.assertEqual(status,400)
+    def test_deepseek_text_provider_uses_server_credentials_and_json_mode(self):
+        env={'LANCE_TEXT_PROVIDER':'deepseek','DEEPSEEK_API_KEY':'deepseek-server-key','DEEPSEEK_DIRECTOR_MODEL':'deepseek-v4-pro','DEEPSEEK_REFINE_MODEL':'deepseek-flash'}
+        response={'choices':[{'message':{'content':'{"ok":true}'}}],'usage':{'total_tokens':12}}
+        with patch.dict(os.environ,env,clear=True),patch.object(s,'deepseek_request',return_value=response) as call:
+            status,data=self.request('POST','/api/chat',json.dumps({'prompt':'test','purpose':'refine','model':'client-model'}),{'Authorization':'Bearer client-secret','Content-Type':'application/json'})
+        self.assertEqual(status,200);payload=json.loads(data);self.assertEqual(payload['provider'],'deepseek');self.assertEqual(payload['model'],'deepseek-flash')
+        self.assertEqual(call.call_args.args[1]['response_format'],{'type':'json_object'});self.assertEqual(call.call_args.args[1]['thinking'],{'type':'disabled'});self.assertEqual(call.call_args.args[2],'deepseek-server-key')
+        self.assertNotIn(b'deepseek-server-key',data);self.assertNotIn(b'client-secret',data)
     def test_video_contract(self):
         payload=s.build_video_body({'prompt':'test','duration':8,'ratio':'4:3'},'model-id');self.assertEqual(payload['duration'],8);self.assertEqual(payload['ratio'],'4:3')
         with self.assertRaises(ValueError):s.build_video_body({'prompt':'test','duration':13},'model')

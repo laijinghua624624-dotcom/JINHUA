@@ -35,6 +35,7 @@ ROOT = Path(__file__).resolve().parent
 DATA = Path(os.environ.get('LANCE_DATA_DIR', ROOT / '.lance-data'))
 MEDIA = DATA / 'media'
 ARK = 'https://ark.cn-beijing.volces.com/api/v3'
+DEEPSEEK = 'https://api.deepseek.com'
 MAX_UPLOAD = 250 * 1024 * 1024
 POOL = concurrent.futures.ThreadPoolExecutor(max_workers=2)
 JOBS = {}
@@ -73,24 +74,37 @@ def paid_request_allowed(handler):
         return True
 
 def model_routes():
-    routes={role:{'model':os.environ.get(env,'').strip()} for role,env in {
-        'director':'ARK_DIRECTOR_MODEL','refine':'ARK_REFINE_MODEL','image':'ARK_IMAGE_MODEL',
-        'video':'ARK_VIDEO_MODEL','embedding':'ARK_EMBEDDING_MODEL'}.items()}
-    routes['speech']={'model':os.environ.get('SPEECH_MODEL_VERSION','').strip() or os.environ.get('SPEECH_RESOURCE_ID','volc.seedasr.auc').strip()}
+    provider=text_provider()
+    text_models={
+        'director':os.environ.get('DEEPSEEK_DIRECTOR_MODEL','').strip() or 'deepseek-v4-pro',
+        'refine':os.environ.get('DEEPSEEK_REFINE_MODEL','').strip() or 'deepseek-flash'
+    } if provider=='deepseek' else {
+        'director':os.environ.get('ARK_DIRECTOR_MODEL','').strip(),
+        'refine':os.environ.get('ARK_REFINE_MODEL','').strip()
+    }
+    routes={role:{'provider':provider,'model':model} for role,model in text_models.items()}
+    routes.update({role:{'provider':'ark','model':os.environ.get(env,'').strip()} for role,env in {
+        'image':'ARK_IMAGE_MODEL','video':'ARK_VIDEO_MODEL','embedding':'ARK_EMBEDDING_MODEL'}.items()})
+    routes['speech']={'provider':'doubao','model':os.environ.get('SPEECH_MODEL_VERSION','').strip() or os.environ.get('SPEECH_RESOURCE_ID','volc.seedasr.auc').strip()}
     return routes
+
+def text_provider():
+    provider=os.environ.get('LANCE_TEXT_PROVIDER','ark').strip().lower() or 'ark'
+    if provider not in {'ark','deepseek'}:raise ValueError('LANCE_TEXT_PROVIDER 仅支持 ark 或 deepseek')
+    return provider
 
 def route_model(role):
     routes=model_routes()
     if role not in routes:raise ValueError('未知模型分工')
     model=routes[role]['model']
-    if role=='director' and not model:model=os.environ.get('ARK_TEXT_MODEL','').strip()
+    if role=='director' and routes[role].get('provider')=='ark' and not model:model=os.environ.get('ARK_TEXT_MODEL','').strip()
     if not model:raise ValueError(f'服务端未配置 {role} 模型ID；请在本机 .env 设置，不在前端填写密钥')
     if not re.fullmatch(r'[a-zA-Z0-9_.:-]{1,160}',model):raise ValueError('服务端模型ID格式无效')
     return model
 
 def safe_error(error):
     message=str(error)
-    for key in ('ARK_API_KEY','VOLC_ACCESS_KEY_ID','VOLC_SECRET_ACCESS_KEY','SPEECH_API_KEY','SPEECH_ACCESS_TOKEN','SUPABASE_SERVICE_ROLE_KEY'):
+    for key in ('ARK_API_KEY','DEEPSEEK_API_KEY','VOLC_ACCESS_KEY_ID','VOLC_SECRET_ACCESS_KEY','SPEECH_API_KEY','SPEECH_ACCESS_TOKEN','SUPABASE_SERVICE_ROLE_KEY'):
         secret=os.environ.get(key,'')
         if secret:message=message.replace(secret,'[已隐藏]')
     message=re.sub(r'https?://\S+','[上游地址已隐藏]',message)
@@ -226,9 +240,7 @@ def data_url(name):
         raise ValueError('模型参考必须使用图片，请先提取视频关键帧或上传尺寸图截图')
     return 'data:'+mimetypes.guess_type(path)[0]+';base64,'+base64.b64encode(path.read_bytes()).decode()
 
-def ark_request(path, body, token, method='POST'):
-    if not token:
-        raise ValueError('服务端未配置 Ark API Key，请仅在本机 .env 设置 ARK_API_KEY')
+def json_api_request(base_url,path,body,token,service,method='POST'):
     if not shutil.which('curl'):
         raise ValueError('系统缺少 curl，无法安全连接模型服务')
     payload=json.dumps(body,ensure_ascii=False).encode() if body is not None else None
@@ -240,7 +252,7 @@ def ark_request(path, body, token, method='POST'):
             payload_file.write(payload);payload_file.close()
             os.chmod(payload_file.name,0o600)
             command+=['--data-binary','@'+payload_file.name]
-        command.append(ARK+path)
+        command.append(base_url+path)
         # Pass credentials through stdin so they never appear in argv, logs, or process listings.
         headers=('Authorization: Bearer '+token+'\nContent-Type: application/json\n').encode()
         result=subprocess.run(command,input=headers,capture_output=True,timeout=250)
@@ -254,11 +266,21 @@ def ark_request(path, body, token, method='POST'):
             except Exception:
                 message=result.stderr.decode('utf-8','replace') or '模型调用失败'
             label=status or result.returncode
-            raise ValueError(f'模型接口 {label}：{safe_error(message)}')
+            raise ValueError(f'{service}接口 {label}：{safe_error(message)}')
         return json.loads(response_text)
     finally:
         if payload_file:
             Path(payload_file.name).unlink(missing_ok=True)
+
+def ark_request(path, body, token, method='POST'):
+    if not token:
+        raise ValueError('服务端未配置 Ark API Key，请仅在本机 .env 设置 ARK_API_KEY')
+    return json_api_request(ARK,path,body,token,'Ark',method)
+
+def deepseek_request(path, body, token, method='POST'):
+    if not token:
+        raise ValueError('服务端未配置 DeepSeek API Key，请仅在服务端 .env 设置 DEEPSEEK_API_KEY')
+    return json_api_request(DEEPSEEK,path,body,token,'DeepSeek',method)
 
 def public_url(url):
     parsed=urllib.parse.urlparse(url)
@@ -686,8 +708,10 @@ class Handler(BaseHTTPRequestHandler):
         path=urllib.parse.unquote(urllib.parse.urlparse(self.path).path)
         try:
             if path=='/api/health':
-                routes=model_routes();routes['director']['model']=routes['director']['model'] or os.environ.get('ARK_TEXT_MODEL','')
-                return self.send_json({'ok':True,'keyConfigured':bool(os.environ.get('ARK_API_KEY')),'routes':routes,'models':{'text':routes['director']['model'],'image':routes['image']['model'],'video':routes['video']['model']},'speechConfigured':bool(os.environ.get('SPEECH_API_KEY') or os.environ.get('SPEECH_APP_ID') and os.environ.get('SPEECH_ACCESS_TOKEN')),'ffmpeg':bool(shutil.which('ffmpeg') and shutil.which('ffprobe')),'pdfText':bool(document_binary('pdftotext')),'ocr':bool(document_binary('pdftoppm') and document_binary('tesseract'))})
+                routes=model_routes()
+                if routes['director']['provider']=='ark':routes['director']['model']=routes['director']['model'] or os.environ.get('ARK_TEXT_MODEL','')
+                ark_key=bool(os.environ.get('ARK_API_KEY'));deepseek_key=bool(os.environ.get('DEEPSEEK_API_KEY'))
+                return self.send_json({'ok':True,'keyConfigured':ark_key or deepseek_key,'textProvider':text_provider(),'arkKeyConfigured':ark_key,'deepseekKeyConfigured':deepseek_key,'routes':routes,'models':{'text':routes['director']['model'],'image':routes['image']['model'],'video':routes['video']['model']},'speechConfigured':bool(os.environ.get('SPEECH_API_KEY') or os.environ.get('SPEECH_APP_ID') and os.environ.get('SPEECH_ACCESS_TOKEN')),'ffmpeg':bool(shutil.which('ffmpeg') and shutil.which('ffprobe')),'pdfText':bool(document_binary('pdftotext')),'ocr':bool(document_binary('pdftoppm') and document_binary('tesseract'))})
             if path=='/api/pinterest/status':return self.send_json(pinterest_status())
             if path=='/api/pinterest/connect':
                 app_id=os.environ.get('PINTEREST_APP_ID','').strip();secret=os.environ.get('PINTEREST_APP_SECRET','').strip()
@@ -804,18 +828,23 @@ class Handler(BaseHTTPRequestHandler):
                     return path
                 data=reverse_story_pdf(body,reverse_frame)
                 return self.send_binary(data,'application/pdf',str(body.get('title') or '视频')+'_反推故事脚本.pdf')
-            token=os.environ.get('ARK_API_KEY','')
             if self.path=='/api/chat':
                 purpose=body.get('purpose','director')
                 if purpose not in ('director','refine'):raise ValueError('未知文本模型分工')
+                provider=text_provider()
                 model=route_model(purpose)
                 content=[{'type':'text','text':str(body.get('prompt',''))}]
                 for name in body.get('references',[])[:12]:content.append({'type':'image_url','image_url':{'url':data_url(name)}})
-                # Seed 2.1 Pro enables deep thinking by default. For this workbench the
-                # model must return bounded structured JSON; leaving thinking enabled can
-                # spend the whole HTTP timeout before producing a single response byte.
-                result=ark_request('/chat/completions',{'model':model,'messages':[{'role':'system','content':'你是Lance的内容总监助理。只输出完整JSON，严格遵守用户结构。区分已知事实与待确认事项，不编造场地尺寸、服装品牌、预算报价或产品性能。'}, {'role':'user','content':content}],'thinking':{'type':'disabled'},'max_tokens':10000 if purpose=='director' else 4000,'temperature':0.65},token)
-                return self.send_json({'text':result.get('choices',[{}])[0].get('message',{}).get('content',''),'purpose':purpose,'model':model,'usage':result.get('usage',{})})
+                # Both providers can default to extended thinking. This workbench needs
+                # bounded JSON, so disable thinking and request JSON mode from DeepSeek.
+                payload={'model':model,'messages':[{'role':'system','content':'你是Lance的内容总监助理。只输出完整JSON，严格遵守用户结构。区分已知事实与待确认事项，不编造场地尺寸、服装品牌、预算报价或产品性能。'}, {'role':'user','content':content}],'thinking':{'type':'disabled'},'max_tokens':10000 if purpose=='director' else 4000,'temperature':0.65}
+                if provider=='deepseek':
+                    payload['response_format']={'type':'json_object'}
+                    result=deepseek_request('/chat/completions',payload,os.environ.get('DEEPSEEK_API_KEY',''))
+                else:
+                    result=ark_request('/chat/completions',payload,os.environ.get('ARK_API_KEY',''))
+                return self.send_json({'text':result.get('choices',[{}])[0].get('message',{}).get('content',''),'purpose':purpose,'provider':provider,'model':model,'usage':result.get('usage',{})})
+            token=os.environ.get('ARK_API_KEY','')
             if self.path=='/api/image':
                 model=route_model('image')
                 payload={'model':model,'prompt':body['prompt'],'size':image_size(body),'response_format':'url','watermark':False}

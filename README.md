@@ -14,16 +14,19 @@ python3 -m venv .venv
 
 打开 http://127.0.0.1:8787 。该端口专用于 JINHUA；`8000` 留给其他项目，`8765` 留给旧版即梦代理。不能用普通静态服务器替代，也不要直接双击 HTML。默认只监听本机。前端依赖包已构建，可直接使用；修改 PPT 依赖后执行 `npm ci && npm run build`。当前服务已启动；本机登录自启动未通过验收，已撤回该配置。关机或进程退出后需重新运行，不能当作云服务器。
 
-模型 ID 与 API Key 只在本机 `.env` 配置，前端弹窗不接收密钥：
+模型 ID 与 API Key 只在本机 `.env` 配置，前端弹窗不接收密钥。文字任务可使用 DeepSeek 余额，图片、视频、语音和审美语义检索仍走原有方舟链路：
 
 ```dotenv
+LANCE_TEXT_PROVIDER=deepseek
+DEEPSEEK_API_KEY=填写DeepSeek密钥
+DEEPSEEK_DIRECTOR_MODEL=deepseek-v4-pro
+DEEPSEEK_REFINE_MODEL=deepseek-flash
 ARK_API_KEY=填写新的方舟密钥
-ARK_TEXT_MODEL=支持看图和JSON输出的模型或接入点ID
 ARK_IMAGE_MODEL=支持多参考图及2304x1728输出的图片模型ID
 ARK_VIDEO_MODEL=支持图生视频及8秒输出的视频模型ID
 ```
 
-修改 `.env` 后重启服务。新版本采用方舟 Ark 文本、图片与视频接口；旧版即梦 AK/SK 代理仍保留，但新版不会自动使用它。模型权限、区域、参数和费用必须在你的账户实际验证。连接检查只确认本机服务，不代表付费模型可用。不承诺固定五分钟完成视频生成。
+修改 `.env` 后重启服务。`director` 默认走 `deepseek-v4-pro`，`refine` 默认走 `deepseek-flash`；如需回退方舟文字模型，将 `LANCE_TEXT_PROVIDER=ark` 并配置 `ARK_DIRECTOR_MODEL` / `ARK_REFINE_MODEL`。旧版即梦 AK/SK 代理仍保留，但新版不会自动使用它。模型权限、区域、参数和费用必须在你的账户实际验证。连接检查只确认本机服务，不代表付费模型可用。不承诺固定五分钟完成视频生成。
 
 ## 使用路线
 
