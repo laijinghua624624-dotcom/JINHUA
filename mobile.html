@@ -10,11 +10,11 @@
   <title>Lance · 随身创意</title>
   <link rel="manifest" href="mobile.webmanifest">
   <link rel="icon" href="mobile-icon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="mobile.css?v=20260925b">
+  <link rel="stylesheet" href="mobile.css?v=20260927a">
   <script defer src="mobile-config.js"></script>
   <script defer src="studio-cloud.js"></script>
-  <script defer src="studio-radar.js?v=20260925c"></script>
-  <script defer src="mobile.js?v=20260925b"></script>
+  <script defer src="studio-radar.js?v=20260927a"></script>
+  <script defer src="mobile.js?v=20260927a"></script>
 </head>
 <body>
   <header class="mobile-head">
@@ -22,6 +22,7 @@
     <span id="sync-state" class="sync-state">本机草稿</span>
   </header>
   <main id="mobile-app" class="mobile-main" aria-live="polite"></main>
+  <div id="mobile-toast" class="mobile-toast" role="status" aria-live="polite" hidden></div>
   <nav class="mobile-nav" aria-label="随身版导航">
     <button data-tab="radar" class="active"><span>◉</span>雷达</button>
     <button data-tab="capture"><span>＋</span>记录</button>

@@ -63,3 +63,15 @@ test('手机雷达看完一轮才重置，且不立即重复上一组',()=>{
   const all=Radar.CASES.map(item=>item.id),previous=all.slice(-3),batch=Radar.mobileBatch(Radar.CASES,all,999,3);
   assert.equal(batch.reset,true);assert.equal(batch.items.some(item=>previous.includes(item.id)),false);assert.equal(batch.seen.length,3);
 });
+
+test('手机雷达按上海时区判断新的一天',()=>{
+  assert.equal(Radar.dayKey(new Date('2026-09-27T15:59:59Z')),'2026-09-27');
+  assert.equal(Radar.dayKey(new Date('2026-09-27T16:00:01Z')),'2026-09-28');
+});
+
+test('用户偏好的类别会在新一组中优先出现',()=>{
+  const category=Radar.CASES.find(item=>item.visualFocus)?.category;
+  const batch=Radar.mobileBatch(Radar.CASES,[],12345,3,[category]);
+  assert.ok(batch.items.some(item=>item.category===category));
+  assert.equal(new Set(batch.items.map(item=>item.id)).size,3);
+});
