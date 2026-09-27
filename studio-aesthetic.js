@@ -30,6 +30,11 @@
     const category=categoryOf(a,folders),categoryOK=!q.category||q.category==='全部'||category===q.category,subtypeOK=q.category!=='封面参考'||coverSubtypeMatch(a,q.coverType||'全部',folders);
     return categoryOK&&subtypeOK&&(!q.tag||q.tag==='全部'||a.tags.includes(q.tag))&&(!q.favorite||a.favorite)&&(`${a.name} ${category} ${a.category} ${a.tags.join(' ')} ${a.notes} ${a.link} ${a.sourceSite||''}`.toLowerCase().includes(search));
   }).sort((a,b)=>visualWeight(b)-visualWeight(a)||String(b.createdAt).localeCompare(String(a.createdAt)));}
+  function tagSummary(items){
+    const counts=new Map();
+    for(const item of items||[])for(const tag of tags(item?.tags||[]))counts.set(tag,(counts.get(tag)||0)+1);
+    return [...counts].map(([tag,count])=>({tag,count})).sort((a,b)=>b.count-a.count||a.tag.localeCompare(b.tag,'zh-CN'));
+  }
   function image(a){return a.files.find(f=>f.localId===a.coverId&&f.kind==='image')||a.files.find(f=>f.kind==='image')||null;}
   function forProject(items,scope,id){return id?items.filter(a=>a.usedIn.some(p=>p.scope===scope&&p.id===id)):[];}
   function trashItem(items,id,deletedAt=new Date().toISOString()){
@@ -87,5 +92,5 @@
     }
     return result;
   }
-  return {CATEGORIES,link,tags,entry,normalize,migrate,filter,coverReference,categoryOf,coverSubtypeMatch,visualWeight,viewFilter,image,forProject,trashItem,restoreItem,projectReferences,mergeExtracted,splitLegacy};
+  return {CATEGORIES,link,tags,entry,normalize,migrate,filter,coverReference,categoryOf,coverSubtypeMatch,visualWeight,viewFilter,tagSummary,image,forProject,trashItem,restoreItem,projectReferences,mergeExtracted,splitLegacy};
 });
