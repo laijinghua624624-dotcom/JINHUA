@@ -53,3 +53,16 @@ test('full workbench snapshot and private media use the authenticated user',asyn
   const upload=calls.find(x=>x.url.includes('/storage/v1/object/workbench-media/'));assert.equal(upload.options.headers['x-upsert'],'true');assert.equal(upload.options.headers.Authorization,'Bearer user-token');
   const backup=calls.find(x=>x.url.includes('/personal/backups/'));assert.equal(backup.options.headers['x-upsert'],'false');assert.match(backup.options.headers['Content-Type'],/^text\/plain/);
 });
+
+test('mobile cleanup only removes owned, unchanged, backed-up project rows',async()=>{
+  values.set(Cloud.SESSION_KEY,JSON.stringify({access_token:'user-token',expires_at:Math.floor(Date.now()/1000)+3600,user:{id:'user-1'}}));
+  const calls=[];global.fetch=async(url,options)=>{calls.push({url,options});return new Response(JSON.stringify([{id:'p1'}]));};
+  const row={id:'p1',user_id:'user-1',workspace:'xinxuan',updated_at:'2026-09-28T12:00:00Z'};
+  await Cloud.removeBackedUpProjects([row]);
+  const query=new URL(calls[0].url).searchParams;
+  assert.equal(calls[0].options.method,'DELETE');assert.equal(query.get('user_id'),'eq.user-1');assert.equal(query.get('updated_at'),'eq.'+row.updated_at);
+  await assert.rejects(Cloud.removeBackedUpProjects([{...row,user_id:'other'}]),/范围无效/);
+  assert.equal(calls.length,1);
+  global.fetch=async()=>new Response('[]');
+  await assert.rejects(Cloud.removeBackedUpProjects([row]),/已变化/);
+});

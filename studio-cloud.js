@@ -42,6 +42,15 @@
   }
   async function downloadFile(path){const s=await auth();const c=config(),response=await root.fetch(c.url+'/storage/v1/object/'+BUCKET+'/'+encodePath(path),{headers:{apikey:c.key,Authorization:'Bearer '+s.access_token}});if(!response.ok)throw Error('随身文件下载失败');return response.blob();}
   async function listProjects(){const s=await auth();return request('/rest/v1/mobile_projects?select=*&order=updated_at.desc&limit=300',{token:s.access_token})||[];}
+  async function removeBackedUpProjects(items){
+    const s=await auth();
+    if(items.some(row=>!row.id||row.user_id!==s.user.id||!['xinxuan','personal'].includes(row.workspace)||!row.updated_at))throw Error('项目清理范围无效');
+    for(const row of items){
+      const query=new URLSearchParams({id:'eq.'+row.id,user_id:'eq.'+s.user.id,workspace:'eq.'+row.workspace,updated_at:'eq.'+row.updated_at});
+      const removed=await request('/rest/v1/mobile_projects?'+query,{method:'DELETE',token:s.access_token,headers:{Prefer:'return=representation'}});
+      if(removed?.length!==1)throw Error('手机项目已变化，已停止清理；备份已保留。');
+    }
+  }
   async function publishProjects(items){
     const s=await auth(),rows=items.map(item=>({...item,user_id:s.user.id,updated_at:new Date().toISOString()}));if(!rows.length)return [];
     return request('/rest/v1/mobile_projects?on_conflict=user_id,workspace,source_id',{method:'POST',token:s.access_token,headers:{Prefer:'resolution=merge-duplicates,return=representation'},body:rows});
@@ -77,5 +86,5 @@
     if(!url)throw Error('云端素材地址生成失败');
     return /^https?:\/\//.test(url)?url:c.url+'/storage/v1'+url;
   }
-  return {SESSION_KEY,BUCKET,WORKBENCH_BUCKET,config,configured,readSession,saveSession,signUp,signIn,signOut,session,listInbox,createInbox,patchInbox,uploadFile,downloadFile,listProjects,publishProjects,getWorkbench,putWorkbench,putWorkbenches,uploadWorkbenchMedia,backupWorkbench,signedWorkbenchMedia,safeName};
+  return {SESSION_KEY,BUCKET,WORKBENCH_BUCKET,config,configured,readSession,saveSession,signUp,signIn,signOut,session,listInbox,createInbox,patchInbox,uploadFile,downloadFile,listProjects,removeBackedUpProjects,publishProjects,getWorkbench,putWorkbench,putWorkbenches,uploadWorkbenchMedia,backupWorkbench,signedWorkbenchMedia,safeName};
 });

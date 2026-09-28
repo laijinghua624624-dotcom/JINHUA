@@ -145,8 +145,10 @@ async function clearAllWorkbenchContent(){
     const spaces=['xinxuan','personal'];
     const local=Object.fromEntries(spaces.map(space=>[space,C.clone(workspacePayload(space))]));
     const remote=Object.fromEntries(await Promise.all(spaces.map(async space=>[space,await StudioCloud.getWorkbench(space)])));
+    const mobileProjects=(await StudioCloud.listProjects()).filter(row=>spaces.includes(row.workspace));
     for(const space of spaces){
       const row=remote[space],localPayload=await prepareWorkspaceBackupMedia(space,local[space]);
+      localPayload.mobileProjects=mobileProjects.filter(row=>row.workspace===space);
       await downloadWorkspaceBackup(space,localPayload,{allowMissing:true});
       await StudioCloud.backupWorkbench(space,localPayload,Date.now(),workbenchDeviceId()+'-before-clean-local');
       if(row?.payload&&WC.contentStamp(row.payload)!==WC.contentStamp(localPayload))await StudioCloud.backupWorkbench(space,C.clone(row.payload),row.revision,row.device_id||'cloud-before-clean');
@@ -159,6 +161,8 @@ async function clearAllWorkbenchContent(){
       const revision=Math.max(Date.now(),Number(before?.revision||0)+1);
       pending.push({workspace:space,payload:C.clone(cleaned[space]),revision,device_id:workbenchDeviceId()});
     }
+    await StudioCloud.removeBackedUpProjects(mobileProjects);
+    if((await StudioCloud.listProjects()).some(row=>spaces.includes(row.workspace)))throw Error('手机项目尚未清理完，备份已保留，请重新检查。');
     await StudioCloud.putWorkbenches(pending);
     const rows=Object.fromEntries(await Promise.all(spaces.map(async space=>[space,await StudioCloud.getWorkbench(space)])));
     for(const space of spaces)if(rows[space]?.payload?.data?.cleanResetAt!==cleaned[space].data.cleanResetAt)throw Error('云端清空结果尚未确认；本机原记录已保留，请重新检查。');
@@ -176,6 +180,7 @@ function persistWorkspacePayload(space,payload,revision,{keepDirty=false,keepAct
   const pairs=[[key(space),JSON.stringify(payload.data)],['lance_studio_aesthetic_'+space,JSON.stringify(payload.aesthetic)],['lance_studio_folders_'+space,JSON.stringify(payload.folders)],['lance_studio_aesthetic_trash_'+space,JSON.stringify(payload.trash||[])]];
   for(const [name,value]of pairs){const prior=localStorage.getItem(name);if(prior)localStorage.setItem(name+'_previous',prior);localStorage.setItem(name,value);}
   if(payload.usage)localStorage.setItem(AI_USAGE_KEY,payload.usage);
+  else if(payload.data.cleanResetAt)localStorage.removeItem(AI_USAGE_KEY);
   setCloudMeta({paired:true,lastRevision:Number(revision)||0,dirtyAt:keepDirty?(cloudMeta(space).dirtyAt||new Date().toISOString()):null,lastSyncedAt:new Date().toISOString()},space);
   if(space===scope&&!keepActive)db=upgradeReverse(payload.data,space);
 }
@@ -654,6 +659,7 @@ async function downloadWorkspaceBackup(space,payload,{allowMissing=false}={}){
   if(allowMissing){for(const note of backupData.fragments||[]){try{await backupFragmentAudio(zip,{fragments:[note]});}catch(error){missing.push({audioKey:note.audioKey,message:error.message});}}}
   else await backupFragmentAudio(zip,backupData);
   zip.file('studio.json',JSON.stringify({scope:space,data:backupData,aesthetic:payload.aesthetic||[],folders:payload.folders||[],trash:payload.trash||[],usage:payload.usage||''},null,2));
+  if(payload.mobileProjects)zip.file('mobile-projects.json',JSON.stringify(payload.mobileProjects,null,2));
   const groups=WC.mediaGroups(backupData,payload.aesthetic||[],payload.trash||[]);
   for(const [id,items]of groups){
     try{
