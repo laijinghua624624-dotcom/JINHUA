@@ -35,6 +35,10 @@
     for(const item of items||[])for(const tag of tags(item?.tags||[]))counts.set(tag,(counts.get(tag)||0)+1);
     return [...counts].map(([tag,count])=>({tag,count})).sort((a,b)=>b.count-a.count||a.tag.localeCompare(b.tag,'zh-CN'));
   }
+  function browseItems(items,mode='all'){
+    return items.filter(item=>mode==='visual'?visualWeight(item)>0:mode==='text'?visualWeight(item)===0:true)
+      .sort((a,b)=>String(b.createdAt||'').localeCompare(String(a.createdAt||'')));
+  }
   function image(a){return a.files.find(f=>f.localId===a.coverId&&f.kind==='image')||a.files.find(f=>f.kind==='image')||null;}
   function forProject(items,scope,id){return id?items.filter(a=>a.usedIn.some(p=>p.scope===scope&&p.id===id)):[];}
   function trashItem(items,id,deletedAt=new Date().toISOString()){
@@ -92,5 +96,5 @@
     }
     return result;
   }
-  return {CATEGORIES,link,tags,entry,normalize,migrate,filter,coverReference,categoryOf,coverSubtypeMatch,visualWeight,viewFilter,tagSummary,image,forProject,trashItem,restoreItem,projectReferences,mergeExtracted,splitLegacy};
+  return {CATEGORIES,link,tags,entry,normalize,migrate,filter,coverReference,categoryOf,coverSubtypeMatch,visualWeight,viewFilter,tagSummary,browseItems,image,forProject,trashItem,restoreItem,projectReferences,mergeExtracted,splitLegacy};
 });

@@ -24,7 +24,23 @@
     const data=payload?.data||{},aesthetic=payload?.aesthetic||[],trash=Array.isArray(data.projectTrash)?data.projectTrash:[];
     return {projects:(data.projects?.length||0)+trash.length,topics:(data.topics?.length||0)+trash.reduce((n,b)=>n+(b.topics?.length||0),0),reverse:(data.reverse?.length||0)+trash.reduce((n,b)=>n+(b.reverse?.length||0),0),references:aesthetic.length+(data.assets?.length||0)+trash.reduce((n,b)=>n+(b.assets?.length||0),0),media:mediaGroups(data,aesthetic).size};
   }
-  function empty(payload){const s=summary(payload);return !s.projects&&!s.topics&&!s.reverse&&!s.references;}
+  function empty(payload){const s=summary(payload),d=payload?.data||{};return !s.projects&&!s.topics&&!s.reverse&&!s.references&&!d.fragments?.length&&!d.exports?.length&&!String(d.preferences||'').trim()&&!payload?.folders?.length&&!payload?.trash?.length;}
+  // Transport metadata may change while signing/uploading, but creative content must not.
+  function contentStamp(payload){return JSON.stringify(payload,(key,value)=>['cloudPath','cloudUrl','cloudSyncedAt','cloudAudioPath','cloudAudioUrl'].includes(key)?undefined:value);}
+  function copyMediaInfo(target,uploaded){
+    const source=mediaGroups(uploaded.data,uploaded.aesthetic,uploaded.trash),dest=mediaGroups(target.data,target.aesthetic,target.trash);
+    for(const [id,items]of dest){const info=source.get(id)?.find(item=>item.cloudPath);if(info)for(const item of items)for(const key of ['cloudPath','cloudUrl','cloudSyncedAt'])if(info[key])item[key]=info[key];}
+    for(const note of target.data.fragments||[]){const info=(uploaded.data.fragments||[]).find(item=>note.audioKey&&item.audioKey===note.audioKey);if(info?.cloudAudioPath){note.cloudAudioPath=info.cloudAudioPath;note.cloudAudioUrl=info.cloudAudioUrl;}}
+    return target;
+  }
+  function presentation(state,meta={}){
+    if(state.error)return {label:'同步未完成 · 查看原因',tone:'warn',detail:state.error};
+    if(!state.session)return {label:'仅本机 · 登录同步',tone:'warn',detail:'尚未登录云同步；其他设备暂时看不到这里的新内容。'};
+    if(state.busy)return {label:'正在同步…',tone:'pending',detail:'请保留此页面，素材上传完成后会显示云端保存时间。'};
+    if(meta.dirtyAt)return {label:'本机已保存 · 待同步',tone:'pending',detail:'有新修改尚未传到云端，暂时不要在另一台设备接着修改。'};
+    if(state.status==='云端已同步'&&meta.paired&&meta.lastSyncedAt)return {label:'已同步至云端',tone:'ok',detail:'最近成功同步：'+new Date(meta.lastSyncedAt).toLocaleString('zh-CN')};
+    return {label:'正在核对云端',tone:'pending',detail:'尚未确认本机与云端一致，请稍候。'};
+  }
   function valid(payload){return !!payload&&payload.version===1&&payload.data?.version===2&&Array.isArray(payload.data.topics)&&Array.isArray(payload.data.projects)&&Array.isArray(payload.aesthetic)&&Array.isArray(payload.folders);}
   function newer(remoteRevision,localRevision){return Number(remoteRevision||0)>Number(localRevision||0);}
   function syncDecision(localPayload,remoteRow,meta={}){
@@ -40,5 +56,5 @@
     if(newer(remoteRow.revision,meta.lastRevision))return {action:'pull',reason:'云端版本更新'};
     return {action:'refresh',reason:'内容已经一致'};
   }
-  return {mediaGroups,setCloudInfo,replaceLocalId,summary,empty,valid,newer,syncDecision};
+  return {mediaGroups,setCloudInfo,replaceLocalId,summary,empty,valid,newer,syncDecision,contentStamp,copyMediaInfo,presentation};
 });
