@@ -126,12 +126,12 @@ async function prepareWorkspaceBackupMedia(space,payload){
   for(const [localId,items]of groups){
     const sample=items[0];if(sample.cloudPath)continue;
     const response=await fetch(mediaURL(sample));
-    if(!response.ok)throw Error(`素材 ${localId} 无法读取；为避免产生无法恢复的备份，已停止清空。`);
+    if(!response.ok){(payload.backupMissingMedia||=[]).push({localId,status:response.status});continue;}
     const blob=await response.blob(),path=await StudioCloud.uploadWorkbenchMedia(space,localId,new Blob([blob],{type:blob.type||'application/octet-stream'}));
     WC.setCloudInfo(groups,localId,path);
   }
   for(const note of payload.data.fragments||[])if(note.audioKey&&!note.cloudAudioPath){
-    const blob=await StudioPpt.getExport(note.audioKey);if(!blob)throw Error('一条语音灵感原录音缺失，已停止清空。');
+    const blob=await StudioPpt.getExport(note.audioKey);if(!blob){(payload.backupMissingMedia||=[]).push({audioKey:note.audioKey});continue;}
     note.cloudAudioPath=await StudioCloud.uploadWorkbenchMedia(space,note.audioKey+(blob.type.includes('mp4')?'.m4a':'.webm'),blob);
   }
   return payload;
@@ -147,21 +147,25 @@ async function clearAllWorkbenchContent(){
     const remote=Object.fromEntries(await Promise.all(spaces.map(async space=>[space,await StudioCloud.getWorkbench(space)])));
     for(const space of spaces){
       const row=remote[space],localPayload=await prepareWorkspaceBackupMedia(space,local[space]);
-      await downloadWorkspaceBackup(space,localPayload);
+      await downloadWorkspaceBackup(space,localPayload,{allowMissing:true});
       await StudioCloud.backupWorkbench(space,localPayload,Date.now(),workbenchDeviceId()+'-before-clean-local');
       if(row?.payload&&WC.contentStamp(row.payload)!==WC.contentStamp(localPayload))await StudioCloud.backupWorkbench(space,C.clone(row.payload),row.revision,row.device_id||'cloud-before-clean');
     }
     cloudState.status='正在清空云端';refreshSyncUI();
-    const cleaned=Object.fromEntries(spaces.map(space=>[space,cleanWorkspacePayload(space,local[space])])),rows={};
+    const cleaned=Object.fromEntries(spaces.map(space=>[space,cleanWorkspacePayload(space,local[space])])),pending=[];
     for(const space of spaces){
       const before=remote[space],check=await StudioCloud.getWorkbench(space);
       if(Number(check?.revision||0)!==Number(before?.revision||0))throw Error('另一台设备刚写入了新内容，已停止清空，避免误删。请稍后重新操作。');
       const revision=Math.max(Date.now(),Number(before?.revision||0)+1);
-      rows[space]=await StudioCloud.putWorkbench(space,C.clone(cleaned[space]),revision,workbenchDeviceId());
+      pending.push({workspace:space,payload:C.clone(cleaned[space]),revision,device_id:workbenchDeviceId()});
     }
+    await StudioCloud.putWorkbenches(pending);
+    const rows=Object.fromEntries(await Promise.all(spaces.map(async space=>[space,await StudioCloud.getWorkbench(space)])));
+    for(const space of spaces)if(rows[space]?.payload?.data?.cleanResetAt!==cleaned[space].data.cleanResetAt)throw Error('云端清空结果尚未确认；本机原记录已保留，请重新检查。');
     clearBrowserContentKeys();
     for(const space of spaces)persistWorkspacePayload(space,cleaned[space],rows[space].revision,{keepActive:false});
-    await Promise.all([deleteBrowserDatabase('lance_studio_files'),deleteBrowserDatabase('jinhua_mobile_queue')]);
+    // Retain original file caches for recovery; cleared records no longer show
+    // these files. They can also contain retained personal-profile material.
     cloudState.remotes=rows;cloudState.remote=rows[scope];cloudState.status='云端已同步';cloudState.error='';
     route={view:'home',id:null,tab:'quick'};search='';render();
     notify('本地与公网的项目、收藏、反推和生成记录已清空；恢复备份已保留。');
@@ -272,7 +276,7 @@ async function workbenchCloudAction(action){
   }
   if(action==='workbench-cloud-clean-confirm'){
     if($('#workbench-cloud-clean-phrase')?.value.trim()!=='重新开始')throw Error('请输入“重新开始”后再执行。');
-    close();await clearAllWorkbenchContent();return;
+    close();try{await clearAllWorkbenchContent();}catch(error){dialog('清空未完成',`<p class="missing">${esc(error.message||String(error))}</p><p>请先解决这里的问题，再检查本地与云端数量。备份未成功时不会开始清空。</p>`,btn('查看保存与恢复','workbench-cloud-open','',true));}return;
   }
   if(action==='workbench-cloud-push'){
     if(!confirm(`只把当前的 ${scope==='xinxuan'?'My·工作':'My·个人'} 设为云端主版本。系统会先保留云端恢复备份，空白本机仍不允许覆盖。确定继续吗？`))return;
@@ -643,18 +647,24 @@ function showSettings(){
   const labels={director:'内容总监 · Doubao-Seed-2.1-pro',refine:'日常提炼 · Doubao-Seed-2.1-turbo',image:'快速视觉 · Seedream-5.0-lite',video:'动态预演 · Seedance-2.0-fast',speech:'语音记录 · 豆包录音文件识别2.0',embedding:'审美检索 · Doubao-embedding-vision'};
   dialog('生成服务与模型连接',`<p class="muted">所有密钥和实际模型ID只在服务端配置。GitHub Pages不保存、接收或转发密钥。这里仅显示配置；有模型ID不等于账户已开通或真实调用已验证。</p><label>工作台服务地址（同源服务留空）<input id="cfg-server" value="${esc(settings.server)}"></label><div class="list">${Object.entries(labels).map(([k,l])=>`<div class="row"><span>${l}</span><small>${esc(health?.routes?.[k]?.model||'服务端待配置')}</small></div>`).join('')}</div><p class="muted">本机工具：FFmpeg ${health?.ffmpeg?'可用':'缺失'} · PDF文本 ${health?.pdfText?'可用':'缺失'} · 扫描PDF OCR ${health?.ocr?'可用':'缺失'}。</p><p id="connection-result" class="muted">连接检查不调用付费模型。不需要AK/SK或Supabase服务端密钥的功能不要配置额外权限。</p>`,btn('保存并检查连接','save-settings','',true));
 }
-async function downloadWorkspaceBackup(space,payload){
+async function downloadWorkspaceBackup(space,payload,{allowMissing=false}={}){
   if(!window.JSZip)throw Error('备份组件未加载');
   const zip=new JSZip(),backupData=C.clone(payload.data),name=space==='xinxuan'?'My工作':'My个人';
-  await backupFragmentAudio(zip,backupData);
-  zip.file('studio.json',JSON.stringify({scope:space,data:backupData,aesthetic:payload.aesthetic||[],folders:payload.folders||[]},null,2));
+  const missing=[...(payload.backupMissingMedia||[])];
+  if(allowMissing){for(const note of backupData.fragments||[]){try{await backupFragmentAudio(zip,{fragments:[note]});}catch(error){missing.push({audioKey:note.audioKey,message:error.message});}}}
+  else await backupFragmentAudio(zip,backupData);
+  zip.file('studio.json',JSON.stringify({scope:space,data:backupData,aesthetic:payload.aesthetic||[],folders:payload.folders||[],trash:payload.trash||[],usage:payload.usage||''},null,2));
   const groups=WC.mediaGroups(backupData,payload.aesthetic||[],payload.trash||[]);
   for(const [id,items]of groups){
-    const sample=items[0];let response=await fetch(mediaURL(sample));
-    if(!response.ok&&sample.cloudPath){const url=await StudioCloud.signedWorkbenchMedia(sample.cloudPath);response=await fetch(url);}
-    if(!response.ok)throw Error('备份中断：素材'+id+'无法读取，未交付不完整备份');
-    zip.file('media/'+id,await response.blob());progress('备份素材');
+    try{
+      const sample=items.find(item=>item.cloudPath)||items[0];let response;
+      try{response=await fetch(mediaURL(sample),{signal:AbortSignal.timeout(30000)});}catch(error){if(!sample.cloudPath)throw error;}
+      if(!response?.ok&&sample.cloudPath){const url=await StudioCloud.signedWorkbenchMedia(sample.cloudPath);response=await fetch(url,{signal:AbortSignal.timeout(30000)});}
+      if(!response?.ok)throw Error('素材无法读取（'+(response?.status||'网络错误')+'）');
+      zip.file('media/'+id,await response.blob());progress('备份素材');
+    }catch(error){if(!allowMissing)throw Error('备份中断：素材'+id+'无法读取，未交付不完整备份');missing.push({localId:id,message:error.message});}
   }
+  if(allowMissing)zip.file('backup-status.json',JSON.stringify({complete:missing.length===0,missingMedia:missing,note:'所有文字与索引均保留。missingMedia中的原文件在清空前已经无法读取；此备份不包含这些文件。'},null,2));
   downloadBlob(await zip.generateAsync({type:'blob'}),'Lance完整备份_'+name+'_'+new Date().toISOString().slice(0,10)+'.zip');
 }
 async function backup(){return downloadWorkspaceBackup(scope,workspacePayload(scope));}
@@ -807,6 +817,7 @@ async function runWorkbenchSync(openPanel=false){
   }catch(error){if(error.code==='SYNC_EDITING'){cloudState.status='等待编辑结束';scheduleWorkbenchSync();}else{cloudState.status='同步需处理';cloudState.error=friendlySyncError(error);}refreshSyncUI();if(openPanel)showCloudSync();}
 }
 function resumeWorkbenchSync(openPanel=false){
+  if(cloudState.busy&&!workbenchSyncPromise)return Promise.resolve();
   if(workbenchSyncPromise)return workbenchSyncPromise;
   workbenchSyncPromise=runWorkbenchSync(openPanel).finally(()=>{workbenchSyncPromise=null;});
   return workbenchSyncPromise;

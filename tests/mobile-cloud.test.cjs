@@ -31,6 +31,16 @@ test('safe file names cannot add folders or credentials',()=>{
   assert.equal(Cloud.safeName('scene-reference.mov'),'scene-reference.mov');
 });
 
+test('reset writes both owned workspaces in one request and rejects an incomplete scope',async()=>{
+  values.set(Cloud.SESSION_KEY,JSON.stringify({access_token:'user-token',expires_at:Math.floor(Date.now()/1000)+3600,user:{id:'user-1'}}));
+  const calls=[];global.fetch=async(url,options)=>{calls.push({url,options});return new Response(options.body,{status:201});};
+  const rows=await Cloud.putWorkbenches(['xinxuan','personal'].map(workspace=>({workspace,user_id:'wrong-user',payload:{version:1},revision:21,device_id:'test-device'})));
+  assert.equal(calls.length,1);assert.equal(rows.length,2);assert.ok(rows.every(row=>row.user_id==='user-1'));
+  await assert.rejects(Cloud.putWorkbenches([{workspace:'xinxuan'}]),/范围不完整/);
+  await assert.rejects(Cloud.putWorkbenches([{workspace:'xinxuan'},{workspace:'xinxuan'}]),/范围不完整/);
+  assert.equal(calls.length,1);
+});
+
 test('full workbench snapshot and private media use the authenticated user',async()=>{
   values.set(Cloud.SESSION_KEY,JSON.stringify({access_token:'user-token',expires_at:Math.floor(Date.now()/1000)+3600,user:{id:'user-1'}}));
   const calls=[];global.fetch=async(url,options={})=>{calls.push({url,options});if(url.includes('/workbench_snapshots')&&options.method==='POST')return new Response(JSON.stringify([{workspace:'personal',revision:9}]),{status:201});if(url.includes('/workbench_snapshots'))return new Response(JSON.stringify([]),{status:200});if(url.includes('/object/sign/'))return new Response(JSON.stringify({signedURL:'/object/sign/workbench-media/user-1/personal/a.jpg?token=x'}),{status:200});return new Response('',{status:200});};

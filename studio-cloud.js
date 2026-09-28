@@ -56,6 +56,11 @@
     const rows=await request('/rest/v1/workbench_snapshots?on_conflict=user_id,workspace',{method:'POST',token:s.access_token,headers:{Prefer:'resolution=merge-duplicates,return=representation'},body:row});
     return rows?.[0]||row;
   }
+  async function putWorkbenches(items){
+    const s=await auth(),rows=items.map(item=>({...item,user_id:s.user.id,updated_at:new Date().toISOString()}));
+    if(rows.length!==2||new Set(rows.map(row=>row.workspace)).size!==2||rows.some(row=>!['xinxuan','personal'].includes(row.workspace)))throw Error('清空空间范围不完整');
+    return request('/rest/v1/workbench_snapshots?on_conflict=user_id,workspace',{method:'POST',token:s.access_token,headers:{Prefer:'resolution=merge-duplicates,return=representation'},body:rows});
+  }
   async function uploadWorkbenchMedia(workspace,name,blob){
     const s=await auth(),path=`${s.user.id}/${workspace}/${safeName(name)}`;
     await request('/storage/v1/object/'+WORKBENCH_BUCKET+'/'+encodePath(path),{method:'POST',token:s.access_token,headers:{'Content-Type':blob.type||'application/octet-stream','x-upsert':'true'},body:blob});
@@ -72,5 +77,5 @@
     if(!url)throw Error('云端素材地址生成失败');
     return /^https?:\/\//.test(url)?url:c.url+'/storage/v1'+url;
   }
-  return {SESSION_KEY,BUCKET,WORKBENCH_BUCKET,config,configured,readSession,saveSession,signUp,signIn,signOut,session,listInbox,createInbox,patchInbox,uploadFile,downloadFile,listProjects,publishProjects,getWorkbench,putWorkbench,uploadWorkbenchMedia,backupWorkbench,signedWorkbenchMedia,safeName};
+  return {SESSION_KEY,BUCKET,WORKBENCH_BUCKET,config,configured,readSession,saveSession,signUp,signIn,signOut,session,listInbox,createInbox,patchInbox,uploadFile,downloadFile,listProjects,publishProjects,getWorkbench,putWorkbench,putWorkbenches,uploadWorkbenchMedia,backupWorkbench,signedWorkbenchMedia,safeName};
 });
