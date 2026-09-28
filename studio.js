@@ -13,6 +13,9 @@ let localSaveError='',localSavedAt='';
 let workspaceReady=false,workbenchSyncPromise=null,cloudState={session:null,remote:null,busy:false,status:'未登录',error:'',timer:null};
 const CLOUD_META_PREFIX='jinhua_workbench_sync_v1_';
 const AUTO_SYNC_INTERVAL_MS=30*60*1000;
+// Kept intentionally invisible. Older cached pages treat it as non-empty,
+// preventing a stale tab from automatically restoring cleared content.
+const CLEAN_RESET_PREFERENCE_MARKER='\u200B';
 try{settings=JSON.parse(localStorage.getItem('lance_studio_settings')||'{}');}catch{settings={};}
 settings={server:settings.server||''}; // Model routes and credentials are server-only.
 localStorage.setItem('lance_studio_settings',JSON.stringify(settings));
@@ -105,6 +108,49 @@ function workspacePayload(space=scope){
   try{aesthetic=JSON.parse(localStorage.getItem('lance_studio_aesthetic_'+space)||'[]');folders=JSON.parse(localStorage.getItem('lance_studio_folders_'+space)||'[]');trash=JSON.parse(localStorage.getItem('lance_studio_aesthetic_trash_'+space)||'[]');}catch{throw Error('本机参考库无法读取，已停止同步以避免覆盖。');}
   return {version:1,data,aesthetic:Array.isArray(aesthetic)?aesthetic:[],folders:Array.isArray(folders)?folders:[],trash:Array.isArray(trash)?trash:[],usage:localStorage.getItem(AI_USAGE_KEY)||''};
 }
+function cleanWorkspacePayload(space,source=workspacePayload(space)){
+  const data=C.clone(source?.data||read(space));
+  for(const name of ['topics','projects','assets','exports','reverse','fragments','projectTrash','inspirations'])data[name]=[];
+  data.imported=false;
+  data.preferences=CLEAN_RESET_PREFERENCE_MARKER;
+  data.cleanResetAt=new Date().toISOString();
+  data.cleanResetBy=workbenchDeviceId();
+  return {version:1,data,aesthetic:[],folders:[],trash:[],usage:''};
+}
+function clearBrowserContentKeys(){
+  const exact=new Set(['lance_ai_usage_v1','lance_studio_aesthetic','lance_studio_folders','lance_studio_scope_split_v1','jinhua_mobile_radar_saved','jinhua_mobile_radar_seen','jinhua_mobile_radar_last_viewed','jinhua_mobile_capture_draft_v2','jinhua_mobile_radar_daily_v2','jinhua_mobile_radar_preferred','jinhua_mobile_radar_muted']);
+  for(const name of Object.keys(localStorage))if(exact.has(name)||name.startsWith('lance_studio_v2_')||name.startsWith('lance_studio_aesthetic_')||name.startsWith('lance_studio_folders_')||name.startsWith('xuan_ti_ku_')||name.startsWith('project_plans_')||name.startsWith(CLOUD_META_PREFIX))localStorage.removeItem(name);
+}
+async function clearAllWorkbenchContent(){
+  if(cloudState.busy||workbenchSyncPromise)throw Error('请等待当前同步结束后再清空');
+  if(job||fragmentRecording||fragmentPending)throw Error('请先停止生成、上传或录音，再清空内容');
+  const session=cloudState.session||await StudioCloud.session();if(!session)throw Error('请先登录云端同步账号；清空需要同时写入本地和公网。');
+  cloudState.session=session;cloudState.busy=true;cloudState.status='正在创建备份';cloudState.error='';refreshSyncUI();
+  try{
+    const spaces=['xinxuan','personal'];
+    const local=Object.fromEntries(spaces.map(space=>[space,C.clone(workspacePayload(space))]));
+    const remote=Object.fromEntries(await Promise.all(spaces.map(async space=>[space,await StudioCloud.getWorkbench(space)])));
+    for(const space of spaces){
+      const row=remote[space],localPayload=local[space];
+      await StudioCloud.backupWorkbench(space,localPayload,Date.now(),workbenchDeviceId()+'-before-clean-local');
+      if(row?.payload&&WC.contentStamp(row.payload)!==WC.contentStamp(localPayload))await StudioCloud.backupWorkbench(space,C.clone(row.payload),row.revision,row.device_id||'cloud-before-clean');
+    }
+    cloudState.status='正在清空云端';refreshSyncUI();
+    const cleaned=Object.fromEntries(spaces.map(space=>[space,cleanWorkspacePayload(space,local[space])])),rows={};
+    for(const space of spaces){
+      const before=remote[space],check=await StudioCloud.getWorkbench(space);
+      if(Number(check?.revision||0)!==Number(before?.revision||0))throw Error('另一台设备刚写入了新内容，已停止清空，避免误删。请稍后重新操作。');
+      const revision=Math.max(Date.now(),Number(before?.revision||0)+1);
+      rows[space]=await StudioCloud.putWorkbench(space,C.clone(cleaned[space]),revision,workbenchDeviceId());
+    }
+    clearBrowserContentKeys();
+    for(const space of spaces)persistWorkspacePayload(space,cleaned[space],rows[space].revision,{keepActive:false});
+    await Promise.all([deleteBrowserDatabase('lance_studio_files'),deleteBrowserDatabase('jinhua_mobile_queue')]);
+    cloudState.remotes=rows;cloudState.remote=rows[scope];cloudState.status='云端已同步';cloudState.error='';
+    route={view:'home',id:null,tab:'quick'};search='';render();
+    notify('本地与公网的项目、收藏、反推和生成记录已清空；恢复备份已保留。');
+  }finally{cloudState.busy=false;refreshSyncUI();}
+}
 function persistWorkspacePayload(space,payload,revision,{keepDirty=false,keepActive=false}={}){
   if(!WC.valid(payload))throw Error('云端工作台数据格式不完整，本机未覆盖。');
   const pairs=[[key(space),JSON.stringify(payload.data)],['lance_studio_aesthetic_'+space,JSON.stringify(payload.aesthetic)],['lance_studio_folders_'+space,JSON.stringify(payload.folders)],['lance_studio_aesthetic_trash_'+space,JSON.stringify(payload.trash||[])]];
@@ -182,7 +228,7 @@ function showCloudSync(){
   if(!cloudState.session){dialog('登录云端同步',`<p class="muted">使用与手机随身收件箱相同的账号。这里填的是当时注册 JINHUA 时设置的密码，不是邮箱本身的密码。</p><div class="formgrid"><label>邮箱<input id="workbench-cloud-email" type="email" autocomplete="email"></label><label>密码<input id="workbench-cloud-password" type="password" autocomplete="current-password" minlength="8"></label></div>`,btn('登录','workbench-cloud-login','',true));return;}
   const localWork=workspacePayload('xinxuan'),localPersonal=workspacePayload('personal'),remoteWork=cloudState.remotes?.xinxuan?.payload,remotePersonal=cloudState.remotes?.personal?.payload;
   const currentLocal=scope==='xinxuan'?localWork:localPersonal,currentRemote=scope==='xinxuan'?remoteWork:remotePersonal,currentName=scope==='xinxuan'?'My·工作':'My·个人',sync=WC.presentation(cloudState,cloudMeta()),autoHint=`<div class="rule"><strong>${esc(sync.label)}</strong><br>${esc(sync.detail)}<br>切换设备前，请确认显示“已同步至云端”。项目数量不能代替素材完整性检查。</div>`;
-  dialog('保存与恢复',`<p class="account-line">已登录：${esc(cloudState.session.user?.email||'')}</p><div class="sync-columns"><section><h3>当前设备</h3>${syncSummaryHTML('My·工作',localWork)}${syncSummaryHTML('My·个人',localPersonal)}</section><section><h3>云端主版本</h3>${remoteWork?syncSummaryHTML('My·工作',remoteWork):'<p class="muted">My·工作尚无内容</p>'}${remotePersonal?syncSummaryHTML('My·个人',remotePersonal):'<p class="muted">My·个人尚无内容</p>'}</section></div>${cloudState.error?`<p class="missing">${esc(cloudState.error)}</p>`:''}${autoHint}<details class="danger-zone"><summary>高级恢复（通常不需要）</summary><p class="muted">只处理当前的 ${currentName}。系统禁止空白版本覆盖已有云端成果。</p><div class="actions">${btn('从云端重新恢复','workbench-cloud-pull')}${btn('明确以本机为主','workbench-cloud-push','class="danger"')}</div></details>`,btn('立即检查保存','workbench-cloud-sync-now','',true)+btn('退出同步账号','workbench-cloud-signout'));
+  dialog('保存与恢复',`<p class="account-line">已登录：${esc(cloudState.session.user?.email||'')}</p><div class="sync-columns"><section><h3>当前设备</h3>${syncSummaryHTML('My·工作',localWork)}${syncSummaryHTML('My·个人',localPersonal)}</section><section><h3>云端主版本</h3>${remoteWork?syncSummaryHTML('My·工作',remoteWork):'<p class="muted">My·工作尚无内容</p>'}${remotePersonal?syncSummaryHTML('My·个人',remotePersonal):'<p class="muted">My·个人尚无内容</p>'}</section></div>${cloudState.error?`<p class="missing">${esc(cloudState.error)}</p>`:''}${autoHint}<details class="danger-zone"><summary>高级恢复（通常不需要）</summary><p class="muted">只处理当前的 ${currentName}。系统禁止空白版本覆盖已有云端成果。</p><div class="actions">${btn('从云端重新恢复','workbench-cloud-pull')}${btn('明确以本机为主','workbench-cloud-push','class="danger"')}</div></details><details class="danger-zone"><summary>重新开始（清空本地与公网）</summary><p class="muted">会同时清空 My·工作、My·个人的项目、收藏、反推、素材记录、文件夹、导出记录和AI用量。云端恢复备份会先自动保存；登录账号、收件箱、系统连接和个人资料底稿会保留。</p><div class="actions">${btn('清空全部工作内容','workbench-cloud-clean-request','class="danger"')}</div></details>`,btn('立即检查保存','workbench-cloud-sync-now','',true)+btn('退出同步账号','workbench-cloud-signout'));
 }
 function cloudBadge(){
   const state=WC.presentation(cloudState,cloudMeta());
@@ -204,6 +250,13 @@ async function workbenchCloudAction(action){
   }
   if(action==='workbench-cloud-sync-now'){
     close();await resumeWorkbenchSync(false);const state=WC.presentation(cloudState,cloudMeta());notify(state.detail,cloudState.error?'error':'info');return;
+  }
+  if(action==='workbench-cloud-clean-request'){
+    dialog('确认重新开始',`<div class="rule"><strong>将同时清空本机和公网的 My·工作、My·个人：项目、收藏、反推、素材记录、文件夹、导出记录与AI用量。</strong></div><p>系统会先把本机和云端版本保存为恢复备份；登录账号、随身收件箱、模型连接、个人资料底稿和 GitHub 代码不会删除。</p><label>请输入 <strong>重新开始</strong> 以确认<input id="workbench-cloud-clean-phrase" autocomplete="off"></label>`,btn('取消','workbench-cloud-open')+btn('创建备份并清空','workbench-cloud-clean-confirm','class="danger"'));return;
+  }
+  if(action==='workbench-cloud-clean-confirm'){
+    if($('#workbench-cloud-clean-phrase')?.value.trim()!=='重新开始')throw Error('请输入“重新开始”后再执行。');
+    close();await clearAllWorkbenchContent();return;
   }
   if(action==='workbench-cloud-push'){
     if(!confirm(`只把当前的 ${scope==='xinxuan'?'My·工作':'My·个人'} 设为云端主版本。系统会先保留云端恢复备份，空白本机仍不允许覆盖。确定继续吗？`))return;
@@ -260,8 +313,7 @@ function renderProjectsHub(){
 function showToolbox(){dialog('更多工具与系统',`<p class="muted">这些能力会保留，但不再挤占日常导航。</p><div class="tool-grid"><button data-action="workbench-cloud-open"><strong>保存与恢复</strong><small>${esc(cloudState.status)} · 自动保持多设备一致</small></button><button data-action="nav" data-view="inbox"><strong>随身收件箱</strong><small>处理手机和 iPad 记录</small></button><button data-action="nav" data-view="reverse"><strong>视频反推</strong><small>拆解参考片与历史项目</small></button><button data-action="nav" data-view="radar"><strong>案例雷达</strong><small>寻找摄影、舞台与创意参考</small></button>${scope==='personal'?'':`<button data-action="nav" data-view="supply"><strong>AI创意补给</strong><small>工作创意方向补充</small></button>`}<button data-action="nav" data-view="profile"><strong>我的资料</strong><small>角色、经历与作品资料</small></button><button data-action="settings"><strong>系统连接</strong><small>${health?.ok?'服务已连接':'检查公网服务与模型'}</small></button></div><details class="danger-zone"><summary>数据管理</summary><p class="muted">用于清理演示或测试内容。登录账号、云端收件箱、系统连接和个人资料底稿不会删除。</p>${btn('清空本机工作台内容','reset-local-request','class="danger"')}</details><p class="tool-mobile-link"><a href="mobile.html" target="_blank" rel="noopener">打开 iPhone 随身版 ↗</a></p>`);}
 function deleteBrowserDatabase(name){return new Promise(resolve=>{const request=indexedDB.deleteDatabase(name);request.onsuccess=request.onerror=request.onblocked=()=>resolve();});}
 async function resetLocalWorkspace(){
-  const exact=new Set(['lance_ai_usage_v1','lance_studio_aesthetic','lance_studio_folders','lance_studio_scope_split_v1','jinhua_mobile_radar_saved','jinhua_mobile_radar_seen','jinhua_mobile_radar_last_viewed']);
-  for(const name of Object.keys(localStorage))if(exact.has(name)||name.startsWith('lance_studio_v2_')||name.startsWith('lance_studio_aesthetic_')||name.startsWith('lance_studio_folders_')||name.startsWith('xuan_ti_ku_'))localStorage.removeItem(name);
+  clearBrowserContentKeys();
   await Promise.all([deleteBrowserDatabase('lance_studio_files'),deleteBrowserDatabase('jinhua_mobile_queue')]);
   location.reload();
 }

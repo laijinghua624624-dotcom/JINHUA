@@ -45,3 +45,10 @@ test('unpaired populated copies stop instead of guessing which one wins',()=>{
 test('paired stale local changes do not overwrite a newer cloud revision',()=>{
   assert.equal(Cloud.syncDecision(filled(),{revision:20,payload:filled()},{paired:true,dirtyAt:'now',lastRevision:10}).action,'conflict');
 });
+
+test('a deliberate clean reset is still a paired cloud version, not an unknown empty device',()=>{
+  const reset=blank();reset.data.cleanResetAt='2026-09-28T20:00:00.000Z';
+  assert.equal(Cloud.summary(reset).projects,0);
+  assert.equal(Cloud.empty(reset),false);
+  assert.equal(Cloud.syncDecision(filled(),{revision:20,payload:reset},{paired:true,lastRevision:10}).action,'pull');
+});

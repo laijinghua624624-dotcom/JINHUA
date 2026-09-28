@@ -24,7 +24,10 @@
     const data=payload?.data||{},aesthetic=payload?.aesthetic||[],trash=Array.isArray(data.projectTrash)?data.projectTrash:[];
     return {projects:(data.projects?.length||0)+trash.length,topics:(data.topics?.length||0)+trash.reduce((n,b)=>n+(b.topics?.length||0),0),reverse:(data.reverse?.length||0)+trash.reduce((n,b)=>n+(b.reverse?.length||0),0),references:aesthetic.length+(data.assets?.length||0)+trash.reduce((n,b)=>n+(b.assets?.length||0),0),media:mediaGroups(data,aesthetic).size};
   }
-  function empty(payload){const s=summary(payload),d=payload?.data||{};return !s.projects&&!s.topics&&!s.reverse&&!s.references&&!d.fragments?.length&&!d.exports?.length&&!String(d.preferences||'').trim()&&!payload?.folders?.length&&!payload?.trash?.length;}
+  // A clean reset deliberately carries a marker. It has no visible creative
+  // content, but is not an "unknown empty device" that an older tab may use to
+  // resurrect its stale local workspace over the clean cloud snapshot.
+  function empty(payload){const s=summary(payload),d=payload?.data||{};return !d.cleanResetAt&&!s.projects&&!s.topics&&!s.reverse&&!s.references&&!d.fragments?.length&&!d.exports?.length&&!String(d.preferences||'').trim()&&!payload?.folders?.length&&!payload?.trash?.length;}
   // Transport metadata may change while signing/uploading, but creative content must not.
   function contentStamp(payload){return JSON.stringify(payload,(key,value)=>['cloudPath','cloudUrl','cloudSyncedAt','cloudAudioPath','cloudAudioUrl'].includes(key)?undefined:value);}
   function copyMediaInfo(target,uploaded){
