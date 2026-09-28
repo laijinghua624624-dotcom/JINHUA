@@ -121,6 +121,21 @@ function clearBrowserContentKeys(){
   const exact=new Set(['lance_ai_usage_v1','lance_studio_aesthetic','lance_studio_folders','lance_studio_scope_split_v1','jinhua_mobile_radar_saved','jinhua_mobile_radar_seen','jinhua_mobile_radar_last_viewed','jinhua_mobile_capture_draft_v2','jinhua_mobile_radar_daily_v2','jinhua_mobile_radar_preferred','jinhua_mobile_radar_muted']);
   for(const name of Object.keys(localStorage))if(exact.has(name)||name.startsWith('lance_studio_v2_')||name.startsWith('lance_studio_aesthetic_')||name.startsWith('lance_studio_folders_')||name.startsWith('xuan_ti_ku_')||name.startsWith('project_plans_')||name.startsWith(CLOUD_META_PREFIX))localStorage.removeItem(name);
 }
+async function prepareWorkspaceBackupMedia(space,payload){
+  const groups=WC.mediaGroups(payload.data,payload.aesthetic,payload.trash);
+  for(const [localId,items]of groups){
+    const sample=items[0];if(sample.cloudPath)continue;
+    const response=await fetch(mediaURL(sample));
+    if(!response.ok)throw Error(`素材 ${localId} 无法读取；为避免产生无法恢复的备份，已停止清空。`);
+    const blob=await response.blob(),path=await StudioCloud.uploadWorkbenchMedia(space,localId,new Blob([blob],{type:blob.type||'application/octet-stream'}));
+    WC.setCloudInfo(groups,localId,path);
+  }
+  for(const note of payload.data.fragments||[])if(note.audioKey&&!note.cloudAudioPath){
+    const blob=await StudioPpt.getExport(note.audioKey);if(!blob)throw Error('一条语音灵感原录音缺失，已停止清空。');
+    note.cloudAudioPath=await StudioCloud.uploadWorkbenchMedia(space,note.audioKey+(blob.type.includes('mp4')?'.m4a':'.webm'),blob);
+  }
+  return payload;
+}
 async function clearAllWorkbenchContent(){
   if(cloudState.busy||workbenchSyncPromise)throw Error('请等待当前同步结束后再清空');
   if(job||fragmentRecording||fragmentPending)throw Error('请先停止生成、上传或录音，再清空内容');
@@ -131,7 +146,8 @@ async function clearAllWorkbenchContent(){
     const local=Object.fromEntries(spaces.map(space=>[space,C.clone(workspacePayload(space))]));
     const remote=Object.fromEntries(await Promise.all(spaces.map(async space=>[space,await StudioCloud.getWorkbench(space)])));
     for(const space of spaces){
-      const row=remote[space],localPayload=local[space];
+      const row=remote[space],localPayload=await prepareWorkspaceBackupMedia(space,local[space]);
+      await downloadWorkspaceBackup(space,localPayload);
       await StudioCloud.backupWorkbench(space,localPayload,Date.now(),workbenchDeviceId()+'-before-clean-local');
       if(row?.payload&&WC.contentStamp(row.payload)!==WC.contentStamp(localPayload))await StudioCloud.backupWorkbench(space,C.clone(row.payload),row.revision,row.device_id||'cloud-before-clean');
     }
@@ -627,7 +643,21 @@ function showSettings(){
   const labels={director:'内容总监 · Doubao-Seed-2.1-pro',refine:'日常提炼 · Doubao-Seed-2.1-turbo',image:'快速视觉 · Seedream-5.0-lite',video:'动态预演 · Seedance-2.0-fast',speech:'语音记录 · 豆包录音文件识别2.0',embedding:'审美检索 · Doubao-embedding-vision'};
   dialog('生成服务与模型连接',`<p class="muted">所有密钥和实际模型ID只在服务端配置。GitHub Pages不保存、接收或转发密钥。这里仅显示配置；有模型ID不等于账户已开通或真实调用已验证。</p><label>工作台服务地址（同源服务留空）<input id="cfg-server" value="${esc(settings.server)}"></label><div class="list">${Object.entries(labels).map(([k,l])=>`<div class="row"><span>${l}</span><small>${esc(health?.routes?.[k]?.model||'服务端待配置')}</small></div>`).join('')}</div><p class="muted">本机工具：FFmpeg ${health?.ffmpeg?'可用':'缺失'} · PDF文本 ${health?.pdfText?'可用':'缺失'} · 扫描PDF OCR ${health?.ocr?'可用':'缺失'}。</p><p id="connection-result" class="muted">连接检查不调用付费模型。不需要AK/SK或Supabase服务端密钥的功能不要配置额外权限。</p>`,btn('保存并检查连接','save-settings','',true));
 }
-async function backup(){if(!window.JSZip)throw Error('备份组件未加载');const zip=new JSZip();const backupData=C.clone(db);await backupFragmentAudio(zip,backupData);zip.file('studio.json',JSON.stringify({scope,data:backupData,aesthetic:globalAssets(),folders:referenceFolders()},null,2));const ids=[...new Set(JSON.stringify([db,globalAssets()]).match(/[a-f0-9]{32}\.(?:mp4|mov|webm|jpg|jpeg|png|webp|pdf|mp3|wav|m4a|ogg|docx|txt|md)/g)||[])];for(const id of ids){const response=await fetch(mediaURL({localId:id}));if(!response.ok)throw Error('备份中断：素材'+id+'无法读取，未交付不完整备份');zip.file('media/'+id,await response.blob());progress('备份素材');}downloadBlob(await zip.generateAsync({type:'blob'}),'Lance完整备份_'+scope+'.zip');}
+async function downloadWorkspaceBackup(space,payload){
+  if(!window.JSZip)throw Error('备份组件未加载');
+  const zip=new JSZip(),backupData=C.clone(payload.data),name=space==='xinxuan'?'My工作':'My个人';
+  await backupFragmentAudio(zip,backupData);
+  zip.file('studio.json',JSON.stringify({scope:space,data:backupData,aesthetic:payload.aesthetic||[],folders:payload.folders||[]},null,2));
+  const groups=WC.mediaGroups(backupData,payload.aesthetic||[],payload.trash||[]);
+  for(const [id,items]of groups){
+    const sample=items[0];let response=await fetch(mediaURL(sample));
+    if(!response.ok&&sample.cloudPath){const url=await StudioCloud.signedWorkbenchMedia(sample.cloudPath);response=await fetch(url);}
+    if(!response.ok)throw Error('备份中断：素材'+id+'无法读取，未交付不完整备份');
+    zip.file('media/'+id,await response.blob());progress('备份素材');
+  }
+  downloadBlob(await zip.generateAsync({type:'blob'}),'Lance完整备份_'+name+'_'+new Date().toISOString().slice(0,10)+'.zip');
+}
+async function backup(){return downloadWorkspaceBackup(scope,workspacePayload(scope));}
 function downloadBlob(blob,name){const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),60000);}
 async function downloadProjectOverviewPDF(p){
   const status=C.projectOverviewStatus(p);if(!status.ready)throw Error('请先补充：'+status.missing.join('、'));
