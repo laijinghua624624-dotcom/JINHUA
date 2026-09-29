@@ -524,13 +524,20 @@ def image_size(body):
         raise ValueError('图片尺寸不支持')
     return size
 
-def extract_frames(name):
+def extract_frames(name,count=12,start=None,end=None):
     path=media_path(name)
     meta=describe(path)
     if meta['kind']!='video': raise ValueError('请上传视频后提取造型')
+    import math
+    if type(count) is not int or not 1<=count<=12:raise ValueError('抽帧数量必须为1至12')
+    start=0.0 if start is None else float(start)
+    end=float(meta['duration']) if end is None else float(end)
+    if not math.isfinite(start) or not math.isfinite(end) or not 0<=start<end<=float(meta['duration'])+0.01:
+        raise ValueError('视频时间范围无效')
+    end=min(end,float(meta['duration']))
     result=[]
-    for index in range(12):
-        timestamp=meta['duration']*(index+0.5)/12
+    for index in range(count):
+        timestamp=start+(end-start)*(index+0.5)/count
         target=MEDIA/(uuid.uuid4().hex+'.jpg')
         subprocess.run(['ffmpeg','-v','error','-ss',str(timestamp),'-i',str(path),'-frames:v','1','-vf','scale=960:-2','-y',str(target)],check=True,capture_output=True,timeout=45)
         item=describe(target,'video-frame');item['timestamp']=round(timestamp,2);item['sourceVideo']=name
@@ -792,7 +799,7 @@ class Handler(BaseHTTPRequestHandler):
             if path.startswith('/media/'): target=media_path(path[7:])
             else:
                 name='index.html' if path=='/' else path.lstrip('/')
-                if name not in {'index.html','studio.js','studio-security.js','studio.css','studio-core.js','studio-reverse.js','studio-aesthetic.js','studio-capture.js','studio-aesthetic-ui.js','studio-folders.js','studio-folders-ui.js','studio-aesthetic.css','studio-radar.js','studio-radar-ui.js','studio-radar.css','studio-profile.js','studio-inspiration.js','studio-fragments.js','studio-fragments-ui.js','studio-ppt.js','studio-cloud.js','studio-workspace-cloud.js','studio-mobile-inbox.js','mobile.html','mobile.css','mobile.js','mobile-config.js','mobile.webmanifest','mobile-sw.js','mobile-icon.svg','vendor/presentation.js','lance_qrcode_public.png','lance_qrcode.png','lance_intro.mp4','api-guide.html','tutorial.html','deliverables/Lance专场整体汇报模板_v1.pptx','deliverables/Lance单条剧本汇报模板_v1.pptx'}:
+                if name not in {'index.html','studio.js','studio-security.js','studio.css','studio-core.js','studio-reverse.js','studio-reverse-case.js','studio-reverse-case-ui.js','studio-reverse-case.css','studio-aesthetic.js','studio-capture.js','studio-aesthetic-ui.js','studio-folders.js','studio-folders-ui.js','studio-aesthetic.css','studio-radar.js','studio-radar-ui.js','studio-radar.css','studio-profile.js','studio-inspiration.js','studio-fragments.js','studio-fragments-ui.js','studio-ppt.js','studio-cloud.js','studio-workspace-cloud.js','studio-mobile-inbox.js','mobile.html','mobile.css','mobile.js','mobile-config.js','mobile.webmanifest','mobile-sw.js','mobile-icon.svg','vendor/presentation.js','lance_qrcode_public.png','lance_qrcode.png','lance_intro.mp4','api-guide.html','tutorial.html','deliverables/Lance专场整体汇报模板_v1.pptx','deliverables/Lance单条剧本汇报模板_v1.pptx'}:
                     return self.send_json({'error':'文件不存在'},404)
                 target=ROOT/name
             if not target.is_file(): return self.send_json({'error':'文件不存在'},404)
@@ -865,6 +872,14 @@ class Handler(BaseHTTPRequestHandler):
                     return path
                 data=reverse_story_pdf(body,reverse_frame)
                 return self.send_binary(data,'application/pdf',str(body.get('title') or '视频')+'_反推故事脚本.pdf')
+            if self.path=='/api/reverse/case/pdf':
+                from studio_pdf import reverse_case_pdf
+                def case_frame(local_id):
+                    path=media_path(local_id)
+                    if describe(path).get('kind')!='image':raise ValueError('案例封面必须为有效图片')
+                    return path
+                data=reverse_case_pdf(body,case_frame)
+                return self.send_binary(data,'application/pdf',str(body.get('title') or '历史项目')+'_整体项目案例.pdf')
             if self.path=='/api/chat':
                 purpose=body.get('purpose','director')
                 if purpose not in ('director','refine'):raise ValueError('未知文本模型分工')
@@ -912,7 +927,7 @@ class Handler(BaseHTTPRequestHandler):
                         response={'status':'succeeded','asset':asset};cache.write_text(json.dumps(response))
                     return self.send_json(response)
                 return self.send_json({'status':status,'error':result.get('error',{}).get('message','') if result.get('error') else ''})
-            if self.path=='/api/frames':return self.send_json(run_job(extract_frames,body['localId']))
+            if self.path=='/api/frames':return self.send_json(run_job(extract_frames,body['localId'],body.get('count',12),body.get('start'),body.get('end')))
             if self.path=='/api/assemble':return self.send_json(run_job(assemble,body['clips'],body.get('bgm')))
             if self.path=='/api/verify':
                 return self.send_json(describe(media_path(body['localId']),body.get('source','upload')))

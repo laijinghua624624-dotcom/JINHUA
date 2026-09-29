@@ -240,6 +240,50 @@ def _shot_page(c, page, shot):
     c.showPage(); return page + 1
 
 
+def reverse_case_pdf(payload, frame_loader):
+    """A project overview with actual sampled images, never detailed scripts."""
+    labels=(('theme','整体主题与依据'),('rhythm','内容分工与节奏'),('visual','视觉定调'),('reuse','可借鉴的方法'),('uncertainties','待核对与证据边界'))
+    clips=payload.get('clips') if isinstance(payload,dict) else None
+    overview=payload.get('overview') if isinstance(payload,dict) else None
+    if not isinstance(clips,list) or not 1<=len(clips)<=60 or not isinstance(overview,dict):
+        raise ValueError('请先生成整体项目案例')
+    if not payload.get('caseStatus',{}).get('ready') or any(not isinstance(overview.get(k),str) or not overview[k].strip() for k,_ in labels):
+        raise ValueError('整体案例尚未就绪')
+    _register_font(); output=BytesIO(); c=canvas.Canvas(output,pagesize=PAGE_SIZE)
+    c._lance_report_header='历史项目案例 · 采样概览，不含单条脚本'
+    title=_clean(payload.get('title'),120);c.setTitle(title+' · 历史项目案例');c.setAuthor('Lance')
+    count=payload['caseStatus'].get('done',0)
+    page=_text_pages(c,1,'历史项目案例',title+f'\n\n已概览 {count}/{len(clips)} 条视频／时间段。\n基于采样画面及已提供资料；未完整分析音轨。上传顺序不代表发布时间。')
+    board=[clip for clip in clips if isinstance(clip,dict) and clip.get('caseFrames')][:3]
+    if board:
+        _base(c,page,'先看原片 · 项目视觉索引')
+        for j,clip in enumerate(board):
+            frame=clip['caseFrames'][0]
+            if not isinstance(frame,dict) or not frame.get('localId'):raise ValueError('案例封面缺失')
+            _draw_frame(c,frame_loader(frame['localId']),(.7+j*4.05)*inch,2.1*inch,3.85*inch,3.7*inch)
+            c.setFillColor(INK);c.setFont(FONT,11)
+            for n,line in enumerate(_wrap(_clean(clip.get('title'),120),11,3.85*inch)[:3]):
+                c.drawString((.7+j*4.05)*inch,(1.8-n*.23)*inch,line)
+        c.showPage();page+=1
+    for key,label in labels:page=_text_pages(c,page,label,_clean(overview[key],1800))
+    for i,clip in enumerate(clips):
+        if not isinstance(clip,dict):raise ValueError('案例视频数据格式错误')
+        name=_clean(clip.get('title'),120);frames=clip.get('caseFrames') or []
+        if not isinstance(frames,list):raise ValueError('案例画面格式错误')
+        if frames:
+            _base(c,page,f'视频／时间段 {i+1:02d} · 原片采样')
+            c.setFillColor(INK);c.setFont(FONT,13)
+            for n,line in enumerate(_wrap(name,13,PAGE_SIZE[0]-1.4*inch)[:2]):c.drawString(.7*inch,PAGE_SIZE[1]-(1.6+n*.23)*inch,line)
+            for j,frame in enumerate(frames[:3]):
+                if not isinstance(frame,dict) or not frame.get('localId'):raise ValueError('案例封面缺失')
+                _draw_frame(c,frame_loader(frame['localId']),(.7+j*4.05)*inch,2.0*inch,3.85*inch,2.9*inch)
+                c.setFillColor(MUTED);c.setFont(FONT,10);c.drawString((.7+j*4.05)*inch,1.7*inch,f"原片 {float(frame.get('timestamp') or 0):.2f}秒")
+            c.showPage();page+=1
+        summary=clip.get('caseSummary') or {}
+        page=_text_pages(c,page,f'视频／时间段 {i+1:02d} · 轻量概览',name+'\n\n'+'\n\n'.join(label+'：'+_clean(summary.get(key),1800) for key,label in (('summary','可见内容'),('role','可能的内容作用（推断）'),('visual','视觉特征'),('uncertainties','未能确认'))))
+    c.save();return output.getvalue()
+
+
 def reverse_story_pdf(payload, frame_loader):
     data = validate_reverse_story(payload, frame_loader); _register_font()
     output = BytesIO(); c = canvas.Canvas(output, pagesize=PAGE_SIZE)

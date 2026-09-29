@@ -1,7 +1,7 @@
-(function(root,factory){if(typeof module==='object')module.exports=factory(require('./studio-core.js'));else root.StudioPpt=factory(root.StudioCore);})(globalThis,function(C){
+(function(root,factory){if(typeof module==='object')module.exports=factory(require('./studio-core.js'),require('./studio-reverse-case.js'));else root.StudioPpt=factory(root.StudioCore,root.StudioReverseCase);})(globalThis,function(C,RC){
   'use strict';
   const THEME={bg:'14121A',ink:'F6F2E9',muted:'B7AE9F',accent:'C4A96B'};
-  const MODES={decision:'老板决策版',full:'完整策划版',execution:'单条执行版',reverse:'视频反推报告'};
+  const MODES={decision:'老板决策版',full:'完整策划版',execution:'单条执行版',reverse:'视频反推报告',case:'历史项目案例','case-pdf':'历史项目案例PDF'};
   const REPORT_FIELDS=[['recommendation','一句话主推方向'],['reason','推荐理由／为什么适合这个人物与项目'],['confirmed','已确认事实（只填写已核实的信息）'],['pending','待确认信息与假设'],['alternatives','备选方向及取舍（可留空）'],['production','拍摄安排、预算与资源边界'],['decisions','本次需要拍板的事项']];
   const ensureReport=item=>{if(!item.report||typeof item.report!=='object')item.report={};for(const[k]of REPORT_FIELDS)if(typeof item.report[k]!=='string')item.report[k]='';return item.report;};
   const modeFor=(kind,mode)=>mode||(kind==='deep'?'execution':'full');
@@ -51,7 +51,23 @@
     overview('依据与未确认事项',[{label:'分析依据',body:item.analysis?.basis||'依据原视频关键帧与已补充资料进行推断'},{label:'待核对',body:f.uncertainties||'未确认信息需结合原始策划、完整音轨与主创访谈继续核对'}]);
     return {mode:'reverse',label:MODES.reverse,draft:false,status,slides,overviewCount:slides.length};
   }
+  function planCaseDeck(item){
+    const clips=item.clips||[],status=reportStatus(item,'reverse-case'),slides=[];
+    const text=(title,body)=>splitText(body).forEach((body,i)=>slides.push({type:'text',title:title+(i?'（续）':''),body}));
+    slides.push({type:'cover',title:item.title,subtitle:MODES.case,body:`${status.done}/${status.total}条视频／时间段已概览。\n基于采样画面与补充资料，不含逐条详细脚本。`});
+    const board=clips.filter(c=>RC.frames(c).length).slice(0,3).map(c=>({frame:RC.frames(c)[0],shot:{visual:c.title,camera:RC.range(c)}}));
+    if(board.length)slides.push({type:'evidence',title:'先看原片 · 项目视觉索引',entries:board});
+    for(const [key,label]of Object.entries(RC.LABELS))text(label,item.overview?.[key]||'待整理');
+    for(const [i,clip]of clips.entries()){
+      const current=RC.clipReady(clip),summary=current?clip.caseSummary:null,images=RC.frames(clip);
+      if(images.length)slides.push({type:'evidence',title:`${i+1}. ${clip.title}`,subtitle:`原片 ${RC.range(clip)} · ${current?'轻量概览':'尚未纳入有效分析'}`,entries:images.map(frame=>({frame,shot:{timestamp:frame.timestamp,visual:'原片均匀采样画面',camera:'不可据静帧断言运镜'}}))});
+      text(`${i+1}. ${clip.title}`,summary?Object.entries(RC.CLIP_LABELS).map(([key,label])=>label+'：'+summary[key]).join('\n\n'):'待分析／资料变化，尚未纳入有效分析。');
+    }
+    text('覆盖范围与未确认事项',`已概览${status.done}/${status.total}条；未完成${status.pending}条。上传順序不代表发布时间。长录像按10分钟分段，各段均匀采样3帧；未完整分析声音、剪辑或发布节奏。原意图属于推断，预算及效果需补充事实。`);
+    return {mode:'case',label:MODES.case,draft:false,status,slides,overviewCount:slides.length};
+  }
   function reportStatus(item,kind,topics=[],mode){
+    if(kind==='reverse-case'||mode==='case'){const s=RC.status(item,item.clips||[]);return {...s,missing:s.ready?[]:['请先生成／更新整体项目案例']};}
     if(kind==='reverse'||mode==='reverse')return reverseStatus(item);
     mode=modeFor(kind,mode);if(!MODES[mode])throw Error('未知PPT版本');
     if(mode==='execution'){
@@ -65,6 +81,7 @@
     return {...C.directionStatus(item,kind,topics),draft:!full.ready,deliveryMissing:full.missing};
   }
   function planDeck(source,kind,topics=[],mode){
+    if(kind==='reverse-case'||mode==='case')return planCaseDeck(source);
     if(kind==='reverse'||mode==='reverse')return planReverseDeck(source);
     mode=modeFor(kind,mode);
     const item=C.clone(source),all=C.clone(topics),status=reportStatus(item,kind,all,mode);
