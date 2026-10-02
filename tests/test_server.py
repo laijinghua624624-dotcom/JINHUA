@@ -28,6 +28,7 @@ class ServerTests(unittest.TestCase):
             target=s.ROOT/name
             if target.is_file():self.assertEqual(self.request('GET','/'+urllib.parse.quote(name))[0],200)
         self.assertEqual(self.request('GET','/studio-security.js')[0],200)
+        status,privacy=self.request('GET','/privacy.html');self.assertEqual(status,200);self.assertIn('JINHUA'.encode(),privacy)
     def test_client_cannot_supply_credentials_or_override_model(self):
         with patch.dict(os.environ,{'LANCE_TEXT_PROVIDER':'ark','ARK_API_KEY':'server-test-key','ARK_DIRECTOR_MODEL':'director-test','ARK_REFINE_MODEL':'refine-test'}),patch.object(s,'ark_request',return_value={'choices':[{'message':{'content':'{}'}}]}) as call:
             status,data=self.request('POST','/api/chat',json.dumps({'prompt':'test','purpose':'refine','model':'client-model'}),{'Authorization':'Bearer client-secret','Content-Type':'application/json'})
