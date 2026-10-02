@@ -3,6 +3,7 @@
 !Dockerfile.render
 !render.yaml
 !index.html
+!privacy.html
 !studio*.js
 !studio*.css
 !studio_server.py
