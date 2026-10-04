@@ -15,7 +15,7 @@ class TestHandler(studio.Handler):
         if path=='/mobile-config.js':return self.send_preview(b'window.JINHUA_MOBILE_CONFIG=Object.freeze({});','application/javascript')
         if path=='/api/profile-seed':return self.send_json({'fields':{}})
         if path=='/api/reference-sources':return self.send_json({})
-        if path.startswith('/api/') and path!='/api/health' and not path.startswith('/api/jobs/'):
+        if path.startswith('/api/') and path!='/api/health' and not path.startswith(('/api/jobs/','/api/upload-status/')):
             return self.send_json({'error':'TEST: endpoint disabled'},404)
         return super().do_GET()
 
@@ -25,7 +25,7 @@ class TestHandler(studio.Handler):
             clip=bool(body.get('references'))
             fields={'summary':'测试样片：可见蓝色背景与白色图形。','role':'测试推断：可能作为开场视觉，真实用途待确认。','visual':'测试描述：冷色画面，主体位于中央。','uncertainties':'隔离测试结果，并非对真实项目的判断。'} if clip else {'theme':'测试整场：以统一视觉串联预热与活动内容。','rhythm':'仅根据采样资料整理，发布日期与实际节奏待确认。','visual':'测试定调：蓝色背景与简洁主体。','reuse':'测试建议：可复用统一色彩，但不能推定真实传播效果。','uncertainties':'隔离测试模拟AI结果；真实预算、主创意图和音轨均未核实。'}
             return self.send_json({'text':json.dumps(fields,ensure_ascii=False),'model':'test-only','usage':{}})
-        if self.path not in {'/api/upload','/api/frames','/api/verify','/api/reverse/case/pdf','/api/document/text'}:
+        if self.path not in {'/api/upload','/api/upload-reverse','/api/upload-retry','/api/frames','/api/verify','/api/reverse/case/pdf','/api/document/text'}:
             return self.send_json({'error':'TEST: no paid/external requests allowed'},403)
         return super().do_POST()
 

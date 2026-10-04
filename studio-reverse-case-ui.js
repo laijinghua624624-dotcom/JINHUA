@@ -10,10 +10,12 @@ function renderReverseCase(p){
   const clips=reverseCaseChildren(p),s=RC.status(p,clips),path='reverse.'+db.reverse.indexOf(p),removed=db.reverse.filter(c=>c.caseId===p.id&&c.caseRemovedAt);
   return hero('PROJECT CASE',p.title,'历史项目案例 · 上传只归档和抽帧，点击生成才使用AI。',btn('返回参考库','nav','data-view="aesthetic"'))+
     `<section class="panel"><details ${!clips.length?'open':''}><summary>项目名称与背景（可选）</summary><label>项目名称<input data-field="${path}.title" value="${esc(p.title)}"></label>${field('你记得的背景／希望复盘什么（可选）',path+'.notes',p.notes,true)}</details><div class="actions">${upload('批量添加视频','reverse-case-videos',`data-id="${p.id}" multiple`,'video/mp4,video/quicktime,video/webm')}${btn(p.overview?'更新整体案例':'生成整体案例','reverse-case-analyze',`data-id="${p.id}" ${!clips.length?'disabled':''}`,true)}</div><p class="muted">一次最多30个文件，项目最多60条视频／时间段。超过10分钟的录像自动按时间分段，每段先抽3帧；不是自动切镜，也未分析完整音轨。失败可单独重试，成功部分会保留。</p>${(p.uploadFailures||[]).length?`<p class="missing">未上传成功，请重新选择这些文件：${esc(p.uploadFailures.join('；'))}</p>`:''}<details><summary>补充原策划／脚本（可选）</summary>${upload('添加文字资料','reverse-support',`data-id="${p.id}" multiple`,'.txt,.md,.docx,.pdf')}<p class="muted">读取勾选资料的提取文字，每份最多6000字、最多6份；不自动理解扫描图片。</p>${(p.supportingFiles||[]).map((f,i)=>`<label><input type="checkbox" data-bool data-field="${path}.supportingFiles.${i}.includeInAnalysis" ${f.includeInAnalysis?'checked':''}>${esc(f.name)} · ${f.extractedText?'文字已提取':'无可用文字'}</label>`).join('')}</details></section>`+
+    clips.filter((c,i,all)=>c.video?.preparationId&&all.findIndex(x=>x.video?.preparationId===c.video.preparationId)===i).map(c=>`<section class="panel"><h3>${esc(c.video.name)}</h3>${videoPreparationHTML(c)}</section>`).join('')+
     `<section class="panel"><div class="section-head"><h2>整体案例预览</h2><div class="actions">${btn('导出整体PPT','reverse-case-ppt',`data-id="${p.id}" ${!s.ready?'disabled':''}`)}${btn('导出整体PDF','reverse-case-pdf',`data-id="${p.id}" ${!s.ready?'disabled':''}`)}</div></div>${clips.length?`<div class="case-strip">${clips.slice(0,3).map(c=>`<figure>${casePoster(c)}<figcaption>${esc(c.title)}</figcaption></figure>`).join('')}</div>`:''}<p>${s.done}/${s.total}条已完成轻量概览 · 单条详细反推 ${clips.filter(c=>c.analysis).length}条</p>${p.overview&&!s.ready?'<p class="missing">资料已变化，以下为上次总览；请更新整体案例后导出。</p>':''}${s.pending?`<p class="muted">还有${s.pending}条未纳入有效分析，汇报中会明确标注，不冒充全部分析完成。</p>`:''}${p.caseError?`<p class="missing">${esc(p.caseError)}</p>`:''}${p.overview?Object.entries(RC.LABELS).map(([key,label])=>`<details ${key==='theme'||key==='visual'?'open':''}><summary>${label}</summary><p class="preview-copy">${esc(p.overview[key])}</p></details>`).join(''):'<p class="muted">添加视频后，生成一份有画面、有依据的项目总结，不需要先逐条反推脚本。</p>'}</section>`+
     `<section><h2>项目里的视频 · ${clips.length}</h2><p class="muted">按上传顺序展示，不代表发布顺序。“深入反推”只打开这一条，由你决定是否启动AI。</p><div class="case-grid">${clips.map(c=>`<article class="card">${casePoster(c)}<h3>${esc(c.title)}</h3><small>原视频 ${RC.range(c)} · ${c.analysis?'已深入反推':RC.clipReady(c)?'轻量概览已保存':'等待概览'}</small>${c.caseSummary?`<p>${esc(c.caseSummary.summary)}</p><p class="muted">${esc(c.caseSummary.visual)}</p>`:''}${c.caseError?`<p class="missing">${esc(c.caseError)}</p>`:''}<div class="actions">${btn(c.analysis?'查看单条反推':'深入反推这条','reverse-open',`data-id="${c.id}"`)}${RC.frames(c).length!==3?btn('重试封面','reverse-case-frames',`data-id="${c.id}"`):''}${btn('移出项目','reverse-case-remove',`data-id="${c.id}"`)}</div></article>`).join('')}</div>${removed.length?`<details class="panel"><summary>已移出 ${removed.length}条（可恢复）</summary>${removed.map(c=>`<p>${esc(c.title)} ${btn('恢复','reverse-case-restore',`data-id="${c.id}"`)}</p>`).join('')}</details>`:''}</section>`;
 }
 async function reverseCaseFrames(c){
+  if(c.video?.preparationId)throw Error('原片已保存，请先继续处理反推副本，再提取封面。');
   const result=await api('frames',{localId:c.video.localId,count:3,start:c.segment.start,end:c.segment.end});
   const frames=await pollJob(result.jobId);
   if(!Array.isArray(frames)||frames.length!==3||frames.some(f=>!C.assetOK(f,'image')))throw Error('封面提取不完整，请重试');
@@ -33,10 +35,16 @@ async function reverseCaseUpload(e){
         if(!clips.length){
           if(reverseCaseChildren(p).length>=RC.MAX_CLIPS)throw Error('此项目已达到60条，请另建项目');
           if(!/\.(mp4|mov|webm|m4v)$/i.test(file.name))throw Error('请选择MP4、MOV或WebM视频');
-          const video=await api('upload',file);video.name=file.name;clips=RC.makeClips(p,video,key);
-          if(reverseCaseChildren(p).length+clips.length>RC.MAX_CLIPS)throw Error('分段后超过60条，请将长录像分批放入不同项目');
-          db.reverse.push(...clips);save();
-          job.ownerIds.push(...clips.map(c=>c.id));
+          const video=await uploadReverseVideo(file,original=>{
+            clips=RC.makeClips(p,original,key);
+            if(reverseCaseChildren(p).length+clips.length>RC.MAX_CLIPS)throw Error('分段后超过60条，请将长录像分批放入不同项目');
+            db.reverse.push(...clips);save();job.ownerIds.push(...clips.map(c=>c.id));
+          });
+          for(const c of clips)c.video={...video};save();
+        }else if(clips[0].video?.preparationId){
+          const originalService=clips[0].video.originalService;
+          const video=await waitVideoPreparation(await api('upload-retry',{uploadId:clips[0].video.preparationId}));
+          for(const c of clips)c.video={...video,originalService};save();
         }
         for(const c of clips){if(stop)break;if(RC.frames(c).length===3)continue;try{await reverseCaseFrames(c);}catch(error){c.caseError=error.message;save();}}
       }catch(error){p.uploadFailures.push(file.name+'：'+error.message);save();}

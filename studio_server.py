@@ -19,6 +19,8 @@ import secrets
 import shutil
 import socket
 import subprocess
+import sys
+import studio_upload as uploads
 import tempfile
 import threading
 import time
@@ -755,7 +757,9 @@ class Handler(BaseHTTPRequestHandler):
                 routes=model_routes()
                 if routes['director']['provider']=='ark':routes['director']['model']=routes['director']['model'] or os.environ.get('ARK_TEXT_MODEL','')
                 ark_key=bool(os.environ.get('ARK_API_KEY'));deepseek_key=bool(os.environ.get('DEEPSEEK_API_KEY'))
-                return self.send_json({'ok':True,'keyConfigured':ark_key or deepseek_key,'textProvider':text_provider(),'arkKeyConfigured':ark_key,'deepseekKeyConfigured':deepseek_key,'routes':routes,'models':{'text':routes['director']['model'],'image':routes['image']['model'],'video':routes['video']['model']},'speechConfigured':bool(os.environ.get('SPEECH_API_KEY') or os.environ.get('SPEECH_APP_ID') and os.environ.get('SPEECH_ACCESS_TOKEN')),'ffmpeg':bool(shutil.which('ffmpeg') and shutil.which('ffprobe')),'pdfText':bool(document_binary('pdftotext')),'ocr':bool(document_binary('pdftoppm') and document_binary('tesseract'))})
+                return self.send_json({'ok':True,'uploadLimits':uploads.limits(self),'keyConfigured':ark_key or deepseek_key,'textProvider':text_provider(),'arkKeyConfigured':ark_key,'deepseekKeyConfigured':deepseek_key,'routes':routes,'models':{'text':routes['director']['model'],'image':routes['image']['model'],'video':routes['video']['model']},'speechConfigured':bool(os.environ.get('SPEECH_API_KEY') or os.environ.get('SPEECH_APP_ID') and os.environ.get('SPEECH_ACCESS_TOKEN')),'ffmpeg':bool(shutil.which('ffmpeg') and shutil.which('ffprobe')),'pdfText':bool(document_binary('pdftotext')),'ocr':bool(document_binary('pdftoppm') and document_binary('tesseract'))})
+            if path.startswith('/api/upload-status/'):
+                return self.send_json(uploads.status(sys.modules[__name__],path.split('/')[-1]))
             if path=='/api/pinterest/status':return self.send_json(pinterest_status())
             if path=='/api/pinterest/connect':
                 app_id=os.environ.get('PINTEREST_APP_ID','').strip();secret=os.environ.get('PINTEREST_APP_SECRET','').strip()
@@ -799,7 +803,8 @@ class Handler(BaseHTTPRequestHandler):
             if path.startswith('/media/'): target=media_path(path[7:])
             else:
                 name='index.html' if path=='/' else path.lstrip('/')
-                if name not in {'index.html','privacy.html','studio.js','studio-security.js','studio.css','studio-core.js','studio-reverse.js','studio-reverse-case.js','studio-reverse-case-ui.js','studio-reverse-case.css','studio-aesthetic.js','studio-capture.js','studio-aesthetic-ui.js','studio-folders.js','studio-folders-ui.js','studio-aesthetic.css','studio-radar.js','studio-radar-ui.js','studio-radar.css','studio-profile.js','studio-inspiration.js','studio-fragments.js','studio-fragments-ui.js','studio-ppt.js','studio-cloud.js','studio-workspace-cloud.js','studio-mobile-inbox.js','mobile.html','mobile.css','mobile.js','mobile-config.js','mobile.webmanifest','mobile-sw.js','mobile-icon.svg','vendor/presentation.js','lance_qrcode_public.png','lance_qrcode.png','lance_intro.mp4','api-guide.html','tutorial.html','deliverables/Lance专场整体汇报模板_v1.pptx','deliverables/Lance单条剧本汇报模板_v1.pptx'}:
+                creative_file = name in {'studio-creative.js','studio-creative-ui.js','studio-creative.css','studio-upload.js'}
+                if not creative_file and name not in {'index.html','privacy.html','studio.js','studio-security.js','studio.css','studio-core.js','studio-reverse.js','studio-reverse-case.js','studio-reverse-case-ui.js','studio-reverse-case.css','studio-aesthetic.js','studio-capture.js','studio-aesthetic-ui.js','studio-folders.js','studio-folders-ui.js','studio-aesthetic.css','studio-radar.js','studio-radar-ui.js','studio-radar.css','studio-profile.js','studio-inspiration.js','studio-fragments.js','studio-fragments-ui.js','studio-ppt.js','studio-cloud.js','studio-workspace-cloud.js','studio-mobile-inbox.js','mobile.html','mobile.css','mobile.js','mobile-config.js','mobile.webmanifest','mobile-sw.js','mobile-icon.svg','vendor/presentation.js','lance_qrcode_public.png','lance_qrcode.png','lance_intro.mp4','api-guide.html','tutorial.html','deliverables/Lance专场整体汇报模板_v1.pptx','deliverables/Lance单条剧本汇报模板_v1.pptx'}:
                     return self.send_json({'error':'文件不存在'},404)
                 target=ROOT/name
             if not target.is_file(): return self.send_json({'error':'文件不存在'},404)
@@ -828,14 +833,27 @@ class Handler(BaseHTTPRequestHandler):
         if not self.allowed():return self.send_json({'error':'来源不被允许'},403)
         try:
             length=int(self.headers.get('Content-Length',0))
-            if not 0<length<=MAX_UPLOAD:return self.send_json({'error':'上传为空或超过250MB'},413)
+            limit=uploads.limits(self)['reverseVideoBytes'] if self.path=='/api/upload-reverse' else MAX_UPLOAD
+            if not 0<length<=limit:return self.send_json({'error':f'文件为空或超过本入口上限 {limit//1024//1024} MiB；请使用本地大视频反推入口。','code':'UPLOAD_TOO_LARGE','limitBytes':limit},413)
             MEDIA.mkdir(parents=True,exist_ok=True)
+            if self.path=='/api/upload-reverse':
+                name=urllib.parse.unquote(self.headers.get('X-File-Name',''))
+                ext=Path(name).suffix.lower()
+                if ext not in uploads.VIDEO_EXTENSIONS:raise uploads.UploadError('请选择MP4、MOV或WebM视频','INVALID_VIDEO')
+                if not uploads.RECEIVERS.acquire(blocking=False):raise uploads.UploadError('已有两个文件正在接收，请稍后再上传','UPLOAD_BUSY',429)
+                target=MEDIA/(uuid.uuid4().hex+ext)
+                try:
+                    self.connection.settimeout(90)
+                    uploads.receive(self.rfile,length,target)
+                finally:
+                    uploads.RECEIVERS.release()
+                return self.send_json(uploads.accept_reverse(sys.modules[__name__],target,name),202)
             if self.path=='/api/upload':
                 name=urllib.parse.unquote(self.headers.get('X-File-Name',''))
                 ext=Path(name).suffix.lower()
                 if ext not in {'.mp4','.mov','.webm','.jpg','.jpeg','.png','.webp','.pdf','.mp3','.wav','.m4a','.ogg','.docx','.txt','.md'}:raise ValueError('支持图片、PDF/DOCX/TXT/MD、MP4/MOV/WebM视频和音频')
                 target=MEDIA/(uuid.uuid4().hex+ext)
-                target.write_bytes(self.rfile.read(length))
+                uploads.receive(self.rfile,length,target)
                 # MediaRecorder's streaming WebM often has no duration header.
                 # Normalize only an audio container with missing duration; retain its original.
                 if ext in {'.webm','.ogg','.m4a','.wav','.mp3'}:
@@ -850,6 +868,7 @@ class Handler(BaseHTTPRequestHandler):
             if length>20*1024*1024:raise ValueError('生成请求超过20MB')
             body=json.loads(self.rfile.read(length))
             if not isinstance(body,dict):raise ValueError('请求格式错误')
+            if self.path=='/api/upload-retry':return self.send_json(uploads.start(sys.modules[__name__],body.get('uploadId')))
             if self.path in PAID_PATHS and not paid_request_allowed(self):
                 return self.send_json({'error':'本小时生成请求较多，已暂停新的付费任务；稍后再试。'},429)
             if self.path=='/api/transcribe':
@@ -933,6 +952,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send_json(describe(media_path(body['localId']),body.get('source','upload')))
             self.send_json({'error':'未知接口'},404)
         except (BrokenPipeError,ConnectionResetError):pass
+        except uploads.UploadError as error:self.send_json({'error':str(error),'code':error.code},error.status)
+        except socket.timeout:self.send_json({'error':'上传连接中断或长时间没有数据，请重新选择文件。','code':'UPLOAD_INTERRUPTED'},408)
         except Exception as error:self.send_json({'error':safe_error(error)},400)
 
     def log_message(self,fmt,*args):

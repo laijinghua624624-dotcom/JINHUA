@@ -8,6 +8,7 @@
 !studio*.css
 !studio_server.py
 !studio_pdf.py
+!studio_upload.py
 !requirements.txt
 !vendor/
 !vendor/presentation.js

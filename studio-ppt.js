@@ -78,6 +78,7 @@
     }
     const full=kind==='project'?C.sessionStatus(item,topics):C.quickStatus(item);
     if(mode==='full')return full;
+    if(item.creative){const f=kind==='project'?item.fields:item.quick.fields,missing=[];if(!C.text(f.outline))missing.push('核心创意');if(!C.text(f.meaning))missing.push('推荐理由');return {ready:!missing.length,missing,draft:!item.creativeReport?.directionApproved||!item.creativeReport?.visualApproved,deliveryMissing:[]};}
     return {...C.directionStatus(item,kind,topics),draft:!full.ready,deliveryMissing:full.missing};
   }
   function planDeck(source,kind,topics=[],mode){
@@ -90,15 +91,15 @@
     const list=kind==='project'?item.topicIds.map(id=>all.find(t=>t.id===id)).filter(Boolean):[mode==='execution'&&item.quick.approved?approvedTopic(item):item];
     const f=kind==='project'?item.fields:list[0].quick.fields,slides=[];
     const fullStatus=kind==='project'?C.sessionStatus(item,all):C.quickStatus(list[0]);
-    const draft=mode==='decision'&&!fullStatus.ready;
+    const draft=mode==='decision'&&(item.creative?status.draft:!fullStatus.ready);
     const textPage=(title,body,subtitle='')=>splitText(body).forEach((text,i)=>slides.push({type:'text',title:title+(i?'（续）':''),body:text,subtitle}));
     const overview=(title,sections)=>{const rows=sections.filter(s=>C.text(s.body));if(rows.length)slides.push({type:'summary',title,sections:rows.map(s=>({...s,display:excerpt(s.body,88)}))});};
     const coverOf=t=>{const c=C.ensureCover(t);return {topic:t.title,option:c.options.find(o=>o.id===c.selectedId),ratio:c.ratio,recommendation:c.recommendation};};
     const coverReferences=list.flatMap(t=>{const c=C.ensureCover(t);return c.references.map(slot=>({topic:t.title,asset:C.selected(slot),note:slot.referenceNote||'',advice:c.referenceAdvice})).filter(entry=>C.assetOK(entry.asset,'image'));});
     const coverReferenceAdvice=list.map(t=>({topic:t.title,body:C.ensureCover(t).referenceAdvice})).filter(x=>C.text(x.body));
-    const recommendation=r.recommendation||f.outline;
+    const recommendation=item.creative?f.outline:r.recommendation||f.outline;
     slides.push({type:'cover',title:item.title,subtitle:MODES[mode],body:excerpt(recommendation,110)});
-    overview('本次主张',[{label:'主推方向',body:recommendation},{label:'推荐依据',body:r.reason||f.meaning},{label:'需要决定',body:r.decisions||'待明确本轮需要确认的方向、资源与时间'}]);
+    overview('本次主张',[{label:'主推方向',body:recommendation},{label:'推荐依据',body:item.creative?f.meaning:r.reason||f.meaning},{label:'需要决定',body:r.decisions||'待明确本轮需要确认的方向、资源与时间'}]);
     overview('需求与待确认事项',[{label:'已确认事实',body:r.confirmed||'尚未填写，请在汇报要点中核实人物、日期与业务信息'},{label:'需求记录',body:item.idea||'需求待补充'},{label:'待确认',body:r.pending||'预算、场地和拍摄日尚未在汇报要点中确认'}]);
     if(C.text(r.alternatives))overview('方向取舍',[{label:'主推',body:recommendation},{label:'备选与取舍',body:r.alternatives}]);
     overview('创意概念与寓意',[{label:'创意大纲',body:f.outline},{label:'创意描述',body:f.description},{label:'创意寓意',body:f.meaning}]);
@@ -110,19 +111,20 @@
     const wardrobeBody=kind==='project'?item.wardrobeSuggestion:list[0]?.wardrobeSuggestion;
     overview('服装搭配建议',[{label:'主推服装',body:wardrobeBody||'待结合初瑞雪现有衣橱、人物气质与本次创意补充'}]);
     overview('影像与摄影方向',[{label:'影像氛围',body:f.atmosphere||'待补充影像氛围'},{label:'摄影调性',body:f.camera||'待补充摄影方向'}]);
-    const mainReference=list.flatMap(t=>t.quick.images||[]).find(slot=>C.assetOK(C.selected(slot),'image'));
+    const mainReference=item.creativeReport?.visual?{versions:[item.creativeReport.visual],selectedId:item.creativeReport.visual.id,referenceNote:item.creativeReport.visualApproved?'已确认的关键视觉':'讨论中的关键视觉，尚未确认'}:list.flatMap(t=>t.quick.images||[]).find(slot=>C.assetOK(C.selected(slot),'image'));
     if(mainReference)slides.push({type:'image',title:'主视觉参考',asset:C.selected(mainReference),caption:mainReference.referenceNote||mainReference.label||'借鉴要点待补充'});
+    for(const ref of item.creativeReport?.references||[]){const caption=[ref.role,ref.note,ref.link].filter(Boolean).join(' · ');if(ref.asset)slides.push({type:'image',title:'参考 · '+ref.title,asset:ref.asset,caption});else overview('参考 · '+ref.title,[{label:ref.role||'借鉴用途',body:ref.note||'借鉴重点待确认'},{label:'来源（暂无可嵌入图片）',body:ref.link||'本机反推资料'}]);}
     if(coverReferences.length)slides.push({type:'cover-reference',title:'过往封面参考（建议）',entries:coverReferences.slice(0,3),advice:coverReferenceAdvice.map(x=>(kind==='project'?x.topic+'：':'')+x.body).join('\n')||coverReferences.map(x=>x.note).filter(C.text).join('\n')||'仅借鉴人物、文案、构图、色彩或情绪表达，不照搬具体内容。'});
-    if(kind==='project'){
+    if(kind==='project'&&(!item.creative||mode!=='decision')){
       for(const [i,group]of chunks(list,3).entries())slides.push({type:'covers',title:'专场首选封面'+(list.length>3?' '+(i+1):''),entries:group.map(coverOf),preferred:true});
-    }else{
+    }else if(kind!=='project'&&(!item.creative||mode!=='decision')){
       const t=list[0],c=C.ensureCover(t);
       slides.push({type:'covers',title:'A/B/C封面比较',entries:c.options.map(o=>({topic:t.title,option:o,ratio:c.ratio,selected:o.id===c.selectedId})),preferred:false});
       overview('首选封面与选择依据',[{label:'首选方案',body:coverOf(t).option.headline||'封面主标题待补充'},{label:'推荐理由',body:c.recommendation||'待补充推荐理由'}]);
     }
     overview('制作安排与资源边界',[{label:'拍摄与制作',body:r.production||'拍摄日、人员、场地、设备和预算待确认'},{label:'限制与假设',body:r.pending||'尚未填写执行限制'}]);
-    overview('本次需要拍板',[{label:'决策事项',body:r.decisions||'主推方向、人物表达、场景规模与拍摄安排待确认'},{label:'后续交付',body:mode==='execution'?'按已确认方向执行，逐镜审查表演、声音、剪辑和连续性':'方向确认后补齐媒体参考，并进入25镜深化与AI成片参考'}]);
-    if(draft)overview('素材待办',[{label:'当前状态',body:'方向讨论稿。完整快速汇报的素材尚未齐备。'},{label:'缺项摘要',body:fullStatus.missing.join('、')}]);
+    overview('本次需要拍板',[{label:'决策事项',body:r.decisions||'主推方向、人物表达、场景规模与拍摄安排待确认'},{label:'后续交付',body:mode==='execution'?'按已确认方向执行，逐镜审查表演、声音、剪辑和连续性':item.creative?'根据本轮反馈定稿；分镜、封面和视频按实际交付需求制作':'方向确认后补齐媒体参考，并进入25镜深化与AI成片参考'}]);
+    if(draft)overview(item.creative?'待确认事项':'素材待办',item.creative?[{label:'方向',body:item.creativeReport?.directionApproved?'已确认':'当前文字尚未确认'},{label:'关键视觉',body:item.creativeReport?.visualApproved?'已确认':'尚未确认；本稿供讨论'}]:[{label:'当前状态',body:'方向讨论稿。完整快速汇报的素材尚未齐备。'},{label:'缺项摘要',body:fullStatus.missing.join('、')}]);
     const overviewCount=slides.length;
     if(mode==='decision')return {mode,label:MODES[mode],draft,status,slides,overviewCount};
     slides.push({type:'divider',title:'完整策划附件',body:kind==='project'?'整体方案及每条故事的脚本、封面与媒体参考':'完整故事、封面推荐、视觉与三段8秒AI视频'});

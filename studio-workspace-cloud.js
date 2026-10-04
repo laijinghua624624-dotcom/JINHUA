@@ -9,7 +9,7 @@
   function mediaGroups(...roots){
     const groups=new Map();
     for(const root of roots)visit(root,value=>{
-      if(typeof value.localId!=='string'||!value.localId||!MEDIA_KINDS.has(value.kind))return;
+      if(value.localOnly||typeof value.localId!=='string'||!value.localId||!MEDIA_KINDS.has(value.kind))return;
       if(!groups.has(value.localId))groups.set(value.localId,[]);groups.get(value.localId).push(value);
     });
     return groups;

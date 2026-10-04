@@ -19,7 +19,7 @@ RUN useradd --create-home --uid 10001 studio \
 WORKDIR /app
 COPY requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
-COPY index.html studio*.js studio*.css studio_server.py studio_pdf.py ./
+COPY index.html studio*.js studio*.css studio_server.py studio_pdf.py studio_upload.py ./
 COPY vendor/presentation.js ./vendor/presentation.js
 COPY api-guide.html tutorial.html privacy.html lance_qrcode_public.png lance_qrcode.png lance_intro.mp4 ./
 COPY mobile.html mobile.js mobile.css mobile-config.js mobile-icon.svg mobile-sw.js mobile.webmanifest ./

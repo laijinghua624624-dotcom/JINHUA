@@ -80,9 +80,10 @@
     return {ready:missing.length===0,missing,items,images:items.reduce((s,t)=>s+quickStatus(t).images,0),videos:items.reduce((s,t)=>s+quickStatus(t).videos,0),covers:items.reduce((s,t)=>s+quickStatus(t).covers,0)};
   }
   function shotFingerprint(shots){return JSON.stringify(shots.map(s=>[s.id,s.visual,s.dialogue,s.camera,s.duration,s.image.selectedId,s.video.selectedId]));}
+  function canDeepen(t){return !!(t?.directionApproved||t?.quick?.approved);}
   function deepStatus(t){
     const missing=DEEP.filter(([k])=>!text(t.deep.fields[k])).map(([,label])=>label);
-    if(!t.quick.approved)missing.unshift('先确认汇报方向');
+    if(!canDeepen(t))missing.unshift('先确认文字方向');
     if(t.deep.shots.length!==25)missing.push(`分镜 ${t.deep.shots.length}/25`);
     const images=t.deep.shots.filter(s=>assetOK(selected(s.image),'image')&&selected(s.image).source==='ai').length;
     const videos=t.deep.shots.filter(s=>assetOK(selected(s.video),'video')&&selected(s.video).source==='ai'&&selected(s.video).duration>=s.duration-0.15).length;
@@ -120,5 +121,5 @@
   function validateShots(raw){if(!Array.isArray(raw.shots)||raw.shots.length!==25)throw Error('必须返回25个完整分镜，原分镜已保留');return raw.shots.map((s,i)=>{if(!text(s.visual)||!text(s.camera)||!Number.isInteger(s.duration)||s.duration<2||s.duration>12)throw Error(`第${i+1}镜画面、摄影或时长不完整（2–12秒）`);return {id:uid(),number:i+1,visual:s.visual,dialogue:s.dialogue||'无台词',camera:s.camera,duration:s.duration,image:slot(`第${i+1}镜`,s.imagePrompt||s.visual),video:slot(`第${i+1}镜视频`,s.videoPrompt||s.visual)};});}
   function snapshot(t,note){const data=clone(t);delete data.snapshots;t.snapshots.push({id:uid(),time:new Date().toISOString(),note,data});t.revision++;}
   function importLegacy(old){const t=topic(old.title);const current=old.versions?.find(v=>v.version===old.currentVersion)?.data||old;const val=k=>current[k]||old[k]||'';t.id='legacy-'+old.id;t.idea=old.hook||'';t.legacyId=old.id;t.legacy=clone(old);const mapping={outline:'creativeOutline',meaning:'creativeMeaning',description:'creativeDescription',dialogue:'narrationDescription',atmosphere:'visualAtmosphere',camera:'cinematographyStyle',script:'script'};for(const[k,v]of Object.entries(mapping))t.quick.fields[k]=val(v);return t;}
-  return {QUICK,SESSION,DEEP,PHASES,COST,uid,clone,text,assetOK,selected,slot,cover,ensureCover,topic,project,sessionTarget,setSessionTarget,projectOverviewStatus,directionStatus,quickStatus,sessionStatus,deepStatus,budgetPlan,monthlyCostRange,quickGenerationCost,deepGenerationCost,shotFingerprint,putVersion,parseJSON,validateFields,validateQuick,validateShots,snapshot,importLegacy};
+  return {QUICK,SESSION,DEEP,PHASES,COST,uid,clone,text,assetOK,selected,slot,cover,ensureCover,topic,project,sessionTarget,setSessionTarget,projectOverviewStatus,directionStatus,canDeepen,quickStatus,sessionStatus,deepStatus,budgetPlan,monthlyCostRange,quickGenerationCost,deepGenerationCost,shotFingerprint,putVersion,parseJSON,validateFields,validateQuick,validateShots,snapshot,importLegacy};
 });

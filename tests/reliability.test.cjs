@@ -94,6 +94,36 @@ test('project landing includes standalone work and report export is not gated by
   const html=h.run('workflowSteps(testTopic,1)');assert.match(html,/data-step="4"\s+class=/);assert.match(html,/单条汇报/);
 });
 
+test('confirmed text unlocks deep workflow without any media or full-delivery approval',()=>{
+  const h=appHarness(),t=C.topic('文字即可深化');h.ctx.testTopic=t;
+  assert.equal(C.canDeepen(t),false);assert.equal(h.run('topicStep(testTopic)'),1);
+  assert.match(h.run('workflowSteps(testTopic,1)'),/data-step="3" disabled/);
+  t.directionApproved={time:'2026-10-05',fields:{outline:'方向',script:'故事'}};
+  const before=JSON.stringify(t);
+  assert.equal(C.canDeepen(t),true);assert.equal(h.run('topicStep(testTopic)'),3);
+  assert.match(h.run('workflowSteps(testTopic,2)'),/data-step="3"\s+class=/);
+  const dock=h.run('topicDock(testTopic,2)');
+  assert.match(dock,/data-action="workflow-go"[^>]*data-step="3"/);
+  assert.match(dock,/进入深入优化（素材可后补）/);assert.doesNotMatch(dock,/生成全部缺失素材/);
+  assert.match(h.run('topicStatusHTML(C.quickStatus(testTopic),2)'),/待完善项（不阻断进入）/);
+  assert.equal(C.quickStatus(t).ready,false);assert.equal(C.deepStatus(t).ready,false);
+  assert.equal(C.deepStatus(t).missing.some(x=>x.includes('先确认')),false);
+  assert.equal(JSON.stringify(t),before);assert.equal(t.quick.approved,null);
+});
+
+test('legacy full approval still unlocks deep work and partial video errors do not lock it',()=>{
+  const h=appHarness(),t=C.topic('旧项目');h.ctx.testTopic=t;
+  t.quick.approved={time:'old',fields:{script:'旧稿'}};
+  assert.equal(h.run('topicStep(testTopic)'),3);
+  t.quick.approved=null;t.directionApproved={fields:{script:'已确认稿'}};
+  C.putVersion(t.quick.videos.opening,{localId:'one.mp4',kind:'video',verified:true,source:'ai',duration:8});
+  t.quick.videos.middle.error='may contain real person';t.quick.videos.ending.error='network error';
+  const before=JSON.stringify(t);
+  assert.equal(C.quickStatus(t).videos,1);assert.equal(C.quickStatus(t).ready,false);
+  assert.match(h.run('workflowSteps(testTopic,2)'),/data-step="3"\s+class=/);
+  assert.equal(JSON.stringify(t),before);
+});
+
 test('an in-flight link import stays in its original workspace and deduplicates retries',async()=>{
   const libs={xinxuan:[{id:'same',name:'链接收藏',link:'https://example.test/one',notes:'工作笔记',files:[],tags:[]}],personal:[{id:'same',name:'个人收藏',link:'https://example.test/two',notes:'不要动',files:[],tags:[]}]};
   let finish,calls=0;const ctx={scope:'xinxuan',URL,Date,console,route:{view:'home'},document:{activeElement:null},$:()=>null,render(){},notify(){},aestheticStoreKey:x=>x,
