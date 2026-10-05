@@ -546,6 +546,47 @@ def extract_frames(name,count=12,start=None,end=None):
         result.append(item)
     return result
 
+def reverse_evidence_times(start,end,cuts):
+    """Keep temporal coverage plus scene changes, with a bounded vision cost."""
+    anchors=[start+(end-start)*(i+.5)/12 for i in range(12)]
+    candidates=sorted(set(t for t in cuts if math.isfinite(t) and start<=t<end))
+    selected=[]
+    # Take changes across the entire range, not just its opening.
+    for i in range(min(24,len(candidates))):
+        t=candidates[min(len(candidates)-1,int((i+.5)*len(candidates)/min(24,len(candidates))))]
+        if all(abs(t-a)>.35 for a in anchors+selected):selected.append(t)
+    return sorted(anchors+selected)
+
+def extract_reverse_evidence(name,start=None,end=None,focus=None):
+    path=media_path(name);meta=describe(path)
+    if meta['kind']!='video':raise ValueError('请选择原视频')
+    start=0.0 if start is None else float(start)
+    end=float(meta['duration']) if end is None else float(end)
+    if not all(math.isfinite(v) for v in (start,end)) or not 0<=start<end<=float(meta['duration'])+.01:
+        raise ValueError('视频时间范围无效')
+    end=min(end,float(meta['duration']));notice='场景变化与均匀时间覆盖结合；仍是采样，不是完整逐镜识别。'
+    if focus is not None:
+        focus=float(focus)
+        if not math.isfinite(focus) or not start<=focus<end:raise ValueError('补看时间须在原片分析范围内')
+        lo=max(start,focus-3);hi=min(end,focus+3)
+        times=[lo+(hi-lo)*(i+.5)/6 for i in range(6)]
+        notice='补看所选时间前后约3秒，共6帧；静帧仍不能证明完整运动。'
+    else:
+        cuts=[]
+        try:
+            scan=subprocess.run(['ffmpeg','-hide_banner','-nostats','-ss',str(start),'-i',str(path),'-t',str(end-start),'-an','-vf',"fps=2,scale=160:-2,select='gt(scene,0.25)',showinfo",'-f','null','-'],capture_output=True,timeout=180,check=True)
+            cuts=[start+float(v) for v in re.findall(r'pts_time:([0-9.]+)',scan.stderr.decode(errors='replace'))]
+            if not cuts:notice='未检测到明显场景变化，已保留12个时间覆盖点；可按时间补看。'
+        except (subprocess.SubprocessError,OSError):
+            notice='场景检测未完成，已回退12个时间覆盖点；可按时间补看。'
+        times=reverse_evidence_times(start,end,cuts)
+    frames=[]
+    for t in times:
+        target=MEDIA/(uuid.uuid4().hex+'.jpg')
+        subprocess.run(['ffmpeg','-v','error','-ss',str(t),'-i',str(path),'-frames:v','1','-vf','scale=960:-2','-y',str(target)],check=True,capture_output=True,timeout=45)
+        item=describe(target,'video-frame');item.update(timestamp=round(t,2),sourceVideo=name);frames.append(item)
+    return {'frames':frames,'notice':notice,'method':'focus' if focus is not None else 'scene-and-coverage','range':{'start':start,'end':end}}
+
 def assemble(clips,bgm=None):
     if len(clips)!=25: raise ValueError('完整成片必须由25个分镜视频组成')
     dimensions={'4:3':(960,720),'9:16':(720,1280),'16:9':(1280,720)}
@@ -803,7 +844,7 @@ class Handler(BaseHTTPRequestHandler):
             if path.startswith('/media/'): target=media_path(path[7:])
             else:
                 name='index.html' if path=='/' else path.lstrip('/')
-                creative_file = name in {'studio-creative.js','studio-creative-ui.js','studio-creative.css','studio-upload.js'}
+                creative_file = name in {'studio-creative.js','studio-creative-ui.js','studio-creative.css','studio-upload.js','studio-director.js','studio-director-ui.js'}
                 if not creative_file and name not in {'index.html','privacy.html','studio.js','studio-security.js','studio.css','studio-core.js','studio-reverse.js','studio-reverse-case.js','studio-reverse-case-ui.js','studio-reverse-case.css','studio-aesthetic.js','studio-capture.js','studio-aesthetic-ui.js','studio-folders.js','studio-folders-ui.js','studio-aesthetic.css','studio-radar.js','studio-radar-ui.js','studio-radar.css','studio-profile.js','studio-inspiration.js','studio-fragments.js','studio-fragments-ui.js','studio-ppt.js','studio-cloud.js','studio-workspace-cloud.js','studio-mobile-inbox.js','mobile.html','mobile.css','mobile.js','mobile-config.js','mobile.webmanifest','mobile-sw.js','mobile-icon.svg','vendor/presentation.js','lance_qrcode_public.png','lance_qrcode.png','lance_intro.mp4','api-guide.html','tutorial.html','deliverables/Lance专场整体汇报模板_v1.pptx','deliverables/Lance单条剧本汇报模板_v1.pptx'}:
                     return self.send_json({'error':'文件不存在'},404)
                 target=ROOT/name
@@ -947,6 +988,7 @@ class Handler(BaseHTTPRequestHandler):
                     return self.send_json(response)
                 return self.send_json({'status':status,'error':result.get('error',{}).get('message','') if result.get('error') else ''})
             if self.path=='/api/frames':return self.send_json(run_job(extract_frames,body['localId'],body.get('count',12),body.get('start'),body.get('end')))
+            if self.path=='/api/reverse/evidence':return self.send_json(run_job(extract_reverse_evidence,body['localId'],body.get('start'),body.get('end'),body.get('focus')))
             if self.path=='/api/assemble':return self.send_json(run_job(assemble,body['clips'],body.get('bgm')))
             if self.path=='/api/verify':
                 return self.send_json(describe(media_path(body['localId']),body.get('source','upload')))

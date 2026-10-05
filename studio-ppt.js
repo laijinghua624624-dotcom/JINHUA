@@ -1,7 +1,7 @@
-(function(root,factory){if(typeof module==='object')module.exports=factory(require('./studio-core.js'),require('./studio-reverse-case.js'));else root.StudioPpt=factory(root.StudioCore,root.StudioReverseCase);})(globalThis,function(C,RC){
+(function(root,factory){if(typeof module==='object')module.exports=factory(require('./studio-core.js'),require('./studio-reverse-case.js'),require('./studio-director.js'));else root.StudioPpt=factory(root.StudioCore,root.StudioReverseCase,root.StudioDirector);})(globalThis,function(C,RC,DR){
   'use strict';
   const THEME={bg:'14121A',ink:'F6F2E9',muted:'B7AE9F',accent:'C4A96B'};
-  const MODES={decision:'老板决策版',full:'完整策划版',execution:'单条执行版',reverse:'视频反推报告',case:'历史项目案例','case-pdf':'历史项目案例PDF'};
+  const MODES={decision:'老板决策版',full:'完整策划版',execution:'单条执行版',reverse:'视频反推报告',director:'导演PPM_含逐页讲稿',case:'历史项目案例','case-pdf':'历史项目案例PDF'};
   const REPORT_FIELDS=[['recommendation','一句话主推方向'],['reason','推荐理由／为什么适合这个人物与项目'],['confirmed','已确认事实（只填写已核实的信息）'],['pending','待确认信息与假设'],['alternatives','备选方向及取舍（可留空）'],['production','拍摄安排、预算与资源边界'],['decisions','本次需要拍板的事项']];
   const ensureReport=item=>{if(!item.report||typeof item.report!=='object')item.report={};for(const[k]of REPORT_FIELDS)if(typeof item.report[k]!=='string')item.report[k]='';return item.report;};
   const modeFor=(kind,mode)=>mode||(kind==='deep'?'execution':'full');
@@ -67,6 +67,7 @@
     return {mode:'case',label:MODES.case,draft:false,status,slides,overviewCount:slides.length};
   }
   function reportStatus(item,kind,topics=[],mode){
+    if(kind==='director'||mode==='director')return {ready:DR.reportReady(item),missing:DR.reportReady(item)?[]:['请确认最新故事理解并生成导演提案']};
     if(kind==='reverse-case'||mode==='case'){const s=RC.status(item,item.clips||[]);return {...s,missing:s.ready?[]:['请先生成／更新整体项目案例']};}
     if(kind==='reverse'||mode==='reverse')return reverseStatus(item);
     mode=modeFor(kind,mode);if(!MODES[mode])throw Error('未知PPT版本');
@@ -82,6 +83,11 @@
     return {...C.directionStatus(item,kind,topics),draft:!full.ready,deliveryMissing:full.missing};
   }
   function planDeck(source,kind,topics=[],mode){
+    if(kind==='director'||mode==='director'){
+      const plan=DR.deck(source);
+      plan.slides=plan.slides.flatMap(p=>['director','text'].includes(p.type)?splitText(p.body,p.type==='director'?140:280).map((body,i)=>({...p,body,title:p.title+(i?'（续）':'')})):[p]);
+      return plan;
+    }
     if(kind==='reverse-case'||mode==='case')return planCaseDeck(source);
     if(kind==='reverse'||mode==='reverse')return planReverseDeck(source);
     mode=modeFor(kind,mode);
@@ -187,7 +193,13 @@
         const rowHeight=4.35/Math.max(p.sections.length,1);
         p.sections.forEach((v,i)=>{const y=2.46+i*rowHeight;txt(s,v.label,.7,y,2.1,.58,19,THEME.accent,true);txt(s,v.display,3,y,9.5,rowHeight-.15,21);});
         notes=p.sections.map(v=>v.label+'\n'+v.body).join('\n\n');
-      }else if(p.type==='text')txt(s,p.body,.7,2.48,11.9,4.32,22);
+      }else if(p.type==='director'){
+        const hasImage=C.assetOK(p.frame,'image');
+        txt(s,p.body,.7,2.48,hasImage?6.3:11.9,4.2,hasImage?19:22);
+        if(hasImage)await addImage(s,p.frame,{x:7.4,y:2.5,w:5.15,h:3.65});
+        txt(s,p.evidence,.7,6.78,11.9,.25,10,THEME.muted);
+        notes=p.notes+'\n'+p.subtitle+'\n'+p.evidence;
+      }else if(p.type==='text'){txt(s,p.body,.7,2.48,11.9,4.32,22);if(p.notes)notes=p.notes;}
       else if(p.type==='matrix'){
         s.addTable([['序号','片名','内容任务摘要'],...p.rows.map(r=>[r[0],excerpt(r[1],26),excerpt(r[2],58)])],{x:.7,y:2.45,w:11.9,h:4.25,colW:[.65,3.3,7.95],rowH:.6,fontFace:'Microsoft YaHei',fontSize:16,color:THEME.ink,fill:THEME.bg,border:{type:'solid',pt:.5,color:'514838'},margin:.055,bold:false,autoPage:false});
         notes=p.rows.map(r=>r.join('\n')).join('\n\n');
