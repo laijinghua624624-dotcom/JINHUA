@@ -26,7 +26,7 @@ function originUnit(){
 
 function deck(over){
   const base={title:'秋天的第一封信',audience:'老板',purpose:'单条',origin:originUnit(),chapters,
-    facts:{confirmed:['双十一前两周发布'],assumed:['老式居民楼可借用']},
+    facts:{confirmed:['双十一前两周发布'],assumed:['老式居民楼']},
     pages:[
       {slotId:'cover',title:'封面',section:'story',basis:'proposal',points:['用一扇朝东的窗，拍妈妈把没寄出的信读给女儿听'],notes:'一句话讲完这条片',evidence:''},
       {slotId:'summary',title:'一页摘要',section:'story',basis:'proposal',points:['用一扇朝东的窗，拍妈妈把没寄出的信读给女儿听','张力：最想说的话最难开口'],notes:'先让老板一分钟理解',evidence:''},
@@ -98,7 +98,7 @@ test('模型条目引用对不上原文就被丢弃，引用得到才保留',()=
 
 test('规则与模型结果合并去重，结论分必须改与建议改',()=>{
   const d=deck();
-  const audit=A.run(d,[{findings:[{page:'camera',level:'warn',quote:'写信：固定中景，东窗侧逆光',why:'这一页没有说清画面怎样支撑主张',fix:'补一句'}]}]);
+  const audit=A.run(d,{findings:[{page:'camera',level:'warn',quote:'写信：固定中景，东窗侧逆光',why:'这一页没有说清画面怎样支撑主张',fix:'补一句'}]});
   assert.equal(audit.verdict.level,'可汇报（有建议）');
   const merged=A.merge([...audit.rules,...audit.ai.findings],[]);
   assert.equal(new Set(merged.map(f=>f.why)).size,merged.length);
