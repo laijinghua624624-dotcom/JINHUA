@@ -180,7 +180,7 @@
     for(const [index,p]of plan.slides.entries()){
       const s=ppt.addSlide();s.background={color:THEME.bg};
       txt(s,'LANCE  内容策划',.6,.28,7,.25,10,THEME.accent);
-      txt(s,plan.draft?'方向讨论稿 · 素材待补齐':plan.label,9,.28,3.7,.25,10,THEME.muted);
+      txt(s,plan.draft?(kind==='director'?'待核对草稿 · 非确认版':'方向讨论稿 · 素材待补齐'):plan.label,9,.28,3.7,.25,10,THEME.muted);
       txt(s,String(index+1).padStart(2,'0'),12.1,7.07,.65,.22,10,THEME.muted);
       const title=excerpt(p.title,48),size=title.length>27?27:32;
       txt(s,title,.65,.86,12.05,1.12,size,THEME.ink,true);
@@ -251,6 +251,7 @@
     const ppt=await buildDeck(window.PptxGenJS,item,kind,topics,getData,plan.mode),blob=await ppt.write({outputType:'blob'});
     const id=C.uid();await putExport(id,blob);
     const record={id,title:item.title,kind,mode:plan.mode,draft:plan.draft,slideCount:plan.slides.length,sourceId:item.id,time:new Date().toISOString()};
+    if(kind==='director'&&item.directorPlan){record.title=item.directorPlan.mode==='adapt'?item.directorPlan.script.title:item.title;record.filename=record.title+'_'+plan.label+'.pptx';record.directorVariant=item.directorExportVariant||'full';}
     record.filename=filename(record);env.db.exports.push(record);env.save();env.downloadBlob(blob,record.filename);env.progress(plan.label+'已生成并存入“成果与备份”，可重复下载');
   }
   return {MODES,REPORT_FIELDS,ensureReport,reportStatus,reverseStatus,planDeck,planReverseDeck,approvedTopic,filename,buildDeck,splitText,exportReport,getExport,putExport};
