@@ -17,9 +17,9 @@ function good(){
     objections:[{question:'这不还是文艺片吗，跟我们专场有什么关系？',response:'片尾用同一封信的收件人指向专场主角，情绪落在具体的人身上'},
       {question:'一个房间一个演员，能撑起预热片吗？',response:'三段都用同一扇窗的光变化，用时间感替代场景量'}],
     fallback:'砍掉女儿角色，只留妈妈和窗，主张仍然成立（少一层关系，但保住“没寄出的信”）',
-    frames:[{name:'写信',venue:'房间书桌，靠窗一侧约2米',camera:'固定中景，略低于视线',light:'东窗侧逆光，9:00-10:00',people:'妈妈1人',props:['信纸','钢笔','旧台灯'],seconds:8,basis:['m4']},
-      {name:'读信',venue:'同一房间，窗边站立',camera:'近景，缓慢推近',light:'侧逆光转为正面柔光',people:'妈妈1人',props:['信纸'],seconds:8,basis:['m4']},
-      {name:'收信',venue:'窗边，窗外过曝',camera:'过肩特写，焦点在信纸',light:'正对窗，面部压暗',people:'妈妈1人',props:['信封','邮票'],seconds:8,basis:['m2']}],
+    frames:[{name:'写信',stage:'建立',venue:'房间书桌，靠窗一侧约2米',camera:'固定中景，略低于视线',light:'东窗侧逆光，9:00-10:00',people:'妈妈1人',props:['信纸','钢笔','旧台灯'],seconds:8,basis:['m4']},
+      {name:'读信',stage:'推进',venue:'同一房间，窗边站立',camera:'近景，缓慢推近',light:'侧逆光转为正面柔光',people:'妈妈1人',props:['信纸'],seconds:8,basis:['m4']},
+      {name:'收信',stage:'落点',venue:'窗边，窗外过曝',camera:'过肩特写，焦点在信纸',light:'正对窗，面部压暗',people:'妈妈1人',props:['信封','邮票'],seconds:8,basis:['m2']}],
     cost:{days:'1天',crew:'4人',budget:'低',rights:'演员肖像待签'},
     assumptionRisk:'若 4×6 米房间实际进深不足，第三人机位只能改手持，画面稳定性下降',
     notes:'换季节点，把“没来得及说的话”做成可拍动作'};
@@ -101,6 +101,43 @@ test('场地只有大概尺寸时写成假设并说明代价，而不是拒绝�
   assert.throws(()=>O.accept(O.create('另一条','单条'),noRisk),/必须在假设风险里写清代价/);
 });
 
+test('张力两侧必须是说法或需求，不能是场景描述',()=>{
+  const p=O.prompt(seeded());
+  assert.match(p,/两侧都必须是主张、需求或事实/);
+  assert.match(p,/不能有一侧是场地、画面或物件描述/);
+});
+
+test('缺资源限制时要求给档位假设，而不是四栏待确认',()=>{
+  const p=O.prompt(seeded());
+  assert.match(p,/必须给档位估算 \+ 一句话依据/);
+  assert.match(p,/四栏都写待确认视为不合格/);
+  const u=seeded();
+  assert.deepEqual(O.costGaps(u),['天数','人数','预算档','授权']);
+  u.cost={days:'1天（单场景）',crew:'4人',budget:'低（无外景）',rights:'已签'};
+  assert.deepEqual(O.costGaps(u),[]);
+});
+
+test('三个画面要覆盖建立／推进／落点，且不能全无人物',()=>{
+  const p=O.prompt(seeded());
+  assert.match(p,/建立（观众进入）／推进（关系或行动发生变化）／落点（情绪或主题落地）/);
+  assert.match(p,/至少一个画面要有人物动作/);
+  const u=seeded();
+  const dup=good();dup.frames[1].stage='建立';
+  assert.throws(()=>O.accept(u,dup),/阶段不能重复/);
+  const noPeople=good();noPeople.frames=noPeople.frames.map(f=>({...f,people:'无人物'}));
+  assert.throws(()=>O.accept(u,noPeople),/三个画面都没有人物/);
+  const badStage=good();badStage.frames[0].stage='开场';
+  assert.throws(()=>O.accept(u,badStage),/画面阶段只能是/);
+});
+
+test('旧单元缺阶段不判错，只提示补标',()=>{
+  const u=seeded();
+  const legacy=good();legacy.frames=legacy.frames.map(({stage,...rest})=>rest);
+  O.accept(u,legacy);
+  assert.equal(O.stageGaps(u),true);
+  assert.ok(!O.issues(u).some(x=>/阶段/.test(x)));
+});
+
 test('完整且有依据时判定为可汇报，并能映射到10页单条模板',()=>{
   const u=seeded();
   O.accept(u,good());
@@ -113,6 +150,7 @@ test('完整且有依据时判定为可汇报，并能映射到10页单条模板
   assert.deepEqual(blocks.map(b=>b.page),[1,2,3,4,5,6,7,8,9,10]);
   assert.equal(blocks[0].content.hook,u.proposition);
   assert.equal(blocks[4].content.关键画面.length,3);
+  assert.deepEqual(blocks[4].content.关键画面.map(f=>f.阶段),['建立','推进','落点']);
   assert.match(blocks[7].content.开场,/写信/);
 });
 

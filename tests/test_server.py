@@ -109,6 +109,46 @@ class ServerTests(unittest.TestCase):
         with patch.object(s,'public_url',side_effect=lambda value:value),patch.object(s,'read_public',return_value=(b'<svg/>','image/svg+xml','https://images.ctfassets.net/example.svg','utf-8')):
             with self.assertRaises(ValueError):s.radar_preview('https://images.ctfassets.net/example.svg')
 
+    def test_radar_feed_parses_public_rss_and_rejects_unknown_sources(self):
+        rss=('<?xml version="1.0"?><rss version="2.0"><channel>'
+             '<item><title><![CDATA[百事可乐穿娃衣]]></title>'
+             '<link>https://www.digitaling.com/projects/1.html</link>'
+             '<pubDate>Sat, 24 Oct 2026 10:46:00 +0800</pubDate>'
+             '<description><![CDATA[<p><img src="https://file.digitaling.com/a.png"></p>]]></description></item>'
+             '<item><title>没有封面的一条</title><link>https://www.digitaling.com/projects/2.html</link></item>'
+             '</channel></rss>')
+        with patch.object(s,'read_public',return_value=(rss.encode('utf-8'),'text/xml','https://www.digitaling.com/rss','utf-8')):
+            s._FEED_CACHE.clear()
+            result=s.radar_feed(['digitaling'],10)
+        self.assertEqual(len(result['items']),2)
+        first=result['items'][0]
+        self.assertEqual(first['title'],'百事可乐穿娃衣')
+        self.assertEqual(first['poster'],'https://file.digitaling.com/a.png')
+        self.assertEqual(first['sourceId'],'digitaling')
+        self.assertEqual(first['site'],'数英')
+        self.assertTrue(first['url'].startswith('https://'))
+        self.assertGreater(first['publishedTs'],0)
+        self.assertEqual(result['sources'][0]['ok'],True)
+        self.assertEqual(result['sources'][0]['count'],2)
+        with self.assertRaises(ValueError):s.radar_feed(['https://evil.example/rss'],10)
+
+    def test_radar_feed_reports_source_failure_without_breaking_others(self):
+        good=('<?xml version="1.0"?><rss version="2.0"><channel>'
+              '<item><title>Good</title><link>https://www.stashmedia.tv/a</link></item>'
+              '</channel></rss>')
+        def reader(url,limit):
+            if 'stashmedia' in url:raise OSError('boom')
+            return good.encode('utf-8'),'text/xml',url,'utf-8'
+        with patch.object(s,'read_public',side_effect=reader):
+            s._FEED_CACHE.clear()
+            result=s.radar_feed(['stash','digitaling'],10)
+        broken=[entry for entry in result['sources'] if entry['id']=='stash'][0]
+        healthy=[entry for entry in result['sources'] if entry['id']=='digitaling'][0]
+        self.assertEqual(broken['ok'],False)
+        self.assertTrue(broken['error'])
+        self.assertEqual(healthy['ok'],True)
+        self.assertEqual(len(result['items']),1)
+
     def test_reference_download_only_serves_public_raster_images(self):
         with patch.object(s,'read_public',return_value=(b'image','image/jpeg','https://cdn.example/cover.jpg','utf-8')):
             status,data=self.request('GET','/api/reference-download?url='+urllib.parse.quote('https://cdn.example/cover.jpg'))
@@ -116,5 +156,40 @@ class ServerTests(unittest.TestCase):
         with patch.object(s,'read_public',return_value=(b'<html>','text/html','https://example.com/','utf-8')):
             status,_=self.request('GET','/api/reference-download?url='+urllib.parse.quote('https://example.com/'))
         self.assertEqual(status,400)
+
+    def test_radar_rank_scores_ready_cases_and_skips_pending(self):
+        vectors={'A':[1.0,0.0],'B':[0.0,1.0],'Q':[1.0,0.0]}
+        ready={'A'}
+        def is_ready(space,text):return text in ready
+        def embed(space,text,*args):return vectors[text]
+        body={'scope':'xinxuan','query':'Q','items':[{'id':'a','text':'A'},{'id':'b','text':'B'}],'limit':0}
+        with patch.object(s,'route_model',return_value='mock-embed'),patch.object(s,'embedding_ready',side_effect=is_ready),patch.object(s,'cached_embedding',side_effect=embed):
+            result=s.radar_rank(body)
+        self.assertEqual(result['scores'],{'a':1.0})
+        self.assertEqual(result['pending'],1)
+        self.assertEqual(result['ready'],1)
+        self.assertEqual(result['total'],2)
+        with patch.object(s,'route_model',return_value='mock-embed'),patch.object(s,'embedding_ready',side_effect=is_ready),patch.object(s,'cached_embedding',side_effect=embed):
+            warmed=s.radar_rank({**body,'limit':8})
+        self.assertEqual(warmed['pending'],0)
+        self.assertEqual(warmed['embedded'],1)
+        self.assertEqual(warmed['scores']['b'],0.0)
+
+    def test_radar_rank_rejects_bad_input_without_calling_the_model(self):
+        for body in (
+            {'scope':'other','query':'Q','items':[{'id':'a','text':'A'}]},
+            {'scope':'xinxuan','query':'','items':[{'id':'a','text':'A'}]},
+            {'scope':'xinxuan','query':'Q','items':[]},
+            {'scope':'xinxuan','query':'Q','items':[{'id':'','text':'A'}]},
+        ):
+            with self.assertRaises(ValueError):s.radar_rank(body)
+
+    def test_embedding_cache_key_is_stable_and_reusable(self):
+        with patch.object(s,'route_model',return_value='mock-embed'):
+            first,_=s.embedding_cache_path('xinxuan','同一段文字')
+            second,_=s.embedding_cache_path('xinxuan','同一段文字')
+            other,_=s.embedding_cache_path('xinxuan','另一段文字')
+        self.assertEqual(first,second)
+        self.assertNotEqual(first,other)
 
 if __name__=='__main__':unittest.main()

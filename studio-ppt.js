@@ -79,8 +79,8 @@
     }
     const full=kind==='project'?C.sessionStatus(item,topics):C.quickStatus(item);
     if(mode==='full')return full;
-    if(item.creative){const f=kind==='project'?item.fields:item.quick.fields,missing=[];if(!C.text(f.outline))missing.push('核心创意');if(!C.text(f.meaning))missing.push('推荐理由');return {ready:!missing.length,missing,draft:!item.creativeReport?.directionApproved||!item.creativeReport?.visualApproved,deliveryMissing:[]};}
-    return {...C.directionStatus(item,kind,topics),draft:!full.ready,deliveryMissing:full.missing};
+    if(item.creative){const f=kind==='project'?item.fields:item.quick.fields,missing=[];if(!C.text(f.outline))missing.push('核心创意');if(!C.text(f.meaning))missing.push('推荐理由');return {ready:!missing.length,missing,draft:!item.creativeReport?.directionApproved||!item.creativeReport?.visualApproved||!!(globalThis.originGate?.(item)?.blocked),deliveryMissing:[]};}
+    return {...C.directionStatus(item,kind,topics),draft:!full.ready||!!(globalThis.originGate?.(item)?.blocked),deliveryMissing:full.missing};
   }
   function planDeck(source,kind,topics=[],mode){
     if(kind==='director'||mode==='director'){
@@ -92,12 +92,13 @@
     if(kind==='reverse'||mode==='reverse')return planReverseDeck(source);
     mode=modeFor(kind,mode);
     const item=C.clone(source),all=C.clone(topics),status=reportStatus(item,kind,all,mode);
+    const gate=globalThis.originGate?.(source)||{blocked:false,count:0,reasons:[]};
     if(mode==='execution'&&item.quick?.approved?.report)item.report=C.clone(item.quick.approved.report);
     const r=ensureReport(item);
     const list=kind==='project'?item.topicIds.map(id=>all.find(t=>t.id===id)).filter(Boolean):[mode==='execution'&&item.quick.approved?approvedTopic(item):item];
     const f=kind==='project'?item.fields:list[0].quick.fields,slides=[];
     const fullStatus=kind==='project'?C.sessionStatus(item,all):C.quickStatus(list[0]);
-    const draft=mode==='decision'&&(item.creative?status.draft:!fullStatus.ready);
+    const draft=mode==='decision'&&((item.creative?status.draft:!fullStatus.ready)||gate.blocked);
     const textPage=(title,body,subtitle='')=>splitText(body).forEach((text,i)=>slides.push({type:'text',title:title+(i?'（续）':''),body:text,subtitle}));
     const overview=(title,sections)=>{const rows=sections.filter(s=>C.text(s.body));if(rows.length)slides.push({type:'summary',title,sections:rows.map(s=>({...s,display:excerpt(s.body,88)}))});};
     const coverOf=t=>{const c=C.ensureCover(t);return {topic:t.title,option:c.options.find(o=>o.id===c.selectedId),ratio:c.ratio,recommendation:c.recommendation};};
@@ -131,8 +132,13 @@
     overview('制作安排与资源边界',[{label:'拍摄与制作',body:r.production||'拍摄日、人员、场地、设备和预算待确认'},{label:'限制与假设',body:r.pending||'尚未填写执行限制'}]);
     overview('本次需要拍板',[{label:'决策事项',body:r.decisions||'主推方向、人物表达、场景规模与拍摄安排待确认'},{label:'后续交付',body:mode==='execution'?'按已确认方向执行，逐镜审查表演、声音、剪辑和连续性':item.creative?'根据本轮反馈定稿；分镜、封面和视频按实际交付需求制作':'方向确认后补齐媒体参考，并进入25镜深化与AI成片参考'}]);
     if(draft)overview(item.creative?'待确认事项':'素材待办',item.creative?[{label:'方向',body:item.creativeReport?.directionApproved?'已确认':'当前文字尚未确认'},{label:'关键视觉',body:item.creativeReport?.visualApproved?'已确认':'尚未确认；本稿供讨论'}]:[{label:'当前状态',body:'方向讨论稿。完整快速汇报的素材尚未齐备。'},{label:'缺项摘要',body:fullStatus.missing.join('、')}]);
+    if(draft&&gate.blocked)overview('出发点体检',[{label:'必须改',body:gate.reasons.join('；')}]);
     const overviewCount=slides.length;
-    if(mode==='decision')return {mode,label:MODES[mode],draft,status,slides,overviewCount};
+    if(mode==='decision'){ /* 逐页讲稿跟着 PPT 走 */
+      const notes=source.pitch&&Array.isArray(source.pitch.notes)?source.pitch.notes:[];
+      if(notes.length)slides.forEach((sl,i)=>{const n=String(notes[i]||'').trim();if(n)sl.notes=(sl.notes?sl.notes+'\n':'')+n;});
+      return {mode,label:MODES[mode],draft,status,slides,overviewCount};
+    }
     slides.push({type:'divider',title:'完整策划附件',body:kind==='project'?'整体方案及每条故事的脚本、封面与媒体参考':'完整故事、封面推荐、视觉与三段8秒AI视频'});
     for(const[k,label]of REPORT_FIELDS)textPage(label,r[k],'汇报要点全文');
     if(kind==='project')for(const[k,label]of C.SESSION)textPage(label,item.fields[k],item.title);
@@ -186,6 +192,8 @@
       txt(s,title,.65,.86,12.05,1.12,size,THEME.ink,true);
       if(p.subtitle&&p.type!=='cover')txt(s,excerpt(p.subtitle,70),.68,2.04,11.95,.34,13,THEME.muted);
       let notes=p.notes||'';
+      /* 有些页型会重建备注；把传进来的讲稿留住，别被覆盖掉 */
+      const keepNote=['summary','matrix','cover-reference'].includes(p.type)?String(p.notes||'').trim():'';
       if(p.type==='cover'||p.type==='divider'){
         txt(s,p.subtitle||'',.7,2.6,11.8,.5,23,THEME.accent);
         txt(s,p.body,.7,3.5,10.8,2.65,30,THEME.ink);
@@ -232,6 +240,7 @@
         s.addImage({data:poster,x:box.x,y:box.y,w:p.poster.width>0&&p.poster.height>0?p.poster.width/p.poster.height:4/3,h:1,sizing:{type:'cover',w:box.w,h:box.h}});s.addMedia({type:'video',data,extn:'mp4',cover:poster,...box});
         txt(s,excerpt(p.caption,96),.8,6.45,11.7,.57,16,THEME.muted);notes+='\n内嵌MP4。实际时长：'+p.asset.duration+'秒';
       }
+      if(keepNote&&!notes.includes(keepNote))notes+=(notes?'\n\n':'')+keepNote;
       if(p.asset)notes+='\n素材来源：'+p.asset.source+'\n'+(p.asset.prompt||'')+'\n'+(p.asset.provenance||'');
       if(plan.draft)notes+='\n完整交付缺项：'+status.deliveryMissing.join('、');
       if(notes)s.addNotes(notes);

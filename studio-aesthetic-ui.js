@@ -22,10 +22,24 @@ function aestheticCover(a){
   const files=Array.isArray(a?.files)?a.files:[],preferred=files.find(f=>f.localId===a.coverId&&f.kind==='image'),image=preferred||files.find(f=>f.kind==='image'),video=files.find(f=>f.kind==='video');
   if(image)return `<img src="${mediaURL(image)}" alt="${esc(a.name||'审美参考')}" loading="eager">`;
   if(a?.legacyImage)return `<img src="${esc(a.legacyImage)}" alt="${esc(a.name||'旧版审美参考')}" loading="lazy">`;
-  if(a?.externalPreview){const base=location.hostname.endsWith('github.io')?'https://lance-content-studio.onrender.com':'',src=a.previewDirect?a.externalPreview:`${base}/api/radar-preview?url=${encodeURIComponent(a.externalPreview)}`;return `<img src="${esc(src)}" alt="${esc(a.name||'来源预览')}" loading="lazy" referrerpolicy="no-referrer" onerror="this.hidden=true;this.nextElementSibling.hidden=false"><span hidden class="preview-unavailable">来源预览暂时无法显示<br><small>标题和笔记仍保留；点开查看来源</small></span>`;}
+  if(a?.externalPreview){const base=location.hostname.endsWith('github.io')?'https://lance-content-studio.onrender.com':'',src=a.previewDirect?a.externalPreview:`${base}/api/radar-preview?url=${encodeURIComponent(a.externalPreview)}`;return `<img src="${esc(src)}" alt="${esc(a.name||'来源预览')}" loading="lazy" referrerpolicy="no-referrer" onerror="this.hidden=true;this.nextElementSibling.hidden=false"><span hidden class="preview-unavailable">来源预览暂时无法显示<br><small>点“补缩略图”存到本机，或打开参考上传截图</small></span>`;}
   if(video)return `<video src="${mediaURL(video)}" muted playsinline preload="metadata"></video>`;
-  return `<span class="aesthetic-placeholder"><span aria-hidden="true">${a?.isProjectAsset?(a.kind==='scene'?'◫':'◇'):(a?.link?'↗':'▣')}</span><small>${a?.link?'链接已保存 · 暂无预览':esc(a?.category||'待添加封面')}</small></span>`;
+  return `<span class="aesthetic-placeholder" style="--cover-hue:${coverHue(a?.category)}"><b aria-hidden="true">${esc(coverGlyph(a))}</b><strong>${esc(a?.category||'待补缩略图')}</strong><small>${esc(coverSite(a)||(a?.link?'链接已保存':'还没有图片来源'))}</small><em>${a?.link?'可自动补图或上传截图':'打开详情可上传截图'}</em></span>`;
 }
+function coverHue(value){
+  let hash=0;for(const ch of String(value||'参考'))hash=(hash*31+(ch.codePointAt(0)||0))%1000003;
+  return hash%360;
+}
+function coverGlyph(a){
+  if(a?.coverGlyph)return a.coverGlyph;
+  const text=`${a?.category||''} ${(a?.tags||[]).join(' ')}`,rules=[['运镜','◉'],['灯光','☀'],['封面','▤'],['服装','◇'],['场景','▦'],['美术','▦'],['分镜','▥'],['音','♪'],['AI','✦'],['电影','▶'],['舞台','◎'],['调色','◐'],['文字','Aa']];
+  return (rules.find(([key])=>text.includes(key))||[,'▣'])[1];
+}
+function coverSite(a){
+  if(a?.sourceSite)return a.sourceSite;
+  try{return a?.link?new URL(a.link).hostname.replace(/^www\./,''):'';}catch{return '';}
+}
+function coverTextOnly(a){return Boolean(a&&StudioCapture.needsCover(a)&&!a.externalPreview);}
 function conciseWardrobeText(value,fallback='适合的场景与搭配说明待补充'){
   const text=String(value||fallback).replace(/\s+/g,' ').trim(),first=text.split(/[。；\n]/).find(Boolean)||text;
   return first.length>58?first.slice(0,58)+'…':first;
@@ -46,7 +60,7 @@ function aestheticCard(a,coverFolders){
     const portrait=A.coverSubtypeMatch(a,'人物照片',coverFolders),text=A.coverSubtypeMatch(a,'纯字体',coverFolders),ai=A.coverSubtypeMatch(a,'增量优化',coverFolders),kind=portrait?'人物':text?'字体':ai?'AI':'封面',title=coverReferenceTitle(a,coverFolders);
     return `<article class="aesthetic-card cover-reference-card ${portrait?'cover-reference-portrait':text?'cover-reference-landscape':''}"><button class="aesthetic-cover" data-action="aesthetic-open" data-id="${esc(a.id)}" aria-label="查看 ${esc(title)}">${aestheticCover(a)}<span class="aesthetic-category">${kind}</span></button><div class="aesthetic-info"><div class="aesthetic-title"><h3>${esc(title)}</h3>${btn(a.favorite?'★':'☆','aesthetic-star',`data-id="${esc(a.id)}" aria-label="${a.favorite?'取消收藏':'收藏'} ${esc(title)}"`)}</div></div></article>`;
   }
-  return `<article class="aesthetic-card"><button class="aesthetic-cover" data-action="aesthetic-open" data-id="${esc(a.id)}">${aestheticCover(a)}<span class="aesthetic-category">${esc(A.categoryOf(a,coverFolders))}</span></button><div class="aesthetic-info"><div class="aesthetic-title"><h3>${esc(a.name)}</h3>${btn(a.favorite?'★':'☆','aesthetic-star',`data-id="${esc(a.id)}" aria-label="${a.favorite?'取消收藏':'收藏'} ${esc(a.name)}"`)}</div><div class="aesthetic-tags">${a.tags.slice(0,5).map(t=>`<span>${esc(t)}</span>`).join('')}</div><p>${esc(a.notes||'记录喜欢的光线、构图、材质或节奏')}</p>${a.link?`<small class="capture-status ${a.captureError?'capture-warning':''}">${esc(a.captureError||a.captureStatus||(A.visualWeight(a)?'已保存来源':'链接已保存 · 暂无预览图'))}</small>`:''}<div class="actions"><small>${a.files.length} 个附件${a.link?' · 有来源链接':''}</small>${StudioCapture.needsEnrichment(a)?btn('重试补全','aesthetic-enrich',`data-id="${esc(a.id)}"`):''}${btn('查看／编辑','aesthetic-open',`data-id="${esc(a.id)}"`)}</div></div></article>`;
+  return `<article class="aesthetic-card"><button class="aesthetic-cover" data-action="aesthetic-open" data-id="${esc(a.id)}">${aestheticCover(a)}<span class="aesthetic-category">${esc(A.categoryOf(a,coverFolders))}</span>${coverTextOnly(a)?'<span class="aesthetic-cover-flag">待补图</span>':''}</button><div class="aesthetic-info"><div class="aesthetic-title"><h3>${esc(a.name)}</h3>${btn(a.favorite?'★':'☆','aesthetic-star',`data-id="${esc(a.id)}" aria-label="${a.favorite?'取消收藏':'收藏'} ${esc(a.name)}"`)}</div><div class="aesthetic-tags">${a.tags.slice(0,5).map(t=>`<span>${esc(t)}</span>`).join('')}</div><p>${esc(a.notes||'记录喜欢的光线、构图、材质或节奏')}</p>${a.link?`<small class="capture-status ${a.captureError?'capture-warning':''}">${esc(a.captureError||a.captureStatus||(A.visualWeight(a)?'已保存来源':'链接已保存 · 暂无预览图'))}</small>`:''}<div class="actions"><small>${a.files.length} 个附件${a.link?' · 有来源链接':''}</small>${StudioCapture.needsCover(a)?btn('补缩略图','aesthetic-cover-fix',`data-id="${esc(a.id)}"`):StudioCapture.needsEnrichment(a)?btn('重试补全','aesthetic-enrich',`data-id="${esc(a.id)}"`):''}${btn('查看／编辑','aesthetic-open',`data-id="${esc(a.id)}"`)}</div></div></article>`;
 }
 function loadAesthetic(){
   ensureScopedLibraries();const store=aestheticStoreKey(),raw=localStorage.getItem(store)||'[]';
@@ -59,21 +73,63 @@ function loadAestheticTrash(){let items;try{items=JSON.parse(localStorage.getIte
 function saveAestheticTrash(items){const store=aestheticTrashKey(),prior=localStorage.getItem(store);try{if(prior)localStorage.setItem(store+'_previous',prior);localStorage.setItem(store,JSON.stringify(items));globalThis.markWorkspaceDirty?.(scope);}catch{throw Error('回收站保存失败，未删除原参考');}}
 function coverReferenceSubnav(all,q,folders){const types=[['人物照片','人物照片'],['纯字体','纯字体'],['增量优化','AI优化']];return `<div class="cover-reference-subnav"><div class="actions">${types.map(([type,label])=>btn(`${label} <small>${all.filter(item=>A.coverSubtypeMatch(item,type,folders)).length}</small>`,'aesthetic-cover-type',`data-cover-type="${esc(type)}" class="${q.coverType===type?'active':''}"`)).join('')}</div></div>`;}
 function currentAestheticQuery(){return {...aestheticQuery,coverFolders:coverReferenceFolders()};}
+let coverBackfillRunning=false,coverAutoRuns=0;
+const COVER_BACKFILL_KEY='lance_studio_cover_backfill_v1';
+function coverPending(item){return Boolean(item&&!item.isProjectAsset&&StudioCapture.needsCover(item));}
+function coverPendingStats(){const all=globalAssets(),pending=all.filter(coverPending),due=pending.filter(coverRetryDue);return {pending,due,total:all.length,textOnly:pending.filter(item=>!item.externalPreview).length};}
+function coverBackfillDue(){try{const last=Number(localStorage.getItem(COVER_BACKFILL_KEY)||0);return !last||Date.now()-last>10*60*1000;}catch{return true;}}
+function coverRetryDue(item){const checked=Date.parse(item?.coverCheckedAt||'');return !checked||Date.now()-checked>6*60*60*1000;}
+function refreshAestheticIfIdle(){if(route?.view!=='aesthetic')return;if(document.getElementById('dialog')?.open)return;if(document.activeElement?.matches?.('input,textarea,select,[contenteditable="true"]'))return;render();}
+async function fixReferenceCover(id){
+  const find=()=>globalAssets().find(item=>item.id===id);
+  let item=find();if(!item)throw Error('参考不存在');
+  if(StudioCapture.coverSource(item))await StudioCapture.attachLocalCover(id,item.externalPreview,item.name);
+  if(!StudioCapture.localCoverImage(find())&&item.link)await StudioCapture.enrich(id,{quiet:true});
+  const all=globalAssets(),updated=all.find(entry=>entry.id===id);
+  if(updated&&StudioCapture.localCoverImage(updated)){if(updated.coverCheckedAt){delete updated.coverCheckedAt;saveAesthetic(all);}refreshAestheticIfIdle();return true;}
+  if(updated){updated.coverCheckedAt=new Date().toISOString();saveAesthetic(all);}
+  refreshAestheticIfIdle();return false;
+}
+// 打开参考库时顺手补几张：老收藏多半只存了链接，补成本地缩略图后才能一眼认出。
+async function backfillReferenceCovers(limit=5,manual=false){
+  if(coverBackfillRunning)return {fixed:0,pending:coverPendingStats().pending.length,busy:true};
+  if(job||document.getElementById('dialog')?.open)return {fixed:0,pending:coverPendingStats().pending.length,busy:true};
+  const pending=coverPendingStats().due.sort((a,b)=>(Number(Boolean(b.favorite))-Number(Boolean(a.favorite)))||String(b.createdAt||'').localeCompare(String(a.createdAt||'')));
+  if(!pending.length)return {fixed:0,pending:0};
+  if(!manual)coverAutoRuns++;
+  if(!manual&&coverAutoRuns===1)notify(`正在自动补齐 ${Math.min(pending.length,limit)} 条收藏的缩略图，补好后卡片会直接显示画面。`);
+  try{localStorage.setItem(COVER_BACKFILL_KEY,String(Date.now()));}catch{}
+  coverBackfillRunning=true;let fixed=0;
+  try{for(const item of pending.slice(0,limit)){try{await fixReferenceCover(item.id);}catch{}if(StudioCapture.localCoverImage(globalAssets().find(entry=>entry.id===item.id)))fixed++;}}
+  finally{coverBackfillRunning=false;}
+  const remaining=coverPendingStats().due.length;
+  if(manual)notify(fixed?`已补齐 ${fixed} 张缩略图${remaining?`，还有 ${remaining} 条未补；可以再点一次`:'。'}`:'缩略图这次没抓到：来源可能限制读取。打开参考后可以直接上传截图。',fixed?'success':'warning');
+  if(fixed)refreshAestheticIfIdle();
+  if(!manual&&fixed>0&&coverAutoRuns<6&&coverPendingStats().due.length)setTimeout(()=>{if(route?.view==='aesthetic'&&!document.hidden&&!job&&!document.getElementById('dialog')?.open)void backfillReferenceCovers(5,false);},1200);
+  return {fixed,pending:remaining};
+}
+function scheduleCoverBackfill(){
+  if(coverBackfillRunning||document.hidden||job||!coverBackfillDue())return;
+  if(!coverPendingStats().due.length)return;
+  setTimeout(()=>{if(route?.view!=='aesthetic'||document.hidden||job||document.getElementById('dialog')?.open)return;void backfillReferenceCovers(5,false);},2600);
+}
 function renderAesthetic(){
-  const all=folderLibraryEntries(globalAssets()),coverFolders=coverReferenceFolders(),projectFolders=projectReferenceFolders(),trashCount=loadAestheticTrash().length,q=aestheticQuery,matches=A.viewFilter(all,currentAestheticQuery()),categories=[...new Set([...A.CATEGORIES,...all.map(a=>A.categoryOf(a,coverFolders))])];
+  const all=folderLibraryEntries(globalAssets()),coverFolders=coverReferenceFolders(),projectFolders=projectReferenceFolders(),trashCount=loadAestheticTrash().length,q=aestheticQuery,matches=A.viewFilter(all,currentAestheticQuery()),categories=[...new Set([...A.CATEGORIES,...all.map(a=>A.categoryOf(a,coverFolders))])],coverStats=coverPendingStats();
   const tagScope=A.viewFilter(all,{...currentAestheticQuery(),tag:'全部'}),tagSummary=A.tagSummary(tagScope),activeTag=q.tag==='全部'?'':q.tag,rankedTags=activeTag?[...tagSummary].sort((a,b)=>a.tag===activeTag?-1:b.tag===activeTag?1:0):tagSummary,visibleTags=aestheticTagsExpanded?rankedTags:rankedTags.slice(0,5),hiddenTagCount=Math.max(0,rankedTags.length-visibleTags.length);
   const isVisualLanding=!q.search&&q.category==='全部'&&q.tag==='全部'&&!q.favorite,items=A.browseItems(matches,q.media||'all'),pageSize=15;
   const pages=Math.max(1,Math.ceil(items.length/pageSize));q.page=Math.max(1,Math.min(q.page,pages));
   const activeFolder=referenceFolder==='all'?'全部参考':referenceFolder==='unfiled'?'尚未归项目':projectFolders.find(folder=>folder.id===referenceFolder)?.name||'全部参考';
   const folderNav=btn('全部','folder-open',`data-id="all" class="${referenceFolder==='all'?'primary':''}"`)+btn('未归类','folder-open',`data-id="unfiled" class="${referenceFolder==='unfiled'?'primary':''}"`)+projectFolders.map(folder=>btn(esc(folder.name),'folder-open',`data-id="${esc(folder.id)}" class="${referenceFolder===folder.id?'primary':''}"`)).join('');
-  return hero('REFERENCE LIBRARY','参考库','用画面做判断，用搜索快速收窄方向。',btn('快速收藏链接','radar-new','',true)+btn(q.category==='封面参考'?'手动添加封面':'手动添加资料','aesthetic-new'))+(isVisualLanding&&referenceFolder==='all'?renderReverseCaseLibrary():'')+
+  const page=hero('REFERENCE LIBRARY','参考库','用画面做判断，用搜索快速收窄方向。',btn('快速收藏链接','radar-new','',true)+btn(q.category==='封面参考'?'手动添加封面':'手动添加资料','aesthetic-new'))+(isVisualLanding&&referenceFolder==='all'?renderReverseCaseLibrary():'')+
     `<section class="library-visual-first"><div class="library-search"><label for="library-visual-search"><span>搜索参考画面</span><input id="library-visual-search" data-aesthetic-search value="${esc(q.search)}" placeholder="搜场景、光线、色调、构图、情绪或项目…"></label>${btn(q.favorite?'★ 收藏中':'☆ 只看收藏','aesthetic-favorite-filter')}</div>
     <nav class="library-tag-shortcuts" aria-label="快捷标签"><div class="library-tag-head"><strong>常用标签</strong><small>先显示最常用的，需要时再展开</small></div><div class="library-tag-list">${btn(`全部 <small>${tagScope.length}</small>`,'aesthetic-tag',`data-tag="全部" class="${q.tag==='全部'?'active':''}"`)}${visibleTags.map(({tag,count})=>btn(`${esc(tag)} <small>${count}</small>`,'aesthetic-tag',`data-tag="${esc(tag)}" class="${q.tag===tag?'active':''}"`)).join('')}${rankedTags.length>5?btn(aestheticTagsExpanded?'收起标签':`更多标签 <small>+${hiddenTagCount}</small>`,'aesthetic-tags-toggle',`class="tag-toggle" aria-expanded="${aestheticTagsExpanded}"`):''}</div></nav>
-    <div class="actions library-media-filter" aria-label="预览类型">${[['all','全部收藏'],['visual','有画面'],['text','文字 / 待补图']].map(([value,label])=>btn(label,'aesthetic-media-filter',`data-media="${value}" class="${(q.media||'all')===value?'active':''}"`)).join('')}</div><div class="library-result-head"><div><span>${isVisualLanding?'最近收藏':'筛选结果'}</span><strong>${esc(activeFolder)}${activeTag?' · '+esc(activeTag):''}</strong><small>${items.length} 项 · 当前范围共 ${matches.length} 项，文字收藏也保留</small></div></div>
+    <div class="actions library-media-filter" aria-label="预览类型">${[['all','全部收藏'],['visual','有画面'],['text','文字 / 待补图']].map(([value,label])=>btn(label,'aesthetic-media-filter',`data-media="${value}" class="${(q.media||'all')===value?'active':''}"`)).join('')}</div><div class="library-result-head"><div><span>${isVisualLanding?'最近收藏':'筛选结果'}</span><strong>${esc(activeFolder)}${activeTag?' · '+esc(activeTag):''}</strong><small>${items.length} 项 · 当前范围共 ${matches.length} 项，文字收藏也保留${coverStats.due.length?` · ${coverStats.due.length} 条待补缩略图`:''}</small></div>${coverStats.due.length?btn(`补齐缩略图 · ${coverStats.due.length}`,'aesthetic-cover-backfill','',true):''}</div>
     <details class="library-filters" ${q.category!=='全部'?'open':''}><summary>更多筛选：分类与项目范围${q.category!=='全部'?' · '+esc(q.category):''}</summary><div class="aesthetic-filters">${['全部',...categories].map(c=>btn(`${esc(c)} <small>${c==='全部'?all.length:all.filter(a=>A.categoryOf(a,coverFolders)===c).length}</small>`,'aesthetic-category',`data-category="${esc(c)}" class="${q.category===c?'active':''}"`)).join('')}</div>${q.category==='封面参考'?coverReferenceSubnav(all,q,coverFolders):`<nav class="actions library-folder-nav" aria-label="切换参考库范围">${folderNav}</nav>`}</details>
     <div class="aesthetic-grid ${q.category==='封面参考'?`cover-reference-wall cover-wall-${q.coverType==='人物照片'?'portrait':q.coverType==='纯字体'?'landscape':'mixed'}`:''}">${items.slice((q.page-1)*pageSize,q.page*pageSize).map(a=>aestheticCard(a,coverFolders)).join('')||empty(q.media==='text'?'当前范围没有纯文字或待补图记录':'没有匹配的参考','可切回“全部收藏”、清除搜索或调整分类；筛选不会删除任何记录。')}</div>
-    <div class="actions library-pagination">${btn('上一页','aesthetic-page',`data-page="${q.page-1}" ${q.page===1?'disabled':''}`)}<span>${items.length} 条 · ${q.page}/${pages} 页</span>${btn('下一页','aesthetic-page',`data-page="${q.page+1}" ${q.page===pages?'disabled':''}`)}</div></section>
+    ${coverStats.due.length?`<p class="library-cover-note">有 ${coverStats.due.length} 条收藏还缺缩略图：打开参考库时会自动从来源补封面，补不到的可以在卡片里上传截图。</p>`:''}<div class="actions library-pagination">${btn('上一页','aesthetic-page',`data-page="${q.page-1}" ${q.page===1?'disabled':''}`)}<span>${items.length} 条 · ${q.page}/${pages} 页</span>${btn('下一页','aesthetic-page',`data-page="${q.page+1}" ${q.page===pages?'disabled':''}`)}</div></section>
     <details class="library-management"><summary>文件夹、批量与资料管理</summary>${folderToolbar()}<div class="actions library-management-actions">${btn('一键收藏助手','radar-helper')}${btn('同步 Pinterest','radar-pinterest')}${btn(q.category==='封面参考'?'批量导入封面':'批量上传','aesthetic-batch')}${btn('AI语义检索','aesthetic-semantic')}${btn(`回收站${trashCount?' · '+trashCount:''}`,'aesthetic-trash')}</div></details>`;
+  scheduleCoverBackfill();
+  return page;
 }
 function aestheticDialog(a){
   const coverFolders=coverReferenceFolders(),categories=[...new Set([...A.CATEGORIES,...globalAssets().map(item=>A.categoryOf(item,coverFolders))])],defaultCategory=a?.category||(aestheticQuery.category==='封面参考'?'封面参考':'摄影参考'),defaultTags=a?.tags||(['人物照片','纯字体','增量优化'].includes(aestheticQuery.coverType)?[aestheticQuery.coverType]:[]);
@@ -83,7 +139,7 @@ function aestheticDialog(a){
   }
   dialog(a?'参考详情与编辑':'添加审美参考',`<div class="formgrid"><label>标题<input id="aes-name" value="${esc(a?.name||'')}"></label><label>分类（可直接输入新分类）<input id="aes-category" list="aes-categories" value="${esc(defaultCategory)}"><datalist id="aes-categories">${categories.map(c=>`<option value="${esc(c)}">`).join('')}</datalist></label><label class="wide">标签（逗号分隔）<input id="aes-tags" value="${esc(defaultTags.join('，'))}" placeholder="逆光、雾气、冷暖对比"></label><label class="wide">来源链接或分享文字<textarea id="aes-link" class="short" placeholder="支持http/https网页、视频链接及含链接的分享文字">${esc(a?.link||'')}</textarea></label><label>来源网站<input id="aes-source-site" value="${esc(a?.sourceSite||'')}" placeholder="例如 ShotDeck"></label><label>使用范围标记<select id="aes-source-usage"><option value="unconfirmed" ${(a?.sourceUsage||'unconfirmed')==='unconfirmed'?'selected':''}>待确认</option><option value="link-only" ${a?.sourceUsage==='link-only'?'selected':''}>只保存链接</option><option value="internal-reference" ${a?.sourceUsage==='internal-reference'?'selected':''}>仅内部视觉参考</option><option value="owned" ${a?.sourceUsage==='owned'?'selected':''}>本人／团队原创素材</option><option value="licensed" ${a?.sourceUsage==='licensed'?'selected':''}>已确认授权素材</option></select></label><label class="wide">喜欢什么／参考重点／来源说明<textarea id="aes-notes">${esc(a?.notes||'')}</textarea></label></div>
     <p class="muted">ShotDeck 等素材库建议标记为“仅内部视觉参考”。系统不会自动登录、抓取或批量下载网站内容。</p>
-    ${a?StudioCapture.assetTools(a):''}${folderMembership(a)}${a?.link&&!a?.captureStatus?`<p><a href="${esc(A.link(a.link))}" target="_blank" rel="noopener noreferrer">打开原始来源 ↗</a></p>`:''}
+    ${a&&StudioCapture.needsCover(a)?`<div class="cover-fix"><strong>缩略图</strong><p>${a.externalPreview?'来源预览可能被网站限制显示。把封面保存到本机后，参考库里就能一直看到缩略图。':'这条收藏还没有缩略图。系统会尝试从来源抓一张；抓不到时可直接在下方上传截图。'}</p><div class="actions">${btn('自动补缩略图','aesthetic-cover-fix',`data-id="${esc(a.id)}"`)}</div></div>`:''}${a?StudioCapture.assetTools(a):''}${folderMembership(a)}${a?.link&&!a?.captureStatus?`<p><a href="${esc(A.link(a.link))}" target="_blank" rel="noopener noreferrer">打开原始来源 ↗</a></p>`:''}
     ${a?`<h3>附件与封面</h3><div class="grid">${a.files.map(f=>`<div class="card">${f.kind==='audio'?`<audio controls src="${mediaURL(f)}"></audio>`:mediaMarkup(f)}<p>${esc(f.name||f.kind)}</p></div>`).join('')}${a.legacyImage?`<img class="media" src="${esc(a.legacyImage)}" alt="旧版参考图">`:''}</div><label>卡片封面<select id="aes-cover"><option value="">自动选择</option>${a.files.filter(f=>f.kind==='image').map(f=>`<option value="${esc(f.localId)}" ${a.coverId===f.localId?'selected':''}>${esc(f.name||'参考图')}</option>`).join('')}</select></label><p class="muted">可一次选择多个附件。追加时会一并保存当前文字修改。</p>${upload('追加图片／视频／音频／PDF','aesthetic-files',`data-id="${esc(a.id)}" multiple`,'image/png,image/jpeg,image/webp,video/mp4,video/quicktime,video/webm,audio/mpeg,audio/wav,audio/mp4,application/pdf')}`:'<p class="muted">先建立参考卡，再追加附件；批量上传会按每个文件建立一张参考卡。</p>'}`,
     btn('保存参考','aesthetic-save',a?`data-id="${esc(a.id)}"`:'',true)+(a?btn(`复制到 ${scope==='personal'?'My·工作':'My·个人'}`,'aesthetic-copy',`data-id="${esc(a.id)}"`)+btn('移入回收站','aesthetic-delete-request',`data-id="${esc(a.id)}" class="danger"`):''));
 }
@@ -112,6 +168,22 @@ async function aestheticAction(action,e){
   if(action==='aesthetic-new'){aestheticDialog(null);return;}
   if(action==='aesthetic-copy'){if(!a)throw Error('参考不存在');const target=scope==='personal'?'xinxuan':'personal',existing=JSON.parse(localStorage.getItem(aestheticStoreKey(target))||'[]');if(existing.some(x=>x.copiedFrom?.scope===scope&&x.copiedFrom?.id===a.id))throw Error('目标空间已有这份参考的副本');const copy=C.clone(a);copy.id=C.uid();copy.name=a.name+'（来自'+(scope==='personal'?'My·个人':'My·工作')+'）';copy.folderIds=[];copy.usedIn=[];copy.copiedFrom={scope,id:a.id};copy.createdAt=copy.updatedAt=new Date().toISOString();existing.push(copy);saveAesthetic(existing,target);close();notify('已复制到'+(target==='personal'?'My·个人':'My·工作')+'；两个副本之后互不影响。');return;}
   if(action==='aesthetic-open'){if(!a)throw Error('参考不存在');aestheticDialog(a);return;}
+  if(action==='aesthetic-cover-fix'){
+    if(!a)throw Error('参考不存在');
+    if(!StudioCapture.coverSource(a)&&!a.link)throw Error('这条参考没有来源链接，请直接在详情里上传截图');
+    notify('正在抓取缩略图…');
+    const fixed=await fixReferenceCover(a.id),updated=globalAssets().find(item=>item.id===a.id);
+    if(document.getElementById('dialog')?.open&&updated)aestheticDialog(updated);
+    notify(fixed?'缩略图已保存到本机。':(a.link?'这次没抓到来源封面，来源可能限制读取；可以直接上传截图。':'没有可抓取的来源封面，请上传截图。'),fixed?'success':'warning');
+    return;
+  }
+  if(action==='aesthetic-cover-backfill'){
+    const stats=coverPendingStats();
+    if(!stats.due.length){notify(stats.pending.length?'这些收藏的来源限制了读取，自动补图暂时抓不到；可以逐条打开参考上传截图。':'当前收藏都已有缩略图。',stats.pending.length?'warning':'info');return;}
+    notify(`正在补齐 ${Math.min(stats.due.length,12)} 条收藏的缩略图，可继续使用其他功能。`);
+    void backfillReferenceCovers(12,true);
+    return;
+  }
   if(action==='aesthetic-enrich'){if(!a)throw Error('参考不存在');notify('正在自动读取标题、简介和封面；你可以继续使用其他功能。');await StudioCapture.enrich(a.id);return;}
   if(action==='aesthetic-category'){aestheticQuery.category=e.dataset.category;aestheticQuery.coverType=aestheticQuery.category==='封面参考'?'人物照片':'全部';if(aestheticQuery.category==='封面参考')referenceFolder='all';aestheticQuery.page=1;render();return;}
   if(action==='aesthetic-cover-type'){aestheticQuery.category='封面参考';aestheticQuery.coverType=e.dataset.coverType||'人物照片';referenceFolder='all';aestheticQuery.page=1;render();return;}

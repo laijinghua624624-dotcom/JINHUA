@@ -41,6 +41,7 @@ async function importMobileItem(item,options={}){
   if(item.kind==='link'&&options.destination!=='fragment'){
     const asset=A.entry(options.title||item.title||'网页参考');asset.category=options.category||'摄影参考';asset.tags=A.tags(options.tags||'网页收藏，待整理');asset.notes=options.notes||item.body||'';asset.requirements=asset.notes;asset.link=mobileSafeLink(item.source_url);asset.sourceSite=options.sourceSite||(asset.link?new URL(asset.link).hostname:'');asset.sourceUsage=options.sourceUsage||'internal-reference';asset.folderIds=options.folderIds||[];asset.mobileSource={id:item.id,capturedAt:item.created_at};
     if(item.file_path){const blob=await StudioCloud.downloadFile(item.file_path),file=new File([blob],item.file_name||'网页参考附件',{type:item.mime_type||blob.type||'application/octet-stream'}),uploaded=await api('upload',file);uploaded.name=file.name;asset.files=[uploaded];}
+    else if(item.metadata&&item.metadata.cover_url){const cover=await capturePublicImage(item.metadata.cover_url,asset.name);if(cover){asset.files=[cover];asset.coverId=cover.localId;}}
     asset.updatedAt=now;const all=globalAssets();all.push(asset);saveAesthetic(all);
   }else if(['text','link','voice'].includes(item.kind)){
     const fragment=StudioFragments.create(item.body||item.source_url||'',item.kind);

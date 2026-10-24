@@ -119,7 +119,7 @@ function cleanWorkspacePayload(space,source=workspacePayload(space)){
   return {version:1,data,aesthetic:[],folders:[],trash:[],usage:''};
 }
 function clearBrowserContentKeys(){
-  const exact=new Set(['lance_ai_usage_v1','lance_studio_aesthetic','lance_studio_folders','lance_studio_scope_split_v1','jinhua_mobile_radar_saved','jinhua_mobile_radar_seen','jinhua_mobile_radar_last_viewed','jinhua_mobile_capture_draft_v2','jinhua_mobile_radar_daily_v2','jinhua_mobile_radar_preferred','jinhua_mobile_radar_muted']);
+  const exact=new Set(['lance_ai_usage_v1','lance_studio_aesthetic','lance_studio_folders','lance_studio_scope_split_v1','jinhua_mobile_radar_saved','jinhua_mobile_radar_seen','jinhua_mobile_radar_last_viewed','jinhua_mobile_capture_draft_v2','jinhua_mobile_radar_daily_v2','jinhua_mobile_radar_preferred','jinhua_mobile_radar_muted','lance_radar_seen_v1','lance_radar_daily_v1']);
   for(const name of Object.keys(localStorage))if(exact.has(name)||name.startsWith('lance_studio_v2_')||name.startsWith('lance_studio_aesthetic_')||name.startsWith('lance_studio_folders_')||name.startsWith('xuan_ti_ku_')||name.startsWith('project_plans_')||name.startsWith(CLOUD_META_PREFIX))localStorage.removeItem(name);
 }
 async function prepareWorkspaceBackupMedia(space,payload){
@@ -363,11 +363,11 @@ function renderReportTools(){
 }
 function showReportOptions(item,kind,mode){
   if(item.creative)item=creativeReportItem(item);
-  const status=StudioPpt.reportStatus(item,kind,db.topics,mode),plan=StudioPpt.planDeck(item,kind,db.topics,mode);
+  const status=StudioPpt.reportStatus(item,kind,db.topics,mode),plan=StudioPpt.planDeck(item,kind,db.topics,mode); const gate=globalThis.originGate?.(item)||{blocked:false,count:0,reasons:[]};
   const modes=kind==='project'?['decision','full']:['decision','full','execution'];
-  const missing=mode==='decision'?status.missing:(status.deliveryMissing||status.missing);
+  const missing=[...(mode==='decision'?status.missing:(status.deliveryMissing||status.missing)),...(gate.blocked?gate.reasons.map(x=>'出发点体检 · '+x):[])];
   const note=mode==='decision'?'只导出当前内容的方向、已有视觉参考和待确认事项；不要求三段视频，也不用完成25镜。':mode==='execution'?'包含已确认的快速汇报、执行方案、25张AI分镜图和完整AI成片。':'先展示主汇报，再附完整脚本、A/B/C封面、3–5张视觉参考和每条三段8秒AI视频。';
-  dialog(item.title+' · 导出'+plan.label,`<div class="actions">${modes.map(m=>btn(StudioPpt.MODES[m],'report-options',`data-id="${item.id}" data-kind="${kind}" data-mode="${m}"`,m===mode)).join('')}</div><p class="muted" style="margin-top:18px">${note}</p><p>${plan.slides.length}页，主汇报${plan.overviewCount}页${plan.draft?' · 方向讨论稿，素材待补齐':''}</p>${missing.length?`<details class="report-missing" ${!status.ready?'open':''}><summary>${status.ready?'完整交付待办':'当前版本待补充'}（${missing.length}项）</summary><ul>${missing.map(s=>`<li>${esc(s)}</li>`).join('')}</ul></details>`:''}<details open><summary>页序预览</summary><ol class="report-outline">${plan.slides.map((s,i)=>`<li>${i===plan.overviewCount?'<strong>附件开始</strong> · ':''}${esc(s.title)}</li>`).join('')}</ol></details><p class="muted">文件会下载并缓存到当前浏览器；“成果”保留导出记录，换设备可从原稿重新导出。视频内嵌于完整策划版与单条执行版，请在汇报设备上试播。</p>`,btn('下载'+plan.label,'report-download',`data-id="${item.id}" data-kind="${kind}" data-mode="${mode}" ${status.ready?'':'disabled'}`,true));
+  dialog(item.title+' · 导出'+plan.label,`<div class="actions">${modes.map(m=>btn(StudioPpt.MODES[m],'report-options',`data-id="${item.id}" data-kind="${kind}" data-mode="${m}" ${gate.blocked&&m!=='decision'?'disabled':''}`,m===mode)).join('')}</div><p class="muted" style="margin-top:18px">${note}</p>${gate.blocked?`<p class="missing">出发点体检有 ${gate.count} 项必须改：完整版与执行版已停用，本次只能导出方向讨论稿。</p>`:''}<p>${plan.slides.length}页，主汇报${plan.overviewCount}页${plan.draft?' · 方向讨论稿，素材待补齐':''}</p>${missing.length?`<details class="report-missing" ${!status.ready?'open':''}><summary>${status.ready?'完整交付待办':'当前版本待补充'}（${missing.length}项）</summary><ul>${missing.map(s=>`<li>${esc(s)}</li>`).join('')}</ul></details>`:''}<details open><summary>页序预览</summary><ol class="report-outline">${plan.slides.map((s,i)=>`<li>${i===plan.overviewCount?'<strong>附件开始</strong> · ':''}${esc(s.title)}</li>`).join('')}</ol></details><p class="muted">文件会下载并缓存到当前浏览器；“成果”保留导出记录，换设备可从原稿重新导出。视频内嵌于完整策划版与单条执行版，请在汇报设备上试播。</p>`,btn('下载'+plan.label,'report-download',`data-id="${item.id}" data-kind="${kind}" data-mode="${mode}" ${status.ready&&!(gate.blocked&&mode!=='decision')?'':'disabled'}`,true));
 }
 function hero(kicker,title,subtitle,actions=''){return `<div class="hero"><div><div class="eyebrow">${kicker}</div><h1>${esc(title)}</h1><p class="muted">${subtitle}</p></div><div class="actions">${actions}</div></div>`;}
 function empty(title,body,action=''){return `<div class="empty"><h2>${title}</h2><p>${body}</p>${action}</div>`;}
@@ -591,7 +591,22 @@ async function api(path,body,options={}){
   let result;try{result=await response.json();}catch{throw Error(location.hostname.endsWith('github.io')?'公网生成服务返回异常。已保留当前文字和已上传的文件，请从完整工作台重试。':'当前生成服务返回了无法识别的内容，请刷新后重试');}
   if(!response.ok||result.error&& !result.status)throw Error(result.error||'服务请求失败');return result;
 }
-async function chat(prompt,refs=[],purpose='director'){const r=await api('chat',{purpose,prompt,references:refs});recordTextUsage(r,purpose);return C.parseJSON(r.text);}
+async function chat(prompt,refs=[],purpose='director',opts={}){const r=await api('chat',{purpose,prompt,references:refs,...opts});recordTextUsage(r,purpose);return C.parseJSON(r.text);}
+// 把公开网页上的封面下载下来存成库里的本地文件；失败就返回 null，收藏仍然只存链接。
+async function capturePublicImage(url,name='参考封面'){
+  const source=String(url||'').trim();
+  if(!/^https?:\/\//i.test(source))return null;
+  let response;
+  try{response=await fetch(serviceBase()+'/api/reference-download?url='+encodeURIComponent(source),{cache:'no-store',signal:AbortSignal.timeout(60000)});}catch{return null;}
+  if(!response.ok)return null;
+  let blob;
+  try{blob=await response.blob();}catch{return null;}
+  const type=String(blob.type||'').toLowerCase();
+  if(!type.startsWith('image/'))return null;
+  const ext={'image/jpeg':'jpg','image/png':'png','image/webp':'webp','image/gif':'gif','image/avif':'avif'}[type]||'jpg';
+  const file=new File([blob],`${String(name||'参考封面').replace(/[\\/:*?"<>|]+/g,' ').trim().slice(0,28)||'参考封面'}.${ext}`,{type});
+  try{const uploaded=await uploadFile(file);uploaded.name=file.name;return uploaded;}catch{return null;}
+}
 async function delay(ms){await new Promise(r=>setTimeout(r,ms));}
 async function pollJob(id){for(let n=0;n<600;n++){const r=await api('jobs/'+id);if(r.status==='succeeded')return r.result;if(r.status==='failed')throw Error(r.error);await delay(2000);}throw Error('处理超时，请稍后检查成果。');}
 function jobTouchesId(id){return !!(job&&id&&(job.ownerIds||[]).includes(id));}
@@ -747,7 +762,8 @@ document.addEventListener('click',async event=>{
   try{
     if(fragmentRecording&&action!=='fragment-stop')throw Error('请先停止并保存录音');
     if(fragmentPending&&!['fragment-retry','fragment-download-pending'].includes(action))throw Error('请先重试保存录音，或下载保底；不要离开页面');
-    if(job&&jobTouchesCurrent()&&!['stop','close','nav','topic','deep','project','project-section','projects-filter','project-settings','asset','preview-topic','preview-project','reveal-material','snapshot','folder-open','toolbox','settings','reverse-case-open','reverse-open'].includes(action))throw Error('这项内容正在生成，完成或停止后可继续打磨；你仍可打开其他项目、参考库和灵感');
+    /* creative-tab 必须放行：生成要 30–40 秒，锁住标签切换会让人以为卡死（只切视图，不改数据） */
+    if(job&&jobTouchesCurrent()&&!['stop','close','nav','topic','deep','project','project-section','projects-filter','project-settings','asset','preview-topic','preview-project','reveal-material','snapshot','folder-open','toolbox','settings','reverse-case-open','reverse-open','creative-tab'].includes(action))throw Error('这项内容正在生成，完成或停止后可继续打磨；你仍可打开其他项目、参考库和灵感');
     if(action.startsWith('fragment-')){await fragmentAction(action,e);return;}
     if(action.startsWith('creative-')){flushPendingFieldSave();await creativeAction(action,e);return;}
     if(action.startsWith('reverse-case-')){await reverseCaseAction(action,e);return;}

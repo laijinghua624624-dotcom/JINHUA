@@ -68,7 +68,12 @@
       const text=String(item||'').trim();
       if(text.length<4)continue;
       const page=(pages||[]).find(p=>overlap(text,pageText(p))>=0.4);
-      if(page&&!/假设|待确认|拟定|预计/.test(pageText(page)))
+      if(!page)continue;
+      /* 只看假设原文前后各 12 个字，避免同页别处的“约”把问题盖掉 */
+      const hay=norm(pageText(page)),needle=norm(text),idx=hay.indexOf(needle);
+      if(idx<0)continue;
+      const window=hay.slice(Math.max(0,idx-12),idx+needle.length+12);
+      if(!/假设|预计|拟定|待确认|约|大约|大概|左右/.test(window))
         found.push(finding('R06b',page.slotId,'block',page.title,text,'把假设写成了事实：'+text,'加“假设”或“预计”，并写清假设不成立的代价'));
     }
 

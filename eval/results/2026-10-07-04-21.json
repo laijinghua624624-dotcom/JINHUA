@@ -1,0 +1,383 @@
+{
+  "at": "2026-10-07T04:21:03.559Z",
+  "cases": [
+    {
+      "id": "double11-champion",
+      "title": "双十一 · 初瑞雪《冠军篇》",
+      "baseline": null,
+      "checksPassed": 25,
+      "checksTotal": 26,
+      "checks": [
+        {
+          "name": "有方向候选",
+          "ok": true,
+          "detail": ""
+        },
+        {
+          "name": "脚本七段基本齐",
+          "ok": true,
+          "detail": "outline/meaning/description/dialogue"
+        },
+        {
+          "name": "四幕有内容",
+          "ok": true,
+          "detail": ""
+        },
+        {
+          "name": "有主题句",
+          "ok": true,
+          "detail": "冠军也会被问还行不行"
+        },
+        {
+          "name": "主题句够短",
+          "ok": true,
+          "detail": "字数 10"
+        },
+        {
+          "name": "有视觉规则",
+          "ok": true,
+          "detail": "4 阶段"
+        },
+        {
+          "name": "时间轴 ≥4 段",
+          "ok": true,
+          "detail": "7 段"
+        },
+        {
+          "name": "关键场次 ≥2 场",
+          "ok": true,
+          "detail": "4 场"
+        },
+        {
+          "name": "时间轴总长对得上成片",
+          "ok": true,
+          "detail": "120s vs 成片 120s（差 0%）"
+        },
+        {
+          "name": "每页都有讲稿",
+          "ok": true,
+          "detail": "10/10"
+        },
+        {
+          "name": "讲稿长度在 25–140 字",
+          "ok": true,
+          "detail": "最短 60／最长 76"
+        },
+        {
+          "name": "执行八页 ≥6 页",
+          "ok": true,
+          "detail": ""
+        },
+        {
+          "name": "有待核实与风险清单",
+          "ok": true,
+          "detail": ""
+        },
+        {
+          "name": "四张视觉提示词各不同",
+          "ok": true,
+          "detail": "4/4"
+        },
+        {
+          "name": "提示词带真实空间或影调",
+          "ok": true,
+          "detail": ""
+        },
+        {
+          "name": "真的生成了参考图",
+          "ok": true,
+          "detail": ""
+        },
+        {
+          "name": "看图判断已完成",
+          "ok": true,
+          "detail": ""
+        },
+        {
+          "name": "看图判断真的读到了图",
+          "ok": true,
+          "detail": ""
+        },
+        {
+          "name": "看图结论有下一步",
+          "ok": true,
+          "detail": ""
+        },
+        {
+          "name": "附录·讲述顺序 ≥4 段",
+          "ok": true,
+          "detail": "5 段"
+        },
+        {
+          "name": "附录·讲述时长 8–20 分钟",
+          "ok": true,
+          "detail": "8 分钟"
+        },
+        {
+          "name": "附录·拍摄清单 ≥5 条",
+          "ok": true,
+          "detail": "8 条"
+        },
+        {
+          "name": "附录·答疑 ≥4 问",
+          "ok": true,
+          "detail": "6 问"
+        },
+        {
+          "name": "没有空话词",
+          "ok": false,
+          "detail": "闭环"
+        },
+        {
+          "name": "没编造金额",
+          "ok": true,
+          "detail": ""
+        },
+        {
+          "name": "页面无报错",
+          "ok": true,
+          "detail": ""
+        }
+      ],
+      "judge": {
+        "A": {
+          "score": 9,
+          "why": "需求理解准确，紧扣'从自我怀疑到全力以赴'的情绪目标，并明确标注了平台流量、实拍光效、预约卡片样式等待确认项，边界声明清晰。"
+        },
+        "B": {
+          "score": 13,
+          "why": "核心创意提炼为'冠军也会被问还行不行'，并设计了可模仿的'握拳捶胸+鼓点'动作母题，具有可识别的一句话主张，且非brief字面复述。"
+        },
+        "C": {
+          "score": 9,
+          "why": "主题句'冠军也会被问还行不行'短而有力，能引发共鸣，容纳不同经历，不是传播话术，具有记忆点。"
+        },
+        "D": {
+          "score": 14,
+          "why": "四幕结构完整，时间轴与120秒成片一致，关键场次（隧道转身、光路行进、舞台集结、结尾爆发）可拍，动作母题贯穿始终。"
+        },
+        "E": {
+          "score": 18,
+          "why": "视觉规则明确，分为积蓄、唤醒、行进、爆发四个动作阶段，影调从黑暗剪影到光路点亮再到舞台爆发，可执行性强，黑白灰阶考虑周全。"
+        },
+        "F": {
+          "score": 27,
+          "why": "执行条线齐备，涵盖选角、摄影、灯光、声音、制片、待核实与风险，逐页讲稿能直接讲满15分钟，汇报完成度高。"
+        },
+        "total": 90,
+        "top_gap": "最该补的一件事：确认平台流量支持与互动挑战的运营资源，否则动作母题的传播规模无法保证。",
+        "judgeTokens": 5157
+      },
+      "latency": {
+        "totalSec": 436,
+        "steps": {
+          "directions": 43,
+          "script": 46,
+          "theme": 25,
+          "shots": 36,
+          "images": 71,
+          "review": 38,
+          "notes": 40,
+          "exec": 86,
+          "appendix": 39
+        }
+      },
+      "cost": {
+        "calls": 8,
+        "tokens": 48787,
+        "thinkingCalls": 7,
+        "retried": 0,
+        "imagesRead": 1
+      }
+    },
+    {
+      "id": "double11-magic",
+      "title": "双十一 · 初瑞雪《魔术篇》",
+      "baseline": null,
+      "checksPassed": 26,
+      "checksTotal": 26,
+      "checks": [
+        {
+          "name": "有方向候选",
+          "ok": true,
+          "detail": ""
+        },
+        {
+          "name": "脚本七段基本齐",
+          "ok": true,
+          "detail": "outline/meaning/description/dialogue"
+        },
+        {
+          "name": "四幕有内容",
+          "ok": true,
+          "detail": ""
+        },
+        {
+          "name": "有主题句",
+          "ok": true,
+          "detail": "她曾经不被看见现在站中间"
+        },
+        {
+          "name": "主题句够短",
+          "ok": true,
+          "detail": "字数 12"
+        },
+        {
+          "name": "有视觉规则",
+          "ok": true,
+          "detail": "4 阶段"
+        },
+        {
+          "name": "时间轴 ≥4 段",
+          "ok": true,
+          "detail": "7 段"
+        },
+        {
+          "name": "关键场次 ≥2 场",
+          "ok": true,
+          "detail": "4 场"
+        },
+        {
+          "name": "时间轴总长对得上成片",
+          "ok": true,
+          "detail": "60s vs 成片 60s（差 0%）"
+        },
+        {
+          "name": "每页都有讲稿",
+          "ok": true,
+          "detail": "10/10"
+        },
+        {
+          "name": "讲稿长度在 25–140 字",
+          "ok": true,
+          "detail": "最短 82／最长 97"
+        },
+        {
+          "name": "执行八页 ≥6 页",
+          "ok": true,
+          "detail": ""
+        },
+        {
+          "name": "有待核实与风险清单",
+          "ok": true,
+          "detail": ""
+        },
+        {
+          "name": "四张视觉提示词各不同",
+          "ok": true,
+          "detail": "4/4"
+        },
+        {
+          "name": "提示词带真实空间或影调",
+          "ok": true,
+          "detail": ""
+        },
+        {
+          "name": "真的生成了参考图",
+          "ok": true,
+          "detail": ""
+        },
+        {
+          "name": "看图判断已完成",
+          "ok": true,
+          "detail": ""
+        },
+        {
+          "name": "看图判断真的读到了图",
+          "ok": true,
+          "detail": ""
+        },
+        {
+          "name": "看图结论有下一步",
+          "ok": true,
+          "detail": ""
+        },
+        {
+          "name": "附录·讲述顺序 ≥4 段",
+          "ok": true,
+          "detail": "5 段"
+        },
+        {
+          "name": "附录·讲述时长 8–20 分钟",
+          "ok": true,
+          "detail": "8 分钟"
+        },
+        {
+          "name": "附录·拍摄清单 ≥5 条",
+          "ok": true,
+          "detail": "8 条"
+        },
+        {
+          "name": "附录·答疑 ≥4 问",
+          "ok": true,
+          "detail": "6 问"
+        },
+        {
+          "name": "没有空话词",
+          "ok": true,
+          "detail": ""
+        },
+        {
+          "name": "没编造金额",
+          "ok": true,
+          "detail": ""
+        },
+        {
+          "name": "页面无报错",
+          "ok": true,
+          "detail": ""
+        }
+      ],
+      "judge": {
+        "A": {
+          "score": 9,
+          "why": "需求理解准确，紧扣brief中的魔术悬念、实拍可行、竖版等要求；未核实处（服装、预约文案、箱体尺寸、报价）均明确标注待确认，边界清晰。"
+        },
+        "B": {
+          "score": 14,
+          "why": "核心创意“空箱走出传奇”有可识别的一句话主张，且不是brief字面复述；将“不被看见到站中间”转化为具体魔术动作，有跳跃性。"
+        },
+        "C": {
+          "score": 9,
+          "why": "主题句“她曾经不被看见现在站中间”短、可记、能容纳不同经历，非传播话术；与创意和画面强关联。"
+        },
+        "D": {
+          "score": 14,
+          "why": "四幕结构完整，时间轴与60秒成片一致，场次可拍；关键场次（空箱、旋转、现身、互动）均有具体执行描述。"
+        },
+        "E": {
+          "score": 18,
+          "why": "视觉规则明确：黑色舞台、单束追光、金色线条、旋转遮掩、环绕镜头；影调可执行，且与情绪递进匹配。"
+        },
+        "F": {
+          "score": 27,
+          "why": "执行条线齐备（选角、摄影、灯光、声音、制片、核实、风险），待核实与风险清楚，逐页讲稿能直接讲；但箱体尺寸和报价未定，影响开拍前准备。"
+        },
+        "total": 91,
+        "top_gap": "最该补的一件事：尽快确认定制旋转魔术箱的尺寸、制作方和报价，否则无法推进道具打样和现场调度。",
+        "judgeTokens": 4158
+      },
+      "latency": {
+        "totalSec": 360,
+        "steps": {
+          "directions": 36,
+          "script": 34,
+          "theme": 38,
+          "shots": 51,
+          "images": 53,
+          "review": 28,
+          "notes": 33,
+          "exec": 40,
+          "appendix": 36
+        }
+      },
+      "cost": {
+        "calls": 8,
+        "tokens": 42943,
+        "thinkingCalls": 7,
+        "retried": 0,
+        "imagesRead": 1
+      }
+    }
+  ]
+}

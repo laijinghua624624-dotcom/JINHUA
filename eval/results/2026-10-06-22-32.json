@@ -1,0 +1,413 @@
+{
+  "at": "2026-10-06T22:32:29.889Z",
+  "cases": [
+    {
+      "id": "fireworks",
+      "title": "放焰火 · 跨年晚会预热",
+      "baseline": 70,
+      "checksPassed": 16,
+      "checksTotal": 16,
+      "checks": [
+        {
+          "name": "有方向候选",
+          "ok": true,
+          "detail": ""
+        },
+        {
+          "name": "脚本七段基本齐",
+          "ok": true,
+          "detail": "outline/meaning/description/dialogue"
+        },
+        {
+          "name": "四幕有内容",
+          "ok": true,
+          "detail": ""
+        },
+        {
+          "name": "有主题句",
+          "ok": true,
+          "detail": "一个人也能放一场"
+        },
+        {
+          "name": "主题句够短",
+          "ok": true,
+          "detail": "字数 8"
+        },
+        {
+          "name": "有视觉规则",
+          "ok": true,
+          "detail": "4 阶段"
+        },
+        {
+          "name": "时间轴 ≥4 段",
+          "ok": true,
+          "detail": "8 段"
+        },
+        {
+          "name": "关键场次 ≥2 场",
+          "ok": true,
+          "detail": "4 场"
+        },
+        {
+          "name": "时间轴总长对得上成片",
+          "ok": true,
+          "detail": "123s vs 成片 123s（差 0%）"
+        },
+        {
+          "name": "每页都有讲稿",
+          "ok": true,
+          "detail": "10/10"
+        },
+        {
+          "name": "讲稿长度在 25–140 字",
+          "ok": true,
+          "detail": "最短 76／最长 104"
+        },
+        {
+          "name": "执行八页 ≥6 页",
+          "ok": true,
+          "detail": ""
+        },
+        {
+          "name": "有待核实与风险清单",
+          "ok": true,
+          "detail": ""
+        },
+        {
+          "name": "没有空话词",
+          "ok": true,
+          "detail": ""
+        },
+        {
+          "name": "没编造金额",
+          "ok": true,
+          "detail": ""
+        },
+        {
+          "name": "页面无报错",
+          "ok": true,
+          "detail": ""
+        }
+      ],
+      "judge": {
+        "A": {
+          "score": 9,
+          "why": "需求理解准确，紧扣跨年节点、黑白影调、手部动作母题，未核实事项（如预算、周期、演员、版权）均明确标注，边界清晰。"
+        },
+        "B": {
+          "score": 14,
+          "why": "核心创意“手指模拟焰火绽放”具有可识别的一句话主张，且不是 brief 的字面复述，动作母题独特且易传播。"
+        },
+        "C": {
+          "score": 9,
+          "why": "主题句“一个人也能放一场”短而有力，能容纳不同人的经历，不是传播话术，具有情感共鸣。"
+        },
+        "D": {
+          "score": 14,
+          "why": "四幕结构完整，时间轴与成片时长一致，场次具体可拍，关键动作和字幕节点清晰。"
+        },
+        "E": {
+          "score": 18,
+          "why": "视觉规则明确（蓄、绽、亮、散），黑白高反差、顶光侧光、微距特写等影调可执行，视觉参考具体。"
+        },
+        "F": {
+          "score": 27,
+          "why": "执行条线齐备，选角、摄影、灯光、声音、制作流程、风险均有详细说明，逐页讲稿可直接用于汇报，待确认事项清楚。"
+        },
+        "total": 91,
+        "top_gap": "最该补的一件事：确认客户对黑白影像和纯手部特写的接受度，以及真实焰火素材的版权与使用许可。",
+        "judgeTokens": 5411
+      },
+      "latency": {
+        "totalSec": 215,
+        "steps": {
+          "directions": 23,
+          "script": 50,
+          "theme": 35,
+          "shots": 28,
+          "notes": 27,
+          "exec": 40
+        }
+      },
+      "cost": {
+        "calls": 6,
+        "tokens": 34568,
+        "thinkingCalls": 6,
+        "retried": 1,
+        "imagesRead": 0
+      }
+    },
+    {
+      "id": "station",
+      "title": "人生站台 · 时间容器",
+      "baseline": null,
+      "checksPassed": 15,
+      "checksTotal": 16,
+      "checks": [
+        {
+          "name": "有方向候选",
+          "ok": true,
+          "detail": ""
+        },
+        {
+          "name": "脚本七段基本齐",
+          "ok": true,
+          "detail": "outline/meaning/description/dialogue"
+        },
+        {
+          "name": "四幕有内容",
+          "ok": true,
+          "detail": ""
+        },
+        {
+          "name": "有主题句",
+          "ok": true,
+          "detail": "没寄出的信，也被听见了"
+        },
+        {
+          "name": "主题句够短",
+          "ok": true,
+          "detail": "字数 11"
+        },
+        {
+          "name": "有视觉规则",
+          "ok": true,
+          "detail": "4 阶段"
+        },
+        {
+          "name": "时间轴 ≥4 段",
+          "ok": true,
+          "detail": "8 段"
+        },
+        {
+          "name": "关键场次 ≥2 场",
+          "ok": true,
+          "detail": "4 场"
+        },
+        {
+          "name": "时间轴总长对得上成片",
+          "ok": true,
+          "detail": "395s vs 成片 395s（差 0%）"
+        },
+        {
+          "name": "每页都有讲稿",
+          "ok": true,
+          "detail": "10/10"
+        },
+        {
+          "name": "讲稿长度在 25–140 字",
+          "ok": true,
+          "detail": "最短 82／最长 103"
+        },
+        {
+          "name": "执行八页 ≥6 页",
+          "ok": true,
+          "detail": ""
+        },
+        {
+          "name": "有待核实与风险清单",
+          "ok": true,
+          "detail": ""
+        },
+        {
+          "name": "没有空话词",
+          "ok": false,
+          "detail": "闭环"
+        },
+        {
+          "name": "没编造金额",
+          "ok": true,
+          "detail": ""
+        },
+        {
+          "name": "页面无报错",
+          "ok": true,
+          "detail": ""
+        }
+      ],
+      "judge": {
+        "A": {
+          "score": 9,
+          "why": "需求理解准确，紧扣'时间容器'与'没说出口的话'，边界声明清晰，多处标注待确认事项（如照片内容、授权、场地尺寸），未核实处不编造。"
+        },
+        "B": {
+          "score": 14,
+          "why": "核心创意明确：'没寄出的信，也被听见了'，以未投递的信作为时间容器，将抽象情感具象化，且非brief字面复述，有可识别的主张。"
+        },
+        "C": {
+          "score": 9,
+          "why": "主题句'没寄出的信，也被听见了'短而有力，能容纳不同人的经历，不是传播话术，具有普适性和记忆点。"
+        },
+        "D": {
+          "score": 14,
+          "why": "四幕结构完整（建立-推进-转折-落点），时间轴与成片时长一致，关键场次齐备且可拍，场次设计具体，动作与情绪递进清晰。"
+        },
+        "E": {
+          "score": 18,
+          "why": "视觉规则明确：老屋固定长镜头、自然光，站台车厢手持，一动一静对比；影调统一旧照片暖黄，执行细节具体（光比、灰阶、长焦压缩），可操作性强。"
+        },
+        "F": {
+          "score": 27,
+          "why": "执行条线齐备（选角、摄影、灯光、声音、制作流程），待核实与风险清楚，逐页讲稿能直接讲满15分钟，汇报完成度高。"
+        },
+        "total": 91,
+        "top_gap": "最该补的一件事：确认结尾真实照片的具体内容与授权，因为它是全片情感落点和主题闭环的关键，且涉及版权与肖像权，需优先解决。",
+        "judgeTokens": 5320
+      },
+      "latency": {
+        "totalSec": 219,
+        "steps": {
+          "directions": 16,
+          "script": 38,
+          "theme": 29,
+          "shots": 37,
+          "notes": 38,
+          "exec": 47
+        }
+      },
+      "cost": {
+        "calls": 6,
+        "tokens": 34833,
+        "thinkingCalls": 6,
+        "retried": 0,
+        "imagesRead": 0
+      }
+    },
+    {
+      "id": "winter",
+      "title": "冬日羽绒 · 产品短片",
+      "baseline": null,
+      "checksPassed": 16,
+      "checksTotal": 16,
+      "checks": [
+        {
+          "name": "有方向候选",
+          "ok": true,
+          "detail": ""
+        },
+        {
+          "name": "脚本七段基本齐",
+          "ok": true,
+          "detail": "outline/meaning/description/dialogue"
+        },
+        {
+          "name": "四幕有内容",
+          "ok": true,
+          "detail": ""
+        },
+        {
+          "name": "有主题句",
+          "ok": true,
+          "detail": "轻到能把自己暖住"
+        },
+        {
+          "name": "主题句够短",
+          "ok": true,
+          "detail": "字数 8"
+        },
+        {
+          "name": "有视觉规则",
+          "ok": true,
+          "detail": "4 阶段"
+        },
+        {
+          "name": "时间轴 ≥4 段",
+          "ok": true,
+          "detail": "8 段"
+        },
+        {
+          "name": "关键场次 ≥2 场",
+          "ok": true,
+          "detail": "4 场"
+        },
+        {
+          "name": "时间轴总长对得上成片",
+          "ok": true,
+          "detail": "15s vs 成片 15s（差 0%）"
+        },
+        {
+          "name": "每页都有讲稿",
+          "ok": true,
+          "detail": "10/10"
+        },
+        {
+          "name": "讲稿长度在 25–140 字",
+          "ok": true,
+          "detail": "最短 89／最长 101"
+        },
+        {
+          "name": "执行八页 ≥6 页",
+          "ok": true,
+          "detail": ""
+        },
+        {
+          "name": "有待核实与风险清单",
+          "ok": true,
+          "detail": ""
+        },
+        {
+          "name": "没有空话词",
+          "ok": true,
+          "detail": ""
+        },
+        {
+          "name": "没编造金额",
+          "ok": true,
+          "detail": ""
+        },
+        {
+          "name": "页面无报错",
+          "ok": true,
+          "detail": ""
+        }
+      ],
+      "judge": {
+        "A": {
+          "score": 8,
+          "why": "需求理解到位，明确15秒、竖版横版、轻暖反差、不露正脸、无品牌标识等限制；未核实处如帧率、场地、字幕、服装细节均标注待确认。"
+        },
+        "B": {
+          "score": 13,
+          "why": "核心创意为“羽绒服像云一样飘落”，用慢动作将衣服下落过程转化为轻的视觉隐喻，非brief字面复述，具有可识别的一句话主张。"
+        },
+        "C": {
+          "score": 9,
+          "why": "主题句“轻到能把自己暖住”短而有力，将轻与暖统一于身体感受，能容纳不同观众对温暖与轻盈的联想，非传播话术。"
+        },
+        "D": {
+          "score": 14,
+          "why": "四幕结构清晰：松落、承接穿衣、轻步、回暖缩入，时间轴精确到秒，场次可拍，与15秒成片时长一致。"
+        },
+        "E": {
+          "score": 17,
+          "why": "视觉规则明确：升格慢动作、冷调、单侧柔光、灰阶控制；动作阶段划分清楚，影像与调性可执行，但部分技术细节如帧率、黑白与否待确认。"
+        },
+        "F": {
+          "score": 26,
+          "why": "执行条线齐备：选角、摄影、灯光、声音、制片、待核实清单、风险均有涉及；逐页讲稿共10页，每页约30-40秒，总时长约5分钟，未达15分钟要求，需扩充讲稿内容或增加汇报细节。"
+        },
+        "total": 87,
+        "top_gap": "逐页讲稿仅约5分钟，需扩充至15分钟，补充创意推导、分镜详解、执行预案等，以满足汇报时长要求。",
+        "judgeTokens": 5036
+      },
+      "latency": {
+        "totalSec": 208,
+        "steps": {
+          "directions": 33,
+          "script": 28,
+          "theme": 27,
+          "shots": 31,
+          "notes": 29,
+          "exec": 47
+        }
+      },
+      "cost": {
+        "calls": 6,
+        "tokens": 32926,
+        "thinkingCalls": 6,
+        "retried": 0,
+        "imagesRead": 0
+      }
+    }
+  ]
+}

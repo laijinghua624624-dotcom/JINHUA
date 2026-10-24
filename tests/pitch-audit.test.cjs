@@ -76,6 +76,16 @@ test('假设被写成事实、空话词过多、缺风险页都会被指出',()=
   assert.ok(rules.some(r=>r.id==='R09'));
 });
 
+test('写成约数的场地条件不算把假设当成事实',()=>{
+  const d=deck();
+  d.facts.assumed=['老式居民楼房间，约 4×6 米，一扇朝东窗'];
+  d.pages.find(p=>p.slotId==='camera').notes='老式居民楼房间，约 4×6 米，一扇朝东窗';
+  assert.ok(!A.scan(d).some(r=>r.id==='R06b'));
+  d.pages.find(p=>p.slotId==='camera').notes='老式居民楼房间可以借用，已和物业谈好';
+  d.facts.assumed=['老式居民楼房间可以借用'];
+  assert.ok(A.scan(d).some(r=>r.id==='R06b'));
+});
+
 test('结尾不是决策清单、或决策项过多都会被指出',()=>{
   const d=deck();
   d.chapters=chapters;

@@ -126,21 +126,34 @@ function radarHistory(){const value=readJSON('jinhua_mobile_radar_seen',[]);retu
 state.radarSeen=radarHistory();
 function radarPool(){const muted=new Set(state.radarMuted),filtered=Radar.CASES.filter(item=>!muted.has(item.category));return filtered.length>=3?filtered:Radar.CASES;}
 function radarSeed(key){return Number(key.replace(/\D/g,''))||Math.floor(Date.now()/86400000);}
+const SIGNAL_KEY='lance_radar_signals_v1';
+function radarSignalStore(){const value=readJSON(SIGNAL_KEY,null);return value&&Array.isArray(value.events)?value:Radar.emptySignals();}
+function radarProfile(){
+  const stored=radarSignalStore();
+  return Radar.deriveSignals({cases:Radar.CASES,events:stored.events,savedIds:radarSaved()});
+}
+function radarRecord(kind,item){if(!item||!item.id)return;try{localStorage.setItem(SIGNAL_KEY,JSON.stringify(Radar.appendSignal(radarSignalStore(),{kind,item})));}catch{}}
+function mobileRecordOpen(id){radarRecord('open',Radar.CASES.find(item=>item.id===id));}
+function radarWhy(item){const why=(state.radarWhy||{})[item.id];return why&&why.length?`<p class="radar-why"><b>为什么推给你</b>${why.map(esc).join(' · ')}</p>`:'';}
 function radarPicks(force=false){
-  const date=localDayKey(),pool=radarPool(),cached=readJSON(DAILY_KEY,null);
+  const date=localDayKey(),pool=radarPool(),cached=readJSON(DAILY_KEY,null),profile=radarProfile(),context=null;
   if(!force&&state.radarCurrent.length&&state.radarDate===date)return state.radarCurrent;
   if(!force&&state.radarOffset===0&&cached?.date===date&&Array.isArray(cached.ids)){
     const restored=cached.ids.map(id=>pool.find(item=>item.id===id)).filter(Boolean);
     if(restored.length===Math.min(3,pool.length)){
-      state.radarCurrent=restored;state.radarDate=date;
+      state.radarCurrent=restored;state.radarDate=date;state.radarWhy=cached.why||{};
       state.radarRemaining=Math.max(0,pool.length-state.radarSeen.filter(id=>pool.some(item=>item.id===id)).length);
+      state.radarShown=state.radarSeen.filter(id=>pool.some(item=>item.id===id)).length;
       return restored;
     }
   }
-  const batch=Radar.mobileBatch(pool,state.radarSeen,radarSeed(date)+state.radarOffset*97,3,state.radarPreferred);
-  state.radarCurrent=batch.items;state.radarSeen=batch.seen;state.radarRemaining=batch.remaining;state.radarReset=batch.reset;state.radarDate=date;
-  localStorage.setItem('jinhua_mobile_radar_seen',JSON.stringify(batch.seen));
-  localStorage.setItem(DAILY_KEY,JSON.stringify({date,ids:batch.items.map(item=>item.id)}));
+  const batch=Radar.planSmart(pool,{seenIds:state.radarSeen,date:new Date(),offset:state.radarOffset,count:3,profile,context});
+  const why={};for(const pick of batch.picks)why[pick.id]=pick.why;
+  state.radarCurrent=batch.items;state.radarSeen=batch.seen;state.radarRemaining=batch.remaining;state.radarShown=batch.shown;state.radarReset=batch.reset;state.radarDate=date;state.radarWhy=why;
+  try{
+    localStorage.setItem('jinhua_mobile_radar_seen',JSON.stringify(batch.seen));
+    localStorage.setItem(DAILY_KEY,JSON.stringify({date,ids:batch.items.map(item=>item.id),why}));
+  }catch{}
   return state.radarCurrent;
 }
 function ensureDailyRadar(notify=false){
@@ -154,23 +167,59 @@ function radarBody(item){return [`【选题雷达】${item.category} · ${item.t
 function radarCard(item){
   const saved=radarSaved().includes(item.id),base=location.hostname.endsWith('github.io')?'https://lance-content-studio.onrender.com':'',preview=item.poster?`${base}/api/radar-preview?url=${encodeURIComponent(item.poster)}`:'';
   const visual=preview?`<img src="${esc(preview)}" alt="${esc(item.title)}案例预览" loading="lazy" onload="const b=this.closest('.radar-mobile-visual');if(this.naturalWidth<120||this.naturalHeight<80){b.classList.add('image-failed');this.remove()}else b.classList.add('image-loaded')" onerror="this.closest('.radar-mobile-visual').classList.add('image-failed');this.remove()">`:`<div class="radar-mobile-placeholder"><span>${esc(item.visualFocus||item.category)}</span></div>`;
-  return `<article class="radar-mobile-card ${item.visualFocus?'visual-first':''}"><a class="radar-mobile-visual" href="${esc(item.url)}" target="_blank" rel="noopener noreferrer">${visual}<span class="radar-visual-source">${esc(item.site||'案例来源')} · 只看原片 ↗</span></a><div class="radar-mobile-content"><div class="radar-mobile-top"><span class="pill">${esc(item.visualFocus||item.category)}</span><small>${esc(item.category)} · ${esc(item.type)}</small></div><h2>${esc(item.title)}</h2><p class="radar-mobile-mechanism">${esc(item.mechanism)}</p><dl><div><dt>${item.visualFocus?'画面为什么值得看':'创意为什么成立'}</dt><dd>${esc(item.craft)}</dd></div><div><dt>我可以怎么拍</dt><dd>${esc(item.transfer)}</dd></div></dl><details class="radar-mobile-details radar-mobile-cn"><summary>中文看片卡 · 英文不用硬读</summary><div><b>这是什么</b><p>${esc(item.goal)}</p><b>故事怎么走</b><p>${esc(item.arc)}</p><b>开场8秒</b><p>${esc(item.hook)}</p><b>封面怎么判断</b><p>${esc(item.cover)}</p><b>注意别照搬</b><p>${esc([item.avoid,item.risk].filter(Boolean).join('；'))}</p></div></details><div class="button-row"><a class="secondary mobile-link-button" href="${esc(item.url)}" target="_blank" rel="noopener noreferrer">值得看，再开原片 ↗</a><button class="primary" data-action="radar-save" data-id="${esc(item.id)}" ${saved?'disabled':''}>${saved?'已进收件箱':'收下这个选题'}</button></div><div class="radar-feedback"><button data-action="radar-more-like" data-category="${esc(item.category)}">多看此类</button><button data-action="radar-less" data-category="${esc(item.category)}">少看此类</button></div></div></article>`;
+  return `<article class="radar-mobile-card ${item.visualFocus?'visual-first':''}"><a class="radar-mobile-visual" href="${esc(item.url)}" target="_blank" rel="noopener noreferrer" onclick="mobileRecordOpen('${esc(item.id)}')">${visual}<span class="radar-visual-source">${esc(item.site||'案例来源')} · 只看原片 ↗</span></a><div class="radar-mobile-content"><div class="radar-mobile-top"><span class="pill">${esc(item.visualFocus||item.category)}</span><small>${esc(item.category)} · ${esc(item.type)}</small></div><h2>${esc(item.title)}</h2>${radarWhy(item)}<p class="radar-mobile-mechanism">${esc(item.mechanism)}</p><dl><div><dt>${item.visualFocus?'画面为什么值得看':'创意为什么成立'}</dt><dd>${esc(item.craft)}</dd></div><div><dt>我可以怎么拍</dt><dd>${esc(item.transfer)}</dd></div></dl><details class="radar-mobile-details radar-mobile-cn"><summary>中文看片卡 · 英文不用硬读</summary><div><b>这是什么</b><p>${esc(item.goal)}</p><b>故事怎么走</b><p>${esc(item.arc)}</p><b>开场8秒</b><p>${esc(item.hook)}</p><b>封面怎么判断</b><p>${esc(item.cover)}</p><b>注意别照搬</b><p>${esc([item.avoid,item.risk].filter(Boolean).join('；'))}</p></div></details><div class="button-row"><a class="secondary mobile-link-button" href="${esc(item.url)}" target="_blank" rel="noopener noreferrer" onclick="mobileRecordOpen('${esc(item.id)}')">值得看，再开原片 ↗</a><button class="primary" data-action="radar-save" data-id="${esc(item.id)}" ${saved?'disabled':''}>${saved?'已进收件箱':'收下这个选题'}</button></div><div class="radar-feedback"><button data-action="radar-more-like" data-category="${esc(item.category)}" data-id="${esc(item.id)}">多看此类</button><button data-action="radar-less" data-category="${esc(item.category)}" data-id="${esc(item.id)}">少看此类</button></div></div></article>`;
 }
-function radarView(){
-  const picks=radarPicks(),today=new Intl.DateTimeFormat('zh-CN',{timeZone:'Asia/Shanghai',month:'long',day:'numeric',weekday:'long'}).format(new Date()),visualCount=picks.filter(item=>item.visualFocus).length;
-  localStorage.setItem('jinhua_mobile_radar_last_viewed',localDayKey());
-  return header('VISUAL RADAR','今天先看 3 个视觉方向。','每天自动换新；先看图片和中文看片卡，有价值再进入原站。')+
-    `<section class="radar-mobile-toolbar"><div><span class="radar-date">${esc(today)} · 案例池还有 ${state.radarRemaining} 条待轮换</span><strong>${visualCount}条视觉 + ${picks.length-visualCount}条创意</strong></div><label>保存到<select id="radar-workspace"><option value="xinxuan" ${state.radarWorkspace==='xinxuan'?'selected':''}>My·工作</option><option value="personal" ${state.radarWorkspace==='personal'?'selected':''}>My·个人</option></select></label><button class="secondary radar-refresh-top" data-action="radar-refresh">换一组</button></section>`+
-    `<section class="mobile-list radar-mobile-list">${picks.map(radarCard).join('')}</section><div class="button-row radar-more"><button class="secondary" data-action="radar-refresh">换一组 · 本轮不重复</button><button class="secondary" data-tab="capture">记录我自己的想法</button></div>`+
-    `<section class="mobile-card reminder-card"><div><span class="mobile-kicker">CALENDAR REMINDER</span><h2>每天定时提醒我来看</h2><p>这是固定文案的系统日历提醒，不是动态推送；打开后会自动显示当天新内容。</p></div><label>提醒时间<input id="radar-reminder-time" type="time" value="${esc(state.reminderTime)}"></label><button class="primary" data-action="radar-reminder">添加每日日历提醒</button><p class="file-note">首次点击会下载日历文件，请在系统日历中确认“添加全部”；不要重复添加。</p></section>`;
+// ── 来自你收藏的网站的最新更新 ──────────────────────────────
+const NEWS_KEY='jinhua_mobile_radar_news_v1';
+const FEED_SOURCES=[{id:'digitaling',name:'数英'},{id:'eventmarketer',name:'Event Marketer'},{id:'stash',name:'Stash'},{id:'livedesign',name:'Live Design'},{id:'directorslibrary',name:'Directors’ Library'}];
+let mobileNews={day:'',items:[],loading:false,error:'',pending:false};
+function mobileFeedSources(){
+  const sites=new Set();
+  for(const id of radarSaved()){const item=Radar.CASES.find(value=>value.id===id);if(item&&item.site)sites.add(item.site);}
+  const ids=FEED_SOURCES.filter(source=>sites.has(source.name)).map(source=>source.id);
+  return ids.length?ids:FEED_SOURCES.map(source=>source.id);
 }
-
-async function saveRadar(item){
-  const workspace=document.querySelector('#radar-workspace')?.value||state.radarWorkspace;
-  state.radarWorkspace=workspace;localStorage.setItem('jinhua_radar_workspace',workspace);
+function mobileNewsMarkup(){
+  const head=`<section class="mobile-card radar-news-mobile"><div><span class="mobile-kicker">FROM YOUR SOURCES</span><h2>你喜欢的网站 · 最新</h2><p>只带标题、链接和封面；正文请回原站看。</p></div>`;
+  if(mobileNews.loading)return `${head}<p class="file-note">正在读取网站更新…</p></section>`;
+  if(mobileNews.error)return `${head}<p class="file-note">${esc(mobileNews.error)}</p></section>`;
+  if(!mobileNews.items.length)return `${head}<p class="file-note">这些网站最近没有新内容。</p></section>`;
+  const rows=mobileNews.items.map(item=>{
+    const saved=radarSaved().includes(item.id);
+    const preview=item.poster?`<img src="${esc(location.hostname.endsWith('github.io')?'https://lance-content-studio.onrender.com':'')}/api/radar-preview?url=${encodeURIComponent(item.poster)}" alt="" loading="lazy" onerror="this.remove()">`:'';
+    return `<article class="radar-news-row"><a class="radar-news-thumb" href="${esc(item.url)}" target="_blank" rel="noopener noreferrer">${preview||'<span>原站</span>'}</a><div><small>${esc(item.site||'')}</small><h3>${esc(item.title)}</h3><div class="button-row"><a class="secondary mobile-link-button" href="${esc(item.url)}" target="_blank" rel="noopener noreferrer">打开原文 ↗</a><button class="primary" data-action="radar-news-save" data-id="${esc(item.id)}" ${saved?'disabled':''}>${saved?'已收藏':'收下'}</button></div></div></article>`;
+  }).join('');
+  return `${head}<div class="radar-news-rows">${rows}</div><div class="button-row"><button class="secondary" data-action="radar-news-refresh">刷新更新</button></div></section>`;
+}
+async function mobileLoadNews(force=false){
+  const day=localDayKey(),cached=readJSON(NEWS_KEY,null);
+  if(!force&&cached&&cached.day===day&&Array.isArray(cached.items)&&cached.items.length){mobileNews={...cached,loading:false,error:'',pending:false};return mobileNews;}
+  mobileNews={day,items:[],loading:true,error:'',pending:false};
+  try{
+    const base=location.hostname.endsWith('github.io')?'https://lance-content-studio.onrender.com':'';
+    const response=await fetch(`${base}/api/radar-feed?source=${encodeURIComponent(mobileFeedSources().join(','))}&limit=6`,{cache:'no-store'});
+    if(!response.ok)throw Error(`网站更新暂时取不到（${response.status}）`);
+    const data=await response.json();
+    mobileNews={day,items:Array.isArray(data.items)?data.items:[],loading:false,error:'',pending:false};
+    try{localStorage.setItem(NEWS_KEY,JSON.stringify(mobileNews));}catch{}
+  }catch(error){
+    mobileNews={day,items:[],loading:false,error:error.message||'网站更新暂时取不到',pending:false};
+  }
+  return mobileNews;
+}
+function mobileEnsureNews(){
+  const day=localDayKey();
+  if(mobileNews.pending||mobileNews.loading)return;
+  if(mobileNews.day===day&&(mobileNews.items.length||mobileNews.error))return;
+  mobileNews.pending=true;
+  mobileLoadNews().then(()=>{mobileNews.pending=false;const node=document.querySelector('.radar-news-mobile');if(node){node.outerHTML=mobileNewsMarkup();}else if(state.tab==='radar')render();}).catch(()=>{mobileNews.pending=false;});
+}
+async function saveMobileNews(item){
+  if(!item)return;
+  const workspace=state.radarWorkspace||'xinxuan';
   const duplicate=state.items.find(value=>value.status==='inbox'&&sameLink(value.source_url,item.url));
   if(duplicate){setRadarSaved([...radarSaved(),item.id]);render();show('这个链接已在待处理收件箱中','info',{name:'toast-inbox',label:'查看'});return;}
-  const record={localId:crypto.randomUUID(),workspace,kind:'link',title:`选题雷达｜${item.title}`,body:radarBody(item),source_url:item.url,file_name:null,mime_type:null,created_at:new Date().toISOString(),metadata:{captured_from:'mobile-radar',radar_source_id:item.id,category:item.category,visual_focus:item.visualFocus||''}};
+  const record={localId:crypto.randomUUID(),workspace,kind:'link',title:`网站更新｜${item.title}`,body:[`来源：${item.site||''}`,`发布：${item.publishedAt||''}`,'来自你收藏的网站公开更新；回到 Mac 后补拆解与不可照搬部分。'].join('\n'),source_url:item.url,file_name:null,mime_type:null,created_at:new Date().toISOString(),metadata:{captured_from:'mobile-feed',site:item.site||'',cover_url:item.poster||''}};
   let message,tone='success';
   try{
     if(Cloud.configured()&&state.session&&navigator.onLine){await Cloud.createInbox({...record,localId:undefined});message='已进入云端收件箱';}
@@ -178,16 +227,69 @@ async function saveRadar(item){
   }catch(error){await queuePut(record);message='云端暂时不可用，已先保存在手机：'+error.message;tone='warning';}
   setRadarSaved([...radarSaved(),item.id]);await updatePending();if(state.session)await loadCloud(false);render();show(message,tone,{name:'toast-inbox',label:'查看收件箱'});
 }
+function radarView(){
+  const picks=radarPicks(),today=new Intl.DateTimeFormat('zh-CN',{timeZone:'Asia/Shanghai',month:'long',day:'numeric',weekday:'long'}).format(new Date()),visualCount=picks.filter(item=>item.visualFocus).length;
+  localStorage.setItem('jinhua_mobile_radar_last_viewed',localDayKey());
+  mobileEnsureNews();
+  return header('VISUAL RADAR','今天先看 3 个视觉方向。','每天自动换新；先看图片和中文看片卡，有价值再进入原站。')+
+    `<section class="radar-mobile-toolbar"><div><span class="radar-date">${esc(today)} · 已看 ${state.radarShown||0} / ${radarPool().length} 条</span><strong>${visualCount}条视觉 + ${picks.length-visualCount}条创意</strong></div><label>保存到<select id="radar-workspace"><option value="xinxuan" ${state.radarWorkspace==='xinxuan'?'selected':''}>My·工作</option><option value="personal" ${state.radarWorkspace==='personal'?'selected':''}>My·个人</option></select></label><button class="secondary radar-refresh-top" data-action="radar-refresh">换一组</button></section>`+
+    `<section class="mobile-list radar-mobile-list">${picks.map(radarCard).join('')}</section><div class="button-row radar-more"><button class="secondary" data-action="radar-refresh">换一组 · 不重复</button><button class="secondary" data-tab="capture">记录我自己的想法</button></div>`+
+    mobileNewsMarkup()+
+    `<section class="mobile-card reminder-card"><div><span class="mobile-kicker">CALENDAR REMINDER</span><h2>每天定时提醒我来看</h2><p>按天生成 14 个日历事件，通知里会带上当天 3 条标题；打开后以 App 内实时内容为准。</p></div><label>提醒时间<input id="radar-reminder-time" type="time" value="${esc(state.reminderTime)}"></label><button class="primary" data-action="radar-reminder">生成 14 天日历提醒</button><p class="file-note">首次点击会下载日历文件，请在系统日历中确认“添加全部”；不要重复添加。</p></section>`;
+}
+
+async function saveRadar(item){
+  const workspace=document.querySelector('#radar-workspace')?.value||state.radarWorkspace;
+  state.radarWorkspace=workspace;localStorage.setItem('jinhua_radar_workspace',workspace);
+  const duplicate=state.items.find(value=>value.status==='inbox'&&sameLink(value.source_url,item.url));
+  if(duplicate){setRadarSaved([...radarSaved(),item.id]);radarRecord('save',item);render();show('这个链接已在待处理收件箱中','info',{name:'toast-inbox',label:'查看'});return;}
+  const record={localId:crypto.randomUUID(),workspace,kind:'link',title:`选题雷达｜${item.title}`,body:radarBody(item),source_url:item.url,file_name:null,mime_type:null,created_at:new Date().toISOString(),metadata:{captured_from:'mobile-radar',radar_source_id:item.id,category:item.category,visual_focus:item.visualFocus||'',cover_url:item.poster||''}};
+  let message,tone='success';
+  try{
+    if(Cloud.configured()&&state.session&&navigator.onLine){await Cloud.createInbox({...record,localId:undefined});message='已进入云端收件箱';}
+    else{await queuePut(record);message='已保存在手机，联网后会同步';}
+  }catch(error){await queuePut(record);message='云端暂时不可用，已先保存在手机：'+error.message;tone='warning';}
+  setRadarSaved([...radarSaved(),item.id]);radarRecord('save',item);await updatePending();if(state.session)await loadCloud(false);render();show(message,tone,{name:'toast-inbox',label:'查看收件箱'});
+}
 function calendarStamp(date){const two=value=>String(value).padStart(2,'0');return `${date.getFullYear()}${two(date.getMonth()+1)}${two(date.getDate())}T${two(date.getHours())}${two(date.getMinutes())}00`;}
+function icsText(value){return String(value||'').replace(/\\/g,'\\\\').replace(/;/g,'\\;').replace(/,/g,'\\,').replace(/\r?\n/g,'\\n');}
+function icsFold(line){const chunks=[];let rest=String(line);while(rest.length>72){chunks.push(rest.slice(0,72));rest=' '+rest.slice(72);}chunks.push(rest);return chunks.join('\r\n');}
+// 按天生成独立事件：通知里就能看到当天 3 条标题，而不是每天同一句。
+function radarReminderDays(count=14){
+  let seen=[...state.radarSeen];const days=[],today=new Date();
+  for(let index=0;index<count;index++){
+    const day=new Date(today.getFullYear(),today.getMonth(),today.getDate()+index);
+    const batch=Radar.planSmart(radarPool(),{seenIds:seen,date:day,count:3,profile:radarProfile()});
+    seen=batch.seen;
+    days.push({day,titles:batch.items.map(item=>item.title)});
+  }
+  return days;
+}
 function downloadRadarReminder(){
-  const input=document.querySelector('#radar-reminder-time'),value=input?.value||'09:30',[hour,minute]=value.split(':').map(Number),start=new Date();
-  start.setHours(hour,minute,0,0);if(start<=new Date())start.setDate(start.getDate()+1);
+  const input=document.querySelector('#radar-reminder-time'),value=input?.value||'09:30',[hour,minute]=value.split(':').map(Number);
   state.reminderTime=value;localStorage.setItem('jinhua_radar_reminder_time',value);
-  const url=new URL('./mobile.html#radar',location.href).href,created=new Date().toISOString().replace(/[-:]/g,'').replace(/\.\d{3}/,'');
-  const ics=['BEGIN:VCALENDAR','VERSION:2.0','PRODID:-//Lance Content Studio//Daily Radar//ZH-CN','CALSCALE:GREGORIAN','BEGIN:VEVENT',`UID:jinhua-daily-radar@${location.hostname||'local'}`,`DTSTAMP:${created}`,`DTSTART;TZID=Asia/Shanghai:${calendarStamp(start)}`,'RRULE:FREQ=DAILY','SUMMARY:Lance 视觉雷达｜来看今天的 3 个方向',`DESCRIPTION:提醒文案固定，打开后内容每天更新。\\n${url}`,`URL:${url}`,'BEGIN:VALARM','TRIGGER:PT0M','ACTION:DISPLAY','DESCRIPTION:打开 Lance 查看今日更新的视觉雷达','END:VALARM','END:VEVENT','END:VCALENDAR'].join('\r\n');
-  const blobUrl=URL.createObjectURL(new Blob([ics],{type:'text/calendar;charset=utf-8'})),link=document.createElement('a');
-  link.href=blobUrl;link.download='Lance视觉雷达-每日提醒.ics';document.body.appendChild(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(blobUrl),1000);
-  show('日历提醒已生成，请在系统日历中确认添加','success');
+  const url=new URL('./mobile.html#radar',location.href).href,created=new Date().toISOString().replace(/[-:]/g,'').replace(/\.\d{3}/,''),host=location.hostname||'local';
+  const lines=['BEGIN:VCALENDAR','VERSION:2.0','PRODID:-//Lance Content Studio//Daily Radar//ZH-CN','CALSCALE:GREGORIAN'];
+  for(const entry of radarReminderDays(14)){
+    const start=new Date(entry.day);start.setHours(hour,minute,0,0);
+    const label=`${entry.day.getMonth()+1}月${entry.day.getDate()}日`;
+    const titles=entry.titles.map(item=>'· '+item).join('\n');
+    const summary=`视觉雷达｜${label} · ${entry.titles[0]||'3 个新方向'}`;
+    const description=`今天先看这 3 个：\n${titles}\n\n在 App 里打开后以实时内容为准。\n${url}`;
+    lines.push('BEGIN:VEVENT',
+      icsFold(`UID:jinhua-radar-${calendarStamp(entry.day).slice(0,8)}@${host}`),
+      `DTSTAMP:${created}`,
+      icsFold(`DTSTART;TZID=Asia/Shanghai:${calendarStamp(start)}`),
+      icsFold(`SUMMARY:${icsText(summary)}`),
+      icsFold(`DESCRIPTION:${icsText(description)}`),
+      `URL:${url}`,
+      'BEGIN:VALARM','TRIGGER:PT0M','ACTION:DISPLAY',icsFold(`DESCRIPTION:${icsText(summary)}`),'END:VALARM',
+      'END:VEVENT');
+  }
+  lines.push('END:VCALENDAR');
+  const blobUrl=URL.createObjectURL(new Blob([lines.join('\r\n')],{type:'text/calendar;charset=utf-8'})),link=document.createElement('a');
+  link.href=blobUrl;link.download='Lance视觉雷达-14天提醒.ics';document.body.appendChild(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(blobUrl),1000);
+  show('已生成 14 天日历提醒，通知里会带上当天 3 条标题','success');
 }
 
 function loginCard(){
@@ -306,12 +408,20 @@ document.addEventListener('click',async event=>{
     }
     if(button.dataset.action==='radar-save'){const item=Radar.CASES.find(value=>value.id===button.dataset.id);if(!item)throw Error('选题不存在');await withBusy(button,'保存中…',()=>saveRadar(item));return;}
     if(button.dataset.action==='radar-more-like'||button.dataset.action==='radar-less'){
-      const category=button.dataset.category;
-      if(button.dataset.action==='radar-more-like'){state.radarPreferred=[category,...state.radarPreferred.filter(value=>value!==category)].slice(0,4);state.radarMuted=state.radarMuted.filter(value=>value!==category);show(`以后优先给你更多“${category}”`,'success');}
-      else{state.radarMuted=[...new Set([...state.radarMuted,category])];state.radarPreferred=state.radarPreferred.filter(value=>value!==category);show(`本轮将减少“${category}”`,'success');}
+      const category=button.dataset.category,item=Radar.CASES.find(value=>value.id===button.dataset.id);
+      if(button.dataset.action==='radar-more-like'){state.radarPreferred=[category,...state.radarPreferred.filter(value=>value!==category)].slice(0,4);state.radarMuted=state.radarMuted.filter(value=>value!==category);radarRecord('like',item);show(`以后优先给你更多“${category}”`,'success');}
+      else{state.radarMuted=[...new Set([...state.radarMuted,category])];state.radarPreferred=state.radarPreferred.filter(value=>value!==category);radarRecord('less',item);show(`本轮将减少“${category}”`,'success');}
       localStorage.setItem(PREFER_KEY,JSON.stringify(state.radarPreferred));localStorage.setItem(MUTED_KEY,JSON.stringify(state.radarMuted));state.radarOffset+=1;state.radarCurrent=[];radarPicks(true);render();scrollTopNow();return;
     }
     if(button.dataset.action==='radar-reminder'){downloadRadarReminder();return;}
+    if(button.dataset.action==='radar-news-refresh'){
+      await withBusy(button,'刷新中…',async()=>{await mobileLoadNews(true);render();show(mobileNews.error||(mobileNews.items.length?`已刷新：${mobileNews.items.length} 条网站新内容`:'这些网站最近没有新内容'),mobileNews.error?'error':'success');});return;
+    }
+    if(button.dataset.action==='radar-news-save'){
+      const item=(mobileNews.items||[]).find(value=>value.id===button.dataset.id);
+      if(!item)throw Error('这条网站更新已经不在列表里，请刷新更新');
+      await withBusy(button,'保存中…',()=>saveMobileNews(item));return;
+    }
     if(button.dataset.action==='sign-in'||button.dataset.action==='sign-up'){
       const email=document.querySelector('#cloud-email').value.trim(),password=document.querySelector('#cloud-password').value;
       if(!email||password.length<8)throw Error('请输入邮箱和至少8位密码');

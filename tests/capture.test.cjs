@@ -25,3 +25,16 @@ test('只有AI需要读取媒体时才提示补原文件',()=>{
   assert.match(Capture.mediaAdvice('audio',false),/转写/);
   assert.match(Capture.mediaAdvice('webpage',false),/之后要让AI读取/);
 });
+
+test('收藏缺缩略图时优先用已保存的预览图，预览不是公开图片则回退来源链接',()=>{
+  assert.equal(Capture.needsCover({link:'https://example.com/work',name:'作品'}),true);
+  assert.equal(Capture.coverSource({externalPreview:'https://cdn.example.com/cover.jpg'}),'https://cdn.example.com/cover.jpg');
+  assert.equal(Capture.coverSource({externalPreview:'data:image/png;base64,aGVsbG8='}),'');
+  assert.equal(Capture.coverSource({externalPreview:'javascript:alert(1)'}),'');
+  const withLocalImage={link:'https://example.com/work',externalPreview:'https://cdn.example.com/cover.jpg',files:[{kind:'image',localId:'cover.jpg'}]};
+  assert.equal(Capture.coverSource(withLocalImage),'');assert.equal(Capture.needsCover(withLocalImage),false);
+  assert.equal(Capture.needsCover({link:'https://example.com/work',files:[{kind:'video',localId:'clip.mp4'}]}),false);
+  assert.equal(Capture.needsCover({externalPreview:'https://cdn.example.com/cover.jpg'}),true);
+  assert.equal(Capture.needsCover({name:'新建空白参考'}),false);
+  assert.equal(Capture.needsCover({legacyImage:'data:image/png;base64,aGVsbG8='}),false);
+});

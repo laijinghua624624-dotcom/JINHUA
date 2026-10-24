@@ -25,6 +25,53 @@
   }
   function needsEnrichment(record){return Boolean(record?.link&&(!meaningfulTitle(record.name,record.link)||!(record.externalPreview||record.legacyImage||(record.files||[]).some(f=>f.kind==='image'))));}
   function refreshReferenceIfIdle(space){if(scope===space&&route?.view==='aesthetic'&&!$('#dialog')?.open&&!document.activeElement?.matches?.('input,textarea,select'))render();}
+  function localCoverImage(record){return (Array.isArray(record?.files)?record.files:[]).find(file=>file&&file.kind==='image')||null;}
+  // 收藏卡要「一眼认出」：优先用已经落成本地的封面，其次是可下载的来源预览，最后才回退到来源链接重新抓取。
+  function coverSource(record){
+    if(!record||localCoverImage(record)||record.legacyImage)return '';
+    const files=Array.isArray(record.files)?record.files:[];
+    if(files.some(file=>file&&file.kind==='video'))return '';
+    const preview=String(record.externalPreview||'').trim();
+    return /^https?:\/\//i.test(preview)?preview:'';
+  }
+  function needsCover(record){
+    if(!record||record.legacyImage)return false;
+    const files=Array.isArray(record.files)?record.files:[];
+    if(files.some(file=>file&&(file.kind==='image'||file.kind==='video')))return false;
+    if(Array.isArray(record.frames)&&record.frames.some(frame=>frame&&frame.kind==='image'))return false;
+    return Boolean(coverSource(record)||String(record.link||'').trim());
+  }
+  // 把网页封面下载成库里的本地图片：来源站有防盗链、图会过期时，本地缩略图仍然看得见。
+  const coverTasks=new Map();
+  function attachLocalCover(recordId,url,name='参考封面'){
+    const source=String(url||'').trim();
+    if(!recordId||!/^https?:\/\//i.test(source)||typeof capturePublicImage!=='function'||typeof saveAesthetic!=='function')return Promise.resolve(null);
+    const space=scope||'xinxuan',taskKey=space+':'+recordId;
+    if(coverTasks.has(taskKey))return coverTasks.get(taskKey);
+    const task=(async()=>{
+      const read=()=>{try{return JSON.parse(localStorage.getItem(aestheticStoreKey(space))||'[]');}catch{return [];}};
+      const first=read().find(item=>item&&item.id===recordId);
+      if(!first)return null;
+      if(localCoverImage(first))return first;
+      let uploaded=null;
+      try{uploaded=await capturePublicImage(source,name||first.name||'参考封面');}catch{uploaded=null;}
+      if(!uploaded?.localId)return null;
+      const all=read(),record=all.find(item=>item&&item.id===recordId);
+      if(!record)return null;
+      if(localCoverImage(record))return record;
+      record.files=[...(Array.isArray(record.files)?record.files:[]),uploaded];
+      record.coverId=uploaded.localId;
+      record.coverStoredAt=new Date().toISOString();
+      delete record.coverCheckedAt;
+      record.captureStatus=record.captureError?'链接和笔记已保存 · 封面已补存到本机':'标题和封面已就绪';
+      record.updatedAt=record.coverStoredAt;
+      saveAesthetic(all,space);
+      refreshReferenceIfIdle(space);
+      return record;
+    })().finally(()=>coverTasks.delete(taskKey));
+    coverTasks.set(taskKey,task);
+    return task;
+  }
   function heuristic(text,url=''){
     const source=`${text||''} ${url||''}`;
     const category=(CATEGORY_RULES.find(([,pattern])=>pattern.test(source))||['摄影参考'])[0];
@@ -78,8 +125,8 @@
     record.captureStatus=!needsEnrichment(record)?'标题和封面已就绪':error?'链接已保存 · 资料待补全':'链接已保存 · 来源未提供完整标题或封面';
     record.updatedAt=new Date().toISOString();return record;
   }
-  function enrich(id){
-    const space=scope,taskKey=space+':'+id;
+  function enrich(id,options={}){
+    const quiet=Boolean(options.quiet),space=scope,taskKey=space+':'+id;
     if(pending.has(taskKey))return pending.get(taskKey);
     const read=()=>scope===space?globalAssets():JSON.parse(localStorage.getItem(aestheticStoreKey(space))||'[]');
     const task=(async()=>{
@@ -89,15 +136,27 @@
       const all=read(),record=all.find(item=>item.id===id);
       if(!record||record.link!==first.link)return; // Deleted/edited while loading: leave it alone.
       applyMetadata(record,info,error,first);saveAesthetic(all,space);refreshReferenceIfIdle(space);
-      if(scope===space)notify(record.captureError||record.captureStatus,error?'error':'info');return record;
-    })().catch(error=>{if(scope===space)notify(error.message||'资料补全暂未完成，已收藏的记录仍保留。','error');}).finally(()=>pending.delete(taskKey));
+      // 标题补全后顺便把封面落成本地图；抓不到也不影响已保存的链接和笔记。
+      let saved=record;
+      const candidate=coverSource(record)||String(info?.previewImage||'').trim();
+      if(candidate&&needsCover(record)){
+        saved=await attachLocalCover(id,candidate,record.name)||record;
+        if(!localCoverImage(saved)&&info?.previewImage&&String(info.previewImage)!==candidate){
+          const refreshed=read(),target=refreshed.find(item=>item&&item.id===id);
+          if(target){target.externalPreview=info.previewImage;target.previewDirect=true;target.updatedAt=new Date().toISOString();saveAesthetic(refreshed,space);}
+          saved=await attachLocalCover(id,info.previewImage,record.name)||saved;
+        }
+        refreshReferenceIfIdle(space);
+      }
+      if(scope===space&&!quiet)notify(saved.captureError||saved.captureStatus,error?'error':'info');return saved;
+    })().catch(error=>{if(scope===space&&!quiet)notify(error.message||'资料补全暂未完成，已收藏的记录仍保留。','error');}).finally(()=>pending.delete(taskKey));
     pending.set(taskKey,task);return task;
   }
   function save(){
     const link=StudioAesthetic.link($('#capture-link').value),note=$('#capture-note').value.trim(),all=globalAssets(),existing=all.find(item=>StudioRadar.normalizedURL(item.link)===StudioRadar.normalizedURL(link));
     const preview=String(activePrefill.preview||'').trim(),sourceTitle=meaningfulTitle(activePrefill.title,link),sourceMedia=String(activePrefill.mediaKind||'').trim(),sourceDescription=String(activePrefill.description||'').trim(),sourceSite=String(activePrefill.siteName||'').trim();
-    if(existing){let changed=false;if(note&&!String(existing.notes||'').includes(note)){existing.captureUserNote=[existing.captureUserNote,note].filter(Boolean).join('\n');existing.notes=[existing.notes,`【再次记录】${note}`].filter(Boolean).join('\n');changed=true;}if(sourceDescription&&!String(existing.notes||'').includes(sourceDescription)){existing.notes=[existing.notes,`【来源简介】${sourceDescription}`].filter(Boolean).join('\n');changed=true;}if(preview&&!existing.externalPreview){existing.externalPreview=preview;existing.previewDirect=true;changed=true;}if(sourceTitle&&(!meaningfulTitle(existing.name,link))){existing.name=sourceTitle;changed=true;}if(sourceSite){existing.sourceSite=sourceSite;changed=true;}if(sourceMedia&&!existing.mediaKind){existing.mediaKind=sourceMedia;changed=true;}if(changed){existing.captureStatus=sourceTitle&&preview?'已从原页面自动补全标题和封面':'已从原页面补全部分信息';existing.updatedAt=new Date().toISOString();saveAesthetic(all);}close();route={view:'aesthetic'};render();notify(preview?'这条已自动补上标题和封面。':'这个链接已经收藏；你的新想法已追加。');if(needsEnrichment(existing))void enrich(existing.id);return existing;}
-    const record=StudioAesthetic.entry(sourceTitle||new URL(link).hostname),rule=heuristic(`${note} ${sourceTitle} ${sourceDescription}`,link);record.link=link;record.category=rule.category;record.tags=[...rule.tags,'快速收藏'];record.notes=[note?`【我喜欢】${note}`:'',sourceDescription?`【来源简介】${sourceDescription}`:''].filter(Boolean).join('\n')||'尚未写喜欢什么，可稍后补充';record.requirements=record.notes;record.captureUserNote=note;record.captureStatus=sourceTitle&&preview?'已自动带回标题和封面':'已保存，正在自动补全基本信息';record.sourceSite=sourceSite||new URL(link).hostname;record.sourceUsage='link-only';record.favorite=true;record.folderIds=[];record.externalPreview=preview;record.previewDirect=Boolean(preview);record.mediaKind=sourceMedia||'webpage';all.push(record);saveAesthetic(all);close();route={view:'aesthetic'};render();notify(preview?'已连标题和封面一起保存；无需再编辑。':'已先保存，系统正在自动补全标题和封面。');void enrich(record.id);return record;
+    if(existing){let changed=false;if(note&&!String(existing.notes||'').includes(note)){existing.captureUserNote=[existing.captureUserNote,note].filter(Boolean).join('\n');existing.notes=[existing.notes,`【再次记录】${note}`].filter(Boolean).join('\n');changed=true;}if(sourceDescription&&!String(existing.notes||'').includes(sourceDescription)){existing.notes=[existing.notes,`【来源简介】${sourceDescription}`].filter(Boolean).join('\n');changed=true;}if(preview&&!existing.externalPreview){existing.externalPreview=preview;existing.previewDirect=true;changed=true;}if(sourceTitle&&(!meaningfulTitle(existing.name,link))){existing.name=sourceTitle;changed=true;}if(sourceSite){existing.sourceSite=sourceSite;changed=true;}if(sourceMedia&&!existing.mediaKind){existing.mediaKind=sourceMedia;changed=true;}if(changed){existing.captureStatus=sourceTitle&&preview?'已从原页面自动补全标题和封面':'已从原页面补全部分信息';existing.updatedAt=new Date().toISOString();saveAesthetic(all);}close();route={view:'aesthetic'};render();notify(preview?'这条已自动补上标题和封面。':'这个链接已经收藏；你的新想法已追加。');if(needsEnrichment(existing))void enrich(existing.id);else if(preview)void attachLocalCover(existing.id,preview,existing.name);return existing;}
+    const record=StudioAesthetic.entry(sourceTitle||new URL(link).hostname),rule=heuristic(`${note} ${sourceTitle} ${sourceDescription}`,link);record.link=link;record.category=rule.category;record.tags=[...rule.tags,'快速收藏'];record.notes=[note?`【我喜欢】${note}`:'',sourceDescription?`【来源简介】${sourceDescription}`:''].filter(Boolean).join('\n')||'尚未写喜欢什么，可稍后补充';record.requirements=record.notes;record.captureUserNote=note;record.captureStatus=sourceTitle&&preview?'已自动带回标题和封面':'已保存，正在自动补全基本信息';record.sourceSite=sourceSite||new URL(link).hostname;record.sourceUsage='link-only';record.favorite=true;record.folderIds=[];record.externalPreview=preview;record.previewDirect=Boolean(preview);record.mediaKind=sourceMedia||'webpage';all.push(record);saveAesthetic(all);close();route={view:'aesthetic'};render();notify(preview?'已连标题和封面一起保存；无需再编辑。':'已先保存，系统正在自动补全标题和封面。');if(preview)void attachLocalCover(record.id,preview,record.name);void enrich(record.id,{quiet:Boolean(preview)});return record;
   }
   function assetTools(record){
     if(!record?.captureStatus&&!record?.downloadAdvice)return '';
@@ -129,6 +188,6 @@
     if(url)setTimeout(()=>quickDialog(prefill),250);
     if(url||params.has('pinterest')){for(const key of ['capture','captureTitle','captureDescription','captureSite','capturePreview','captureMedia','captureNote','pinterest'])params.delete(key);history.replaceState(null,'',location.pathname+(params.toString()?'?'+params:'')+location.hash);}
   }
-  root.StudioCapture={heuristic,quickDialog,paste,voice,save,enrich,applyMetadata,needsEnrichment,meaningfulTitle,assetTools,helperDialog,copyBookmarklet,pinterestDialog,pinterestSync,handleIncoming,bookmarklet,mediaAdvice};
+  root.StudioCapture={heuristic,quickDialog,paste,voice,save,enrich,applyMetadata,needsEnrichment,meaningfulTitle,assetTools,helperDialog,copyBookmarklet,pinterestDialog,pinterestSync,handleIncoming,bookmarklet,mediaAdvice,localCoverImage,coverSource,needsCover,attachLocalCover};
   if(typeof module==='object')module.exports=root.StudioCapture;
 })(globalThis);

@@ -45,12 +45,30 @@ LOCK = threading.Lock()
 RATE_LOCK = threading.Lock()
 RATE_HITS = defaultdict(deque)
 PINTEREST_STATES = {}
-PAID_PATHS = {'/api/chat','/api/image','/api/video','/api/transcribe','/api/reference/search'}
+PAID_PATHS = {'/api/chat','/api/image','/api/video','/api/transcribe','/api/reference/search','/api/radar-rank'}
 RADAR_PREVIEW_HOSTS = {
     'file.digitaling.com','images.ctfassets.net','img.redbull.com','www.tomorrowland.com',
     'aiff.runwayml.com','directorslibrary.com','www.directorslibrary.com','framerusercontent.com',
-    'cdn.shopify.com','images.squarespace-cdn.com'
+    'cdn.shopify.com','images.squarespace-cdn.com',
+    'socialbeta.oss-cn-hangzhou.aliyuncs.com','oss-xpc0.xpccdn.com','lair-aigc.com','deepshow.tech',
+    'stashmedia.tv','www.stashmedia.tv','livedesignonline.com','www.livedesignonline.com',
+    'eventmarketer.com','www.eventmarketer.com','treatmentstudio.com','www.treatmentstudio.com',
+    'momentfactory.com','cdn.momentfactory.com','res.cloudinary.com','i.vimeocdn.com',
+    'mir-s3-cdn-cf.behance.net','media.giphy.com','www.somewhile.cn','ailine.cloud',
+    'www.krea.run','krea.run','s.krea.ai'
 }
+
+# 只订阅这些站点的公开 RSS：不接受任意 URL，避免变成通用抓取代理。
+RADAR_FEEDS = {
+    'digitaling': {'name':'数英','url':'https://www.digitaling.com/rss'},
+    'eventmarketer': {'name':'Event Marketer','url':'https://www.eventmarketer.com/feed/'},
+    'stash': {'name':'Stash','url':'https://www.stashmedia.tv/feed/'},
+    'livedesign': {'name':'Live Design','url':'https://www.livedesignonline.com/rss.xml'},
+    'directorslibrary': {'name':"Directors’ Library",'url':'https://directorslibrary.com/feed/'}
+}
+RADAR_FEED_TTL = 1800
+_FEED_CACHE = {}
+_FEED_LOCK = threading.Lock()
 
 def paid_request_allowed(handler):
     """Keep an accidentally shared public URL from creating an unlimited bill."""
@@ -86,7 +104,7 @@ def model_routes():
     }
     routes={role:{'provider':provider,'model':model} for role,model in text_models.items()}
     routes.update({role:{'provider':'ark','model':os.environ.get(env,'').strip()} for role,env in {
-        'image':'ARK_IMAGE_MODEL','video':'ARK_VIDEO_MODEL','embedding':'ARK_EMBEDDING_MODEL'}.items()})
+        'image':'ARK_IMAGE_MODEL','image-hq':'ARK_IMAGE_MODEL_HQ','vision':'ARK_VISION_MODEL','video':'ARK_VIDEO_MODEL','embedding':'ARK_EMBEDDING_MODEL'}.items()})
     routes['speech']={'provider':'doubao','model':os.environ.get('SPEECH_MODEL_VERSION','').strip() or os.environ.get('SPEECH_RESOURCE_ID','volc.seedasr.auc').strip()}
     return routes
 
@@ -119,6 +137,37 @@ def load_env():
             match = re.match(r'^([A-Z][A-Z0-9_]*)=(.*)$', line.strip())
             if match:
                 os.environ.setdefault(match[1], match[2].strip().strip('\"\''))
+
+# ---------- 有图时走视觉路由：deepseek 文本模型看不见 image_url ----------
+def chat_vision_role(body):
+    """带了 references 就该走视觉模型；没配视觉模型时返回 None（由调用方诚实回报"图没被读取"）。"""
+    return 'vision' if (body or {}).get('references') else None
+
+def vision_model_or_none():
+    try:
+        return route_model('vision')
+    except ValueError:
+        return None
+
+# ---------- 文本模型的采样策略：按任务定温度，判断类任务才开思考 ----------
+CHAT_TEMPERATURES={'diverge':0.9,'structure':0.2,'rewrite':0.35,'verify':0.0}
+def chat_sampling(purpose,body):
+    """返回 (temperature, thinking, task)。没给 task 时保持旧的 0.65，行为不变。"""
+    body=body or {}
+    task=str(body.get('task') or '')
+    raw=body.get('temperature')
+    if isinstance(raw,(int,float)) and not isinstance(raw,bool):
+        temperature=float(raw)
+    else:
+        temperature=CHAT_TEMPERATURES.get(task,0.65)
+    temperature=max(0.0,min(1.5,temperature))
+    thinking=bool(body.get('thinking')) and purpose=='director'
+    return temperature,thinking,task
+
+def chat_budget(purpose,thinking):
+    """思考会占用输出预算，给它留更宽的额度，避免 JSON 被截断。"""
+    budget=10000 if purpose=='director' else 4000
+    return min(int(budget*1.6),16000) if (thinking and purpose=='director') else budget
 
 def server_binding():
     host=os.environ.get('LANCE_BIND_HOST','127.0.0.1')
@@ -493,8 +542,62 @@ def radar_preview(url):
     data,content_type,final,_=read_public(url,8*1024*1024)
     final_host=(urllib.parse.urlparse(final).hostname or '').lower()
     if final_host not in RADAR_PREVIEW_HOSTS:raise ValueError('预览图片跳转到了未允许来源')
-    if content_type not in {'image/jpeg','image/png','image/webp','image/avif'}:raise ValueError('案例预览不是可显示的图片')
+    if content_type not in {'image/jpeg','image/png','image/webp','image/avif','image/gif'}:raise ValueError('案例预览不是可显示的图片')
     return data,content_type
+
+def feed_plain(value):
+    text=html.unescape(re.sub(r'<[^>]+>',' ',str(value or '')))
+    return re.sub(r'\s+',' ',text).strip()
+
+def feed_image(node,content_html):
+    for path in ('.//enclosure','.//{http://search.yahoo.com/mrss/}content','.//{http://search.yahoo.com/mrss/}thumbnail'):
+        for found in node.findall(path):
+            url=str(found.get('url') or '').strip();kind=str(found.get('type') or '').lower()
+            if url and (not kind or kind.startswith('image')):return url
+    match=re.search(r'<img[^>]+src=["\']([^"\']+)["\']',content_html or '',re.I)
+    return match.group(1) if match else ''
+
+def feed_timestamp(value):
+    import datetime
+    text=str(value or '').strip()
+    if not text:return 0
+    try:return int(datetime.datetime.fromisoformat(text.replace('Z','+00:00')).timestamp())
+    except Exception:pass
+    for pattern in ('%a, %d %b %Y %H:%M:%S %z','%a, %d %b %Y %H:%M:%S','%d %b %Y %H:%M:%S %z','%Y-%m-%d %H:%M:%S'):
+        try:return int(datetime.datetime.strptime(text,pattern).timestamp())
+        except Exception:pass
+    return 0
+
+def radar_feed(source_ids,limit=12):
+    """Subscribe to curated public RSS feeds. No arbitrary URLs, no article copying."""
+    wanted=[str(sid).strip() for sid in (source_ids or []) if str(sid).strip() in RADAR_FEEDS][:6]
+    if not wanted:raise ValueError('未指定可订阅的网站')
+    try:limit=max(1,min(int(limit),30))
+    except Exception:limit=12
+    key='|'.join(sorted(wanted))+f'#{limit}'
+    now=time.time()
+    with _FEED_LOCK:cached=_FEED_CACHE.get(key)
+    if cached and now-cached[0]<RADAR_FEED_TTL:return cached[1]
+    items=[];sources=[]
+    for sid in wanted:
+        meta=RADAR_FEEDS[sid];found=0;error=''
+        try:
+            data,content_type,final,_=read_public(meta['url'],4*1024*1024)
+            raw=data.decode('utf-8','replace') if isinstance(data,(bytes,bytearray)) else str(data)
+            root=ET.fromstring(raw.lstrip('\ufeff \t\r\n'))
+            for node in root.iter('item'):
+                title=feed_plain(node.findtext('title'));link=feed_plain(node.findtext('link'))
+                if not title or not link.startswith('http'):continue
+                content_html=node.findtext('{http://purl.org/rss/1.0/modules/content/}encoded') or node.findtext('description') or ''
+                published=node.findtext('pubDate') or node.findtext('{http://purl.org/dc/elements/1.1/}date') or ''
+                items.append({'id':sid+':'+hashlib.sha1(link.encode('utf-8')).hexdigest()[:12],'sourceId':sid,'site':meta['name'],'title':title,'url':link,'poster':feed_image(node,content_html),'publishedAt':published,'publishedTs':feed_timestamp(published)})
+                found+=1
+        except Exception as exc:error=str(exc)[:160]
+        sources.append({'id':sid,'name':meta['name'],'ok':not error,'count':found,'error':error})
+    items.sort(key=lambda item:item['publishedTs'],reverse=True)
+    payload={'items':items[:limit],'sources':sources,'fetchedAt':int(now)}
+    with _FEED_LOCK:_FEED_CACHE[key]=(now,payload)
+    return payload
 
 def download_generated(url,ext):
     MEDIA.mkdir(parents=True,exist_ok=True)
@@ -700,19 +803,34 @@ def transcribe_audio(name):
 
 EMBED_LOCK=threading.Lock()
 
+def embedding_cache_path(space,text,image_id=None):
+    """同一段文字（同一模型）只算一次；返回缓存文件路径与是否已存在。"""
+    if space not in ('personal','xinxuan'):raise ValueError('检索空间无效')
+    if not isinstance(text,str) or len(text)>6000:raise ValueError('每条检索描述最多6000字')
+    model=route_model('embedding');image_hash=''
+    if image_id:
+        path=media_path(image_id);image_hash=hashlib.sha256(path.read_bytes()).hexdigest()
+    fingerprint=hashlib.sha256(json.dumps([model,text,image_hash],ensure_ascii=False).encode()).hexdigest()
+    folder=DATA/'embeddings'/space
+    return folder/(fingerprint+'.json'),model
+
+def embedding_ready(space,text,image_id=None):
+    if not str(text or '').strip() and not image_id:return False
+    path,_=embedding_cache_path(space,text,image_id)
+    return path.is_file()
+
 def cached_embedding(space,text,image_id=None):
     if space not in ('personal','xinxuan'):raise ValueError('检索空间无效')
     if not isinstance(text,str) or len(text)>6000:raise ValueError('每条检索描述最多6000字')
-    model=route_model('embedding');content=[]
+    content=[]
     if text.strip():content.append({'type':'text','text':text})
     image_hash=''
     if image_id:
         path=media_path(image_id);image_hash=hashlib.sha256(path.read_bytes()).hexdigest()
         content.append({'type':'image_url','image_url':{'url':data_url(image_id)}})
     if not content:raise ValueError('没有可索引的文字或图片')
-    fingerprint=hashlib.sha256(json.dumps([model,text,image_hash],ensure_ascii=False).encode()).hexdigest()
-    folder=DATA/'embeddings'/space;folder.mkdir(parents=True,exist_ok=True)
-    cache=folder/(fingerprint+'.json')
+    cache,model=embedding_cache_path(space,text,image_id)
+    folder=cache.parent;folder.mkdir(parents=True,exist_ok=True)
     with EMBED_LOCK:
         if cache.is_file():return json.loads(cache.read_text())
         raw=ark_request('/embeddings/multimodal',{'model':model,'input':content,'encoding_format':'float'},os.environ.get('ARK_API_KEY',''))
@@ -724,6 +842,38 @@ def cached_embedding(space,text,image_id=None):
         vector=[x/norm for x in vector]
         cache.write_text(json.dumps(vector));cache.chmod(0o600)
         return vector
+
+def radar_rank(body):
+    """给案例雷达算语义相关度：案例向量走缓存，每天只为「项目/口味描述」付一次调用。
+    每批最多补算 limit 条未缓存的案例，其余先返回 pending，由前端分批预热。"""
+    space=body.get('scope')
+    if space not in ('personal','xinxuan'):raise ValueError('检索空间无效')
+    query=str(body.get('query') or '').strip()
+    if not query or len(query)>2000:raise ValueError('请提供1–2000字的项目或口味描述')
+    items=body.get('items')
+    if not isinstance(items,list) or not 1<=len(items)<=120:raise ValueError('案例数量需在 1–120 条之间')
+    try:limit=max(0,min(int(body.get('limit',8)),16))
+    except Exception:limit=8
+    cleaned=[]
+    for item in items:
+        if not isinstance(item,dict):continue
+        item_id=str(item.get('id') or '').strip()[:80]
+        text=str(item.get('text') or '').strip()[:1500]
+        if item_id and text:cleaned.append((item_id,text))
+    if not cleaned:raise ValueError('没有可计算的案例文本')
+    ready={};pending=0;embedded=0
+    for item_id,text in cleaned:
+        if embedding_ready(space,text):ready[item_id]=text;continue
+        if embedded>=limit:pending+=1;continue
+        cached_embedding(space,text);ready[item_id]=text;embedded+=1
+    scores={}
+    if ready:
+        query_vector=cached_embedding(space,query);dim=len(query_vector)
+        for item_id,text in ready.items():
+            vector=cached_embedding(space,text)
+            if len(vector)!=dim:raise ValueError('检索向量维度不一致，请检查模型配置')
+            scores[item_id]=round(max(-1.0,min(1.0,sum(a*b for a,b in zip(query_vector,vector)))),6)
+    return {'scope':space,'scores':scores,'pending':pending,'embedded':embedded,'ready':len(ready),'total':len(cleaned),'model':route_model('embedding')}
 
 def semantic_search(body):
     space=body.get('scope');items=body.get('items');query=body.get('query','')
@@ -778,7 +928,10 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers();self.wfile.write(data)
 
     def send_preview(self,data,content_type):
-        self.send_response(200);self.send_header('Content-Type',content_type);self.send_header('Content-Length',str(len(data)));self.send_header('Cache-Control','public, max-age=21600');self.send_header('X-Content-Type-Options','nosniff')
+        # 代码（html/js/css）必须每次取最新的：否则改完刷新还是旧脚本，看起来就是"功能没生效"
+        code_like=any(k in (content_type or '') for k in ('html','javascript','ecmascript','css','json'))
+        cache='no-store' if code_like else 'public, max-age=21600'
+        self.send_response(200);self.send_header('Content-Type',content_type);self.send_header('Content-Length',str(len(data)));self.send_header('Cache-Control',cache);self.send_header('X-Content-Type-Options','nosniff')
         origin=self.headers.get('Origin')
         if origin and self.allowed():self.send_header('Access-Control-Allow-Origin',origin)
         self.end_headers();self.wfile.write(data)
@@ -828,11 +981,15 @@ class Handler(BaseHTTPRequestHandler):
             if path=='/api/radar-preview':
                 url=urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query).get('url',[''])[0]
                 data,content_type=radar_preview(url);return self.send_preview(data,content_type)
+            if path=='/api/radar-feed':
+                query=urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
+                sources=[sid for raw in query.get('source',[]) for sid in str(raw).split(',') if sid]
+                return self.send_json(radar_feed(sources,query.get('limit',['12'])[0]))
             if path=='/api/reference-download':
                 url=urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query).get('url',[''])[0]
                 data,content_type,final,_=read_public(url,12*1024*1024)
-                if content_type not in {'image/jpeg','image/png','image/webp','image/avif'}:raise ValueError('这个链接不是可直接下载的公开图片；请到原网站按其规则下载')
-                suffix={'image/jpeg':'.jpg','image/png':'.png','image/webp':'.webp','image/avif':'.avif'}[content_type]
+                if content_type not in {'image/jpeg','image/png','image/webp','image/avif','image/gif'}:raise ValueError('这个链接不是可直接下载的公开图片；请到原网站按其规则下载')
+                suffix={'image/jpeg':'.jpg','image/png':'.png','image/webp':'.webp','image/avif':'.avif','image/gif':'.gif'}[content_type]
                 name=Path(urllib.parse.urlparse(final).path).stem or 'JINHUA参考图'
                 return self.send_binary(data,content_type,name+suffix)
             if path=='/api/profile-seed':
@@ -844,7 +1001,7 @@ class Handler(BaseHTTPRequestHandler):
             if path.startswith('/media/'): target=media_path(path[7:])
             else:
                 name='index.html' if path=='/' else path.lstrip('/')
-                creative_file = name in {'studio-creative.js','studio-creative-ui.js','studio-creative.css','studio-upload.js','studio-director-plan.js','studio-director.js','studio-director-ui.js','studio-origin.js','studio-audit.js','studio-origin-ui.js'}
+                creative_file = name in {'studio-creative.js','studio-creative-ui.js','studio-creative.css','studio-upload.js','studio-director-plan.js','studio-director.js','studio-director-ui.js','studio-origin.js','studio-audit.js','studio-origin-ui.js','studio-venue.js','studio-venue-ui.js','studio-wizard.js','studio-flow.js','studio-report.js'}
                 if not creative_file and name not in {'index.html','privacy.html','studio.js','studio-security.js','studio.css','studio-core.js','studio-reverse.js','studio-reverse-case.js','studio-reverse-case-ui.js','studio-reverse-case.css','studio-aesthetic.js','studio-capture.js','studio-aesthetic-ui.js','studio-folders.js','studio-folders-ui.js','studio-aesthetic.css','studio-radar.js','studio-radar-ui.js','studio-radar.css','studio-profile.js','studio-inspiration.js','studio-fragments.js','studio-fragments-ui.js','studio-ppt.js','studio-cloud.js','studio-workspace-cloud.js','studio-mobile-inbox.js','mobile.html','mobile.css','mobile.js','mobile-config.js','mobile.webmanifest','mobile-sw.js','mobile-icon.svg','vendor/presentation.js','lance_qrcode_public.png','lance_qrcode.png','lance_intro.mp4','api-guide.html','tutorial.html','deliverables/Lance专场整体汇报模板_v1.pptx','deliverables/Lance单条剧本汇报模板_v1.pptx'}:
                     return self.send_json({'error':'文件不存在'},404)
                 target=ROOT/name
@@ -857,7 +1014,10 @@ class Handler(BaseHTTPRequestHandler):
                 start=int(match[1]);end=min(int(match[2]) if match[2] else end,end);partial=True
                 if start>end:return self.send_json({'error':'范围超出文件'},416)
             self.send_response(206 if partial else 200)
-            self.send_header('Content-Type',mimetypes.guess_type(target)[0] or 'application/octet-stream');self.send_header('Content-Length',str(end-start+1));self.send_header('Accept-Ranges','bytes');self.send_header('X-Content-Type-Options','nosniff')
+            ctype=mimetypes.guess_type(target)[0] or 'application/octet-stream'
+            # 代码文件不缓存（否则改完刷新还是旧脚本，看起来就像"功能没生效"）；媒体按内容哈希命名，可以长缓存
+            code_like=target.suffix.lower() in {'.html','.js','.mjs','.css','.json','.webmanifest'}
+            self.send_header('Content-Type',ctype);self.send_header('Content-Length',str(end-start+1));self.send_header('Accept-Ranges','bytes');self.send_header('X-Content-Type-Options','nosniff');self.send_header('Cache-Control','no-store' if code_like else 'public, max-age=21600')
             if partial:self.send_header('Content-Range',f'bytes {start}-{end}/{size}')
             if self.headers.get('Origin'):self.send_header('Access-Control-Allow-Origin',self.headers['Origin'])
             self.end_headers()
@@ -918,6 +1078,9 @@ class Handler(BaseHTTPRequestHandler):
             if self.path=='/api/reference/search':
                 route_model('embedding')
                 return self.send_json(run_job(semantic_search,body))
+            if self.path=='/api/radar-rank':
+                route_model('embedding')
+                return self.send_json(radar_rank(body))
             if self.path=='/api/document/text':return self.send_json(document_text(body.get('localId')))
             if self.path=='/api/link/import':return self.send_json(parse_public_metadata(body.get('url')) if body.get('metadataOnly') else parse_public_link(body.get('url')))
             if self.path=='/api/project/pdf':
@@ -940,6 +1103,19 @@ class Handler(BaseHTTPRequestHandler):
                     return path
                 data=reverse_case_pdf(body,case_frame)
                 return self.send_binary(data,'application/pdf',str(body.get('title') or '历史项目')+'_整体项目案例.pdf')
+            if self.path=='/api/eval/cases':
+                # 只读：把回归评测跑出来的真实产出交给前端，导入成工作台里的选题（不覆盖任何现有内容）
+                folder=ROOT/'eval'/'out'
+                cases=[]
+                if folder.exists():
+                    for item in sorted(folder.glob('*.json')):
+                        if not re.fullmatch(r'[a-zA-Z0-9_-]{1,40}\.json',item.name):continue
+                        try:
+                            data=json.loads(item.read_text(encoding='utf-8'))
+                            if data.get('fatal'):continue
+                            cases.append(data)
+                        except Exception:continue
+                return self.send_json({'cases':cases,'folder':str(folder)})
             if self.path=='/api/chat':
                 purpose=body.get('purpose','director')
                 if purpose not in ('director','refine'):raise ValueError('未知文本模型分工')
@@ -947,25 +1123,68 @@ class Handler(BaseHTTPRequestHandler):
                 model=route_model(purpose)
                 content=[{'type':'text','text':str(body.get('prompt',''))}]
                 for name in body.get('references',[])[:12]:content.append({'type':'image_url','image_url':{'url':data_url(name)}})
-                # Both providers can default to extended thinking. This workbench needs
-                # bounded JSON, so disable thinking and request JSON mode from DeepSeek.
-                payload={'model':model,'messages':[{'role':'system','content':'你是Lance的内容总监助理。只输出完整JSON，严格遵守用户结构。区分已知事实与待确认事项，不编造场地尺寸、服装品牌、预算报价或产品性能。'}, {'role':'user','content':content}],'thinking':{'type':'disabled'},'max_tokens':10000 if purpose=='director' else 4000,'temperature':0.65}
-                if provider=='deepseek':
-                    payload['response_format']={'type':'json_object'}
-                    result=deepseek_request('/chat/completions',payload,os.environ.get('DEEPSEEK_API_KEY',''))
-                else:
-                    result=ark_request('/chat/completions',payload,os.environ.get('ARK_API_KEY',''))
-                return self.send_json({'text':result.get('choices',[{}])[0].get('message',{}).get('content',''),'purpose':purpose,'provider':provider,'model':model,'usage':result.get('usage',{})})
+                temperature,thinking,task=chat_sampling(purpose,body)
+                want_vision=chat_vision_role(body)
+                vision_ok=False
+                if want_vision:
+                    vmodel=vision_model_or_none()
+                    if vmodel:
+                        model=vmodel;provider='ark';vision_ok=True;thinking=False   # 视觉路由不叠加思考
+                    else:
+                        thinking=False   # 没视觉模型时不要假装在"看图思考"
+                def chat_call(use_thinking):
+                    # 发散要敢想（高温），结构化要稳（低温），校验要死板（0）；判断类任务才开思考。
+                    # 两个 provider 默认都可能开思考，这里显式指定；JSON 模式只在 deepseek 侧要求。
+                    payload={'model':model,'messages':[{'role':'system','content':'你是Lance的内容总监助理。只输出完整JSON，严格遵守用户结构。区分已知事实与待确认事项，不编造场地尺寸、服装品牌、预算报价或产品性能。'}, {'role':'user','content':content}],'thinking':{'type':'enabled' if use_thinking else 'disabled'},'max_tokens':chat_budget(purpose,use_thinking),'temperature':temperature}
+                    if provider=='deepseek':
+                        payload['response_format']={'type':'json_object'}
+                        got=deepseek_request('/chat/completions',payload,os.environ.get('DEEPSEEK_API_KEY',''))
+                    else:
+                        got=ark_request('/chat/completions',payload,os.environ.get('ARK_API_KEY',''))
+                    import json as _json
+                    return got.get('choices',[{}])[0].get('message',{}).get('content','') or '',got
+                import json as _json
+                retried=False
+                try:
+                    text,result=chat_call(thinking)
+                except Exception as error:
+                    if vision_ok:
+                        # 视觉模型不可用（未开通 / 接入点写错）时退回文本路由，并如实告诉上游"图没被读"
+                        vision_ok=False;retried=True;model=route_model(purpose);provider=text_provider();thinking=False
+                        text,result=chat_call(False)
+                    elif not thinking:raise
+                    else:
+                        thinking=False;retried=True;text,result=chat_call(False)
+                if thinking:
+                    try:_json.loads(text)
+                    except Exception:
+                        # 思考偶尔把 JSON 截断：自动退回一次不开思考的请求，避免上游拿到半截结果
+                        thinking=False;retried=True;text,result=chat_call(False)
+                return self.send_json({'text':text,'purpose':purpose,'provider':provider,'model':model,'usage':result.get('usage',{}),'temperature':temperature,'thinking':thinking,'task':task,'retried':retried,
+                    'images':len(body.get('references') or []),'imagesRead':bool(body.get('references')) and vision_ok,
+                    'visionHint':'' if (not body.get('references') or vision_ok) else '未配置视觉模型（ARK_VISION_MODEL），本轮图片没有被读取，请不要在文案里声称看过图'})
             token=os.environ.get('ARK_API_KEY','')
             if self.path=='/api/image':
-                model=route_model('image')
+                want_hq=str(body.get('quality') or '')=='hq'
+                role='image-hq' if want_hq else 'image'
+                hq_fallback=False
+                try:
+                    model=route_model(role)
+                except ValueError:
+                    # 没配高档图片模型就回落，不让"升级"变成报错；但要如实回传，别让用户以为在用高档模型
+                    role='image';model=route_model('image');hq_fallback=True
                 payload={'model':model,'prompt':body['prompt'],'size':image_size(body),'response_format':'url','watermark':False}
                 refs=body.get('references',[])[:4]
                 if refs:payload['image']=[data_url(name) for name in refs]
                 result=ark_request('/images/generations',payload,token)
                 data=result.get('data',[])
                 if not data or not data[0].get('url'):raise ValueError('模型未返回图片，原素材已保留')
-                return self.send_json(download_generated(data[0]['url'],'.jpg'))
+                asset=download_generated(data[0]['url'],'.jpg')
+                asset['modelRole']=role;asset['modelUsed']=model
+                if want_hq:
+                    asset['hqRequested']=True;asset['hqFallback']=hq_fallback
+                    if hq_fallback:asset['hqHint']='服务端未配置 ARK_IMAGE_MODEL_HQ，这次走的是常规图片模型'
+                return self.send_json(asset)
             if self.path=='/api/video':
                 model=route_model('video')
                 result=ark_request('/contents/generations/tasks',build_video_body(body,model),token)

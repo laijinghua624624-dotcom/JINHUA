@@ -1,0 +1,194 @@
+{
+  "at": "2026-10-07T00:43:32.872Z",
+  "cases": [
+    {
+      "id": "fireworks",
+      "title": "放焰火 · 跨年晚会预热",
+      "baseline": 91,
+      "checksPassed": 26,
+      "checksTotal": 26,
+      "checks": [
+        {
+          "name": "有方向候选",
+          "ok": true,
+          "detail": ""
+        },
+        {
+          "name": "脚本七段基本齐",
+          "ok": true,
+          "detail": "outline/meaning/description/dialogue"
+        },
+        {
+          "name": "四幕有内容",
+          "ok": true,
+          "detail": ""
+        },
+        {
+          "name": "有主题句",
+          "ok": true,
+          "detail": "攥紧的手也能放焰火"
+        },
+        {
+          "name": "主题句够短",
+          "ok": true,
+          "detail": "字数 9"
+        },
+        {
+          "name": "有视觉规则",
+          "ok": true,
+          "detail": "4 阶段"
+        },
+        {
+          "name": "时间轴 ≥4 段",
+          "ok": true,
+          "detail": "8 段"
+        },
+        {
+          "name": "关键场次 ≥2 场",
+          "ok": true,
+          "detail": "4 场"
+        },
+        {
+          "name": "时间轴总长对得上成片",
+          "ok": true,
+          "detail": "123s vs 成片 123s（差 0%）"
+        },
+        {
+          "name": "每页都有讲稿",
+          "ok": true,
+          "detail": "10/10"
+        },
+        {
+          "name": "讲稿长度在 25–140 字",
+          "ok": true,
+          "detail": "最短 75／最长 92"
+        },
+        {
+          "name": "执行八页 ≥6 页",
+          "ok": true,
+          "detail": ""
+        },
+        {
+          "name": "有待核实与风险清单",
+          "ok": true,
+          "detail": ""
+        },
+        {
+          "name": "四张视觉提示词各不同",
+          "ok": true,
+          "detail": "4/4"
+        },
+        {
+          "name": "提示词带真实空间或影调",
+          "ok": true,
+          "detail": ""
+        },
+        {
+          "name": "真的生成了参考图",
+          "ok": true,
+          "detail": ""
+        },
+        {
+          "name": "看图判断已完成",
+          "ok": true,
+          "detail": ""
+        },
+        {
+          "name": "看图判断真的读到了图",
+          "ok": true,
+          "detail": ""
+        },
+        {
+          "name": "看图结论有下一步",
+          "ok": true,
+          "detail": ""
+        },
+        {
+          "name": "附录·讲述顺序 ≥4 段",
+          "ok": true,
+          "detail": "5 段"
+        },
+        {
+          "name": "附录·讲述时长 8–20 分钟",
+          "ok": true,
+          "detail": "8 分钟"
+        },
+        {
+          "name": "附录·拍摄清单 ≥5 条",
+          "ok": true,
+          "detail": "8 条"
+        },
+        {
+          "name": "附录·答疑 ≥4 问",
+          "ok": true,
+          "detail": "6 问"
+        },
+        {
+          "name": "没有空话词",
+          "ok": true,
+          "detail": ""
+        },
+        {
+          "name": "没编造金额",
+          "ok": true,
+          "detail": ""
+        },
+        {
+          "name": "页面无报错",
+          "ok": true,
+          "detail": ""
+        }
+      ],
+      "judge": {
+        "A": {
+          "score": 8,
+          "why": "需求理解到位，明确标注了黑白影调、光尘材质、场地尺寸、服装品牌、音效版权等未核实事项，边界声明清晰。"
+        },
+        "B": {
+          "score": 13,
+          "why": "核心创意“手掌放焰火”具有可识别的一句话主张，将焰火动作移植到手掌，不是brief的字面复述，有跳跃性。"
+        },
+        "C": {
+          "score": 9,
+          "why": "主题句“攥紧的手也能放焰火”短而有力，能容纳不同年龄和职业的人，不是传播话术，具有情感张力。"
+        },
+        "D": {
+          "score": 13,
+          "why": "四幕结构清晰，时间轴与成片时长一致，关键场次齐备，每个场次都有明确的动作和拍摄方法，可执行。"
+        },
+        "E": {
+          "score": 17,
+          "why": "视觉规则明确，黑白高反差、顶光侧光、光尘粒子等影调可执行，动作阶段（蓄势、绽开、散开、收势）清晰。"
+        },
+        "F": {
+          "score": 25,
+          "why": "执行条线齐备，选角、摄影、灯光、声音、制作流程、待核实清单和风险均有详细说明，逐页讲稿能直接讲满15分钟。"
+        },
+        "total": 85,
+        "top_gap": "最该补的一件事：尽快确认黑白影调是否被客户接受，这决定后续所有视觉方向，若客户要彩色烟花感，摄影和后期都得改。",
+        "judgeTokens": 5259
+      },
+      "latency": {
+        "totalSec": 353,
+        "steps": {
+          "directions": 22,
+          "script": 33,
+          "theme": 18,
+          "shots": 37,
+          "images": 54,
+          "review": 27,
+          "notes": 50,
+          "exec": 52,
+          "appendix": 49
+        }
+      },
+      "cost": {
+        "calls": 8,
+        "tokens": 49433,
+        "thinkingCalls": 7,
+        "retried": 0,
+        "imagesRead": 1
+      }
+    }
+  ]
+}
