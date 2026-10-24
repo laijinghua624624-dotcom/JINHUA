@@ -7,7 +7,9 @@
         X-Content-Type-Options nosniff
         X-Frame-Options DENY
         Referrer-Policy no-referrer
-        Cache-Control no-store
+        # 只在上游没给缓存策略时才兜底 no-store；否则会把
+        # 带 ?v= 的静态资源的长缓存覆盖掉（并产生重复头）。
+        ?Cache-Control no-store
     }
 
     # The full workbench is always the root page, including on iPad. The
