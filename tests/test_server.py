@@ -9,13 +9,27 @@ class ServerTests(unittest.TestCase):
         cls.temp=tempfile.TemporaryDirectory(prefix='lance-tests-');cls.orig=s.MEDIA;s.MEDIA=Path(cls.temp.name);s.DATA=s.MEDIA
         cls.clip=s.MEDIA/('a'*32+'.mp4')
         subprocess.run(['ffmpeg','-v','error','-f','lavfi','-i','testsrc2=size=160x120:rate=24','-f','lavfi','-i','sine=frequency=440:sample_rate=48000','-t','8','-c:v','libx264','-preset','ultrafast','-c:a','aac','-y',str(cls.clip)],check=True)
-        cls.server=s.ThreadingHTTPServer(('127.0.0.1',0),s.Handler);cls.thread=threading.Thread(target=cls.server.serve_forever,daemon=True);cls.thread.start()
+        cls.server=s.StudioHTTPServer(('127.0.0.1',0),s.Handler);cls.thread=threading.Thread(target=cls.server.serve_forever,daemon=True);cls.thread.start()
     @classmethod
     def tearDownClass(cls):
         cls.server.shutdown();cls.server.server_close();s.MEDIA=cls.orig;cls.temp.cleanup()
     def request(self,method,path,body=None,headers=None):
         conn=http.client.HTTPConnection('127.0.0.1',self.server.server_port)
         conn.request(method,path,body=body,headers=headers or {});r=conn.getresponse();status=r.status;data=r.read();conn.close();return status,data
+    def request_full(self,method,path,headers=None):
+        conn=http.client.HTTPConnection('127.0.0.1',self.server.server_port)
+        conn.request(method,path,headers=headers or {});r=conn.getresponse();status=r.status;data=r.read();heads={k.lower():v for k,v in r.getheaders()};conn.close();return status,data,heads
+    def test_versioned_static_assets_are_cacheable_and_code_is_not(self):
+        status,_,heads=self.request_full('GET','/studio-radar.js?v=20261025-test')
+        self.assertEqual(status,200)
+        self.assertIn('immutable',heads.get('cache-control',''),'带版本号的脚本应该能长缓存，减少首屏并发')
+        _,_,heads=self.request_full('GET','/studio-radar.js')
+        self.assertEqual(heads.get('cache-control'),'no-store','没版本号的脚本必须每次取最新')
+        _,_,heads=self.request_full('GET','/index.html')
+        self.assertEqual(heads.get('cache-control'),'no-store')
+    def test_server_accepts_burst_of_static_requests(self):
+        # 首屏要并发拉 40 多个资源；默认 backlog=5 会被丢连接，在 Render 上表现为成批 502。
+        self.assertGreaterEqual(s.StudioHTTPServer.request_queue_size,128)
     def test_security_and_health(self):
         with patch.dict(os.environ,{'ARK_API_KEY':'TEST-DO-NOT-EXPOSE'}):
             status,data=self.request('GET','/api/health');self.assertEqual(status,200);self.assertNotIn(b'TEST-DO-NOT-EXPOSE',data)

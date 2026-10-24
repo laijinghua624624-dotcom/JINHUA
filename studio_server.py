@@ -1015,9 +1015,13 @@ class Handler(BaseHTTPRequestHandler):
                 if start>end:return self.send_json({'error':'范围超出文件'},416)
             self.send_response(206 if partial else 200)
             ctype=mimetypes.guess_type(target)[0] or 'application/octet-stream'
-            # 代码文件不缓存（否则改完刷新还是旧脚本，看起来就像"功能没生效"）；媒体按内容哈希命名，可以长缓存
+            # 代码文件不缓存（否则改完刷新还是旧脚本，看起来就像"功能没生效"）；
+            # 但带 ?v= 版本号的静态资源可以长缓存——版本号变了 URL 就变了，不会卡旧代码，
+            # 也能把首屏 40 多个并发请求降下来（Render 免费实例并发很弱）。
             code_like=target.suffix.lower() in {'.html','.js','.mjs','.css','.json','.webmanifest'}
-            self.send_header('Content-Type',ctype);self.send_header('Content-Length',str(end-start+1));self.send_header('Accept-Ranges','bytes');self.send_header('X-Content-Type-Options','nosniff');self.send_header('Cache-Control','no-store' if code_like else 'public, max-age=21600')
+            versioned='v=' in (self.path or '')
+            cache='public, max-age=604800, immutable' if versioned else ('no-store' if code_like else 'public, max-age=21600')
+            self.send_header('Content-Type',ctype);self.send_header('Content-Length',str(end-start+1));self.send_header('Accept-Ranges','bytes');self.send_header('X-Content-Type-Options','nosniff');self.send_header('Cache-Control',cache)
             if partial:self.send_header('Content-Range',f'bytes {start}-{end}/{size}')
             if self.headers.get('Origin'):self.send_header('Access-Control-Allow-Origin',self.headers['Origin'])
             self.end_headers()
@@ -1221,9 +1225,17 @@ class Handler(BaseHTTPRequestHandler):
         # Paths only, never log headers, payloads, or credentials.
         print(f'[studio] {args[0] if args else fmt}')
 
+class StudioHTTPServer(ThreadingHTTPServer):
+    """默认 backlog 只有 5：首屏 40 多个资源并发时会被丢连接，
+    在 Render 上表现为成批 502、页面缺脚本。这里把队列和线程都放宽。"""
+    daemon_threads=True
+    allow_reuse_address=True
+    request_queue_size=256
+
 class ThreadingUnixHTTPServer(ThreadingMixIn,UnixStreamServer):
     daemon_threads=True
     allow_reuse_address=True
+    request_queue_size=256
 
 if __name__=='__main__':
     load_env();MEDIA.mkdir(parents=True,exist_ok=True)
@@ -1236,7 +1248,7 @@ if __name__=='__main__':
         print(f'Lance内容工作台：unix://{socket_path}')
     else:
         host,port=server_binding()
-        server=ThreadingHTTPServer((host,port),Handler)
+        server=StudioHTTPServer((host,port),Handler)
         print(f'Lance内容工作台：http://127.0.0.1:{port}')
     print('文本、图片和视频模型未配置时仍可编辑和保存，生成会明确报错。')
     try:server.serve_forever()
