@@ -38,6 +38,16 @@ DATA = Path(os.environ.get('LANCE_DATA_DIR', ROOT / '.lance-data'))
 MEDIA = DATA / 'media'
 ARK = 'https://ark.cn-beijing.volces.com/api/v3'
 DEEPSEEK = 'https://api.deepseek.com'
+def _build_commit():
+    for name in ('RENDER_GIT_COMMIT','GIT_COMMIT','COMMIT_SHA'):
+        value=os.environ.get(name,'').strip()
+        if value:return value[:12]
+    try:
+        result=subprocess.run(['git','rev-parse','--short','HEAD'],cwd=str(Path(__file__).resolve().parent),capture_output=True,text=True,timeout=2)
+        return result.stdout.strip() if result.returncode==0 else ''
+    except Exception:
+        return ''
+BUILD_COMMIT=_build_commit()
 MAX_UPLOAD = 250 * 1024 * 1024
 POOL = concurrent.futures.ThreadPoolExecutor(max_workers=2)
 JOBS = {}
@@ -987,7 +997,7 @@ class Handler(BaseHTTPRequestHandler):
                 routes=model_routes()
                 if routes['director']['provider']=='ark':routes['director']['model']=routes['director']['model'] or os.environ.get('ARK_TEXT_MODEL','')
                 ark_key=bool(os.environ.get('ARK_API_KEY'));deepseek_key=bool(os.environ.get('DEEPSEEK_API_KEY'))
-                return self.send_json({'ok':True,'uploadLimits':uploads.limits(self),'keyConfigured':ark_key or deepseek_key,'textProvider':text_provider(),'arkKeyConfigured':ark_key,'deepseekKeyConfigured':deepseek_key,'routes':routes,'models':{'text':routes['director']['model'],'image':routes['image']['model'],'video':routes['video']['model']},'speechConfigured':bool(os.environ.get('SPEECH_API_KEY') or os.environ.get('SPEECH_APP_ID') and os.environ.get('SPEECH_ACCESS_TOKEN')),'ffmpeg':bool(shutil.which('ffmpeg') and shutil.which('ffprobe')),'pdfText':bool(document_binary('pdftotext')),'ocr':bool(document_binary('pdftoppm') and document_binary('tesseract'))})
+                return self.send_json({'ok':True,'commit':BUILD_COMMIT,'uploadLimits':uploads.limits(self),'keyConfigured':ark_key or deepseek_key,'textProvider':text_provider(),'arkKeyConfigured':ark_key,'deepseekKeyConfigured':deepseek_key,'routes':routes,'models':{'text':routes['director']['model'],'image':routes['image']['model'],'video':routes['video']['model']},'speechConfigured':bool(os.environ.get('SPEECH_API_KEY') or os.environ.get('SPEECH_APP_ID') and os.environ.get('SPEECH_ACCESS_TOKEN')),'ffmpeg':bool(shutil.which('ffmpeg') and shutil.which('ffprobe')),'pdfText':bool(document_binary('pdftotext')),'ocr':bool(document_binary('pdftoppm') and document_binary('tesseract'))})
             if path.startswith('/api/upload-status/'):
                 return self.send_json(uploads.status(sys.modules[__name__],path.split('/')[-1]))
             if path=='/api/pinterest/status':return self.send_json(pinterest_status())
