@@ -426,8 +426,10 @@ def normalize_video(path,source='upload'):
     result=describe(normalized,source);result['originalLocalId']=path.name
     return result
 
-def read_public(url,limit):
-    request=urllib.request.Request(public_url(url),headers={'User-Agent':'Mozilla/5.0 LanceContentStudio/2.0','Accept':'text/html,video/*;q=0.9,*/*;q=0.5'})
+def read_public(url,limit,headers=None):
+    base={'User-Agent':'Mozilla/5.0 LanceContentStudio/2.0','Accept':'text/html,video/*;q=0.9,*/*;q=0.5'}
+    if headers:base.update(headers)
+    request=urllib.request.Request(public_url(url),headers=base)
     opener=urllib.request.build_opener(PublicRedirect())
     with opener.open(request,timeout=45) as response:
         final=public_url(response.geturl());content_type=response.headers.get_content_type().lower();suffix=Path(urllib.parse.urlparse(final).path).suffix.lower()
@@ -568,8 +570,44 @@ def feed_timestamp(value):
         except Exception:pass
     return 0
 
+RADAR_FEED_HEADERS = {
+    'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36',
+    'Accept': 'application/rss+xml,application/xml;q=0.9,text/html;q=0.8,*/*;q=0.7',
+    'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8'
+}
+
+def feed_entries_rss(url,sid,site):
+    data,content_type,final,_=read_public(url,4*1024*1024,RADAR_FEED_HEADERS)
+    raw=data.decode('utf-8','replace') if isinstance(data,(bytes,bytearray)) else str(data)
+    root=ET.fromstring(raw.lstrip('\ufeff \t\r\n'))
+    entries=[]
+    for node in root.iter('item'):
+        title=feed_plain(node.findtext('title'));link=feed_plain(node.findtext('link'))
+        if not title or not link.startswith('http'):continue
+        content_html=node.findtext('{http://purl.org/rss/1.0/modules/content/}encoded') or node.findtext('description') or ''
+        published=node.findtext('pubDate') or node.findtext('{http://purl.org/dc/elements/1.1/}date') or ''
+        entries.append({'id':sid+':'+hashlib.sha1(link.encode('utf-8')).hexdigest()[:12],'sourceId':sid,'site':site,'title':title,'url':link,'poster':feed_image(node,content_html),'publishedAt':published,'publishedTs':feed_timestamp(published)})
+    return entries
+
+def feed_entries_digitaling(sid,site):
+    """数英的 /rss 对机房 IP 返回 403，但列表页可以正常读取；
+    这里按「最新收录」顺序解析列表页兜底，只取标题、链接和封面。"""
+    data,content_type,final,_=read_public('https://www.digitaling.com/projects',4*1024*1024,RADAR_FEED_HEADERS)
+    raw=data.decode('utf-8','replace') if isinstance(data,(bytes,bytearray)) else str(data)
+    entries=[];seen=set();now=int(time.time())
+    for card in re.split(r'<div class="f_l work_item',raw)[1:]:
+        link=re.search(r'href="(https://www\.digitaling\.com/projects/\d+\.html)"',card)
+        if not link:continue
+        url=link.group(1)
+        if url in seen:continue
+        seen.add(url)
+        title=re.search(r'<img[^>]+alt="([^"]*)"',card) or re.search(r'<a[^>]+title="([^"]*)"',card)
+        cover=re.search(r'data-original="([^"]+)"',card)
+        entries.append({'id':sid+':'+hashlib.sha1(url.encode('utf-8')).hexdigest()[:12],'sourceId':sid,'site':site,'title':feed_plain(title.group(1)) if title else '数英项目','url':url,'poster':cover.group(1) if cover else '','publishedAt':'','publishedTs':now-len(entries)})
+    return entries
+
 def radar_feed(source_ids,limit=12):
-    """Subscribe to curated public RSS feeds. No arbitrary URLs, no article copying."""
+    """订阅精选站点的公开内容；只走允许列表里的站点，不复制正文。"""
     wanted=[str(sid).strip() for sid in (source_ids or []) if str(sid).strip() in RADAR_FEEDS][:6]
     if not wanted:raise ValueError('未指定可订阅的网站')
     try:limit=max(1,min(int(limit),30))
@@ -580,24 +618,22 @@ def radar_feed(source_ids,limit=12):
     if cached and now-cached[0]<RADAR_FEED_TTL:return cached[1]
     items=[];sources=[]
     for sid in wanted:
-        meta=RADAR_FEEDS[sid];found=0;error=''
-        try:
-            data,content_type,final,_=read_public(meta['url'],4*1024*1024)
-            raw=data.decode('utf-8','replace') if isinstance(data,(bytes,bytearray)) else str(data)
-            root=ET.fromstring(raw.lstrip('\ufeff \t\r\n'))
-            for node in root.iter('item'):
-                title=feed_plain(node.findtext('title'));link=feed_plain(node.findtext('link'))
-                if not title or not link.startswith('http'):continue
-                content_html=node.findtext('{http://purl.org/rss/1.0/modules/content/}encoded') or node.findtext('description') or ''
-                published=node.findtext('pubDate') or node.findtext('{http://purl.org/dc/elements/1.1/}date') or ''
-                items.append({'id':sid+':'+hashlib.sha1(link.encode('utf-8')).hexdigest()[:12],'sourceId':sid,'site':meta['name'],'title':title,'url':link,'poster':feed_image(node,content_html),'publishedAt':published,'publishedTs':feed_timestamp(published)})
-                found+=1
+        meta=RADAR_FEEDS[sid];entries=[];error='';mode='rss'
+        try:entries=feed_entries_rss(meta['url'],sid,meta['name'])
         except Exception as exc:error=str(exc)[:160]
-        sources.append({'id':sid,'name':meta['name'],'ok':not error,'count':found,'error':error})
+        if not entries and meta.get('fallback'):
+            try:
+                entries=meta['fallback'](sid,meta['name']);mode='html';error=''
+            except Exception as exc:error=(error+' | ' if error else '')+str(exc)[:160]
+        items.extend(entries)
+        sources.append({'id':sid,'name':meta['name'],'ok':bool(entries),'count':len(entries),'mode':mode,'error':error})
     items.sort(key=lambda item:item['publishedTs'],reverse=True)
     payload={'items':items[:limit],'sources':sources,'fetchedAt':int(now)}
     with _FEED_LOCK:_FEED_CACHE[key]=(now,payload)
     return payload
+
+# 数英 RSS 在某些机房 IP 上会被 403，列表页兜底
+RADAR_FEEDS['digitaling']['fallback']=feed_entries_digitaling
 
 def download_generated(url,ext):
     MEDIA.mkdir(parents=True,exist_ok=True)

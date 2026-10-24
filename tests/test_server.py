@@ -150,7 +150,7 @@ class ServerTests(unittest.TestCase):
         good=('<?xml version="1.0"?><rss version="2.0"><channel>'
               '<item><title>Good</title><link>https://www.stashmedia.tv/a</link></item>'
               '</channel></rss>')
-        def reader(url,limit):
+        def reader(url,limit,headers=None):
             if 'stashmedia' in url:raise OSError('boom')
             return good.encode('utf-8'),'text/xml',url,'utf-8'
         with patch.object(s,'read_public',side_effect=reader):
@@ -162,6 +162,27 @@ class ServerTests(unittest.TestCase):
         self.assertTrue(broken['error'])
         self.assertEqual(healthy['ok'],True)
         self.assertEqual(len(result['items']),1)
+
+    def test_radar_feed_falls_back_to_list_page_when_rss_is_blocked(self):
+        # 数英 /rss 对机房 IP 返回 403，但列表页可读——应自动降级而不是整源失效。
+        list_html=('<div class="f_l work_item transition mg_b_20"><div class="works_pic"><a href="https://www.digitaling.com/projects/380932.html">'
+                   '<img alt="百事可乐穿娃衣" data-original="https://file.digitaling.com/eImg/cover/a.png" src="default.png"></a></div></div>'
+                   '<div class="f_l work_item transition mg_b_20"><div class="works_pic"><a href="https://www.digitaling.com/projects/380659.html">'
+                   '<img alt="奥利奥广告牌" data-original="https://file.digitaling.com/eImg/cover/b.png" src="default.png"></a></div></div>')
+        def reader(url,limit,headers=None):
+            if url.rstrip('/').endswith('/rss'):raise OSError('HTTP Error 403: Forbidden')
+            return list_html.encode('utf-8'),'text/html','https://www.digitaling.com/projects','utf-8'
+        with patch.object(s,'read_public',side_effect=reader):
+            s._FEED_CACHE.clear()
+            result=s.radar_feed(['digitaling'],10)
+        source=result['sources'][0]
+        self.assertEqual(source['mode'],'html','RSS 被拒应降级到列表页')
+        self.assertEqual(source['ok'],True)
+        self.assertEqual(source['count'],2)
+        self.assertEqual(source['error'],'')
+        self.assertEqual(result['items'][0]['title'],'百事可乐穿娃衣')
+        self.assertEqual(result['items'][0]['poster'],'https://file.digitaling.com/eImg/cover/a.png')
+        self.assertTrue(result['items'][0]['url'].startswith('https://www.digitaling.com/projects/'))
 
     def test_reference_download_only_serves_public_raster_images(self):
         with patch.object(s,'read_public',return_value=(b'image','image/jpeg','https://cdn.example/cover.jpg','utf-8')):

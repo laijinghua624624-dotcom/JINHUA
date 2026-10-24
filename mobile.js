@@ -171,7 +171,7 @@ function radarCard(item){
 }
 // ── 来自你收藏的网站的最新更新 ──────────────────────────────
 const NEWS_KEY='jinhua_mobile_radar_news_v1';
-const FEED_SOURCES=[{id:'digitaling',name:'数英'},{id:'eventmarketer',name:'Event Marketer'},{id:'stash',name:'Stash'},{id:'livedesign',name:'Live Design'},{id:'directorslibrary',name:'Directors’ Library'}];
+const FEED_SOURCES=[{id:'digitaling',name:'数英'},{id:'eventmarketer',name:'Event Marketer'},{id:'stash',name:'Stash'},{id:'livedesign',name:'Live Design'}];
 let mobileNews={day:'',items:[],loading:false,error:'',pending:false};
 function mobileFeedSources(){
   const sites=new Set();

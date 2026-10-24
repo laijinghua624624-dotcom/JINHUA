@@ -127,7 +127,7 @@ function radarWhyLine(id){
 }
 function radarOpenLink(url,label='打开来源'){return `<a class="button" href="${esc(A.link(url))}" target="_blank" rel="noopener noreferrer">${esc(label)} ↗</a>`;}
 const RADAR_NEWS_KEY='lance_radar_news_v1';
-const RADAR_FEED_SOURCES=[{id:'digitaling',name:'数英'},{id:'eventmarketer',name:'Event Marketer'},{id:'stash',name:'Stash'},{id:'livedesign',name:'Live Design'},{id:'directorslibrary',name:'Directors’ Library'}];
+const RADAR_FEED_SOURCES=[{id:'digitaling',name:'数英'},{id:'eventmarketer',name:'Event Marketer'},{id:'stash',name:'Stash'},{id:'livedesign',name:'Live Design'}];
 let radarNews={date:'',items:[],sources:[],loading:false,error:'',fetchedAt:0},radarNewsPending=false;
 function radarBase(){return location.hostname.endsWith('github.io')?'https://lance-content-studio.onrender.com':'';}
 // 「你喜欢的网站」= 你收藏过作品或收藏过来源的站；没有记录时先按全部更新源推。
