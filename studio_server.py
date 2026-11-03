@@ -1044,7 +1044,14 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send_json({'fields':json.loads(seed.read_text()).get(selected_scope,{}) if seed.is_file() and selected_scope in ('personal','xinxuan') else {}})
             if path.startswith('/api/jobs/'):
                 return self.send_json(JOBS.get(path.split('/')[-1],{'status':'failed','error':'任务不存在或服务已重启，请重试'}))
-            if path.startswith('/media/'): target=media_path(path[7:])
+            if path == '/quote' or path.startswith('/quote/'):
+                rel = 'index.html' if path in ('/quote','/quote/') else path[len('/quote/'):]
+                base = (ROOT/'quote').resolve()
+                target = (base/rel).resolve()
+                if target != base and base not in target.parents:
+                    return self.send_json({'error':'文件不存在'},404)
+                if target.is_dir(): target = target/'index.html'
+            elif path.startswith('/media/'): target=media_path(path[7:])
             else:
                 name='index.html' if path=='/' else path.lstrip('/')
                 creative_file = name in {'studio-creative.js','studio-creative-ui.js','studio-creative.css','studio-upload.js','studio-director-plan.js','studio-director.js','studio-director-ui.js','studio-origin.js','studio-audit.js','studio-origin-ui.js','studio-venue.js','studio-venue-ui.js','studio-wizard.js','studio-flow.js','studio-report.js'}
