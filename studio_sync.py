@@ -28,10 +28,12 @@ Only the Python standard library is used: sqlite3 + hashlib + hmac + secrets.
 """
 import hashlib
 import hmac
+import ipaddress
 import json
 import os
 import re
 import secrets
+import socket
 import sqlite3
 import threading
 import time
@@ -633,6 +635,80 @@ def _delete_media(handler, user):
     return {'deleted': True}
 
 
+_FETCH_UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36'
+
+
+def _public_url(url):
+    try:
+        parsed = urllib.parse.urlparse(str(url or '').strip())
+        if parsed.scheme not in ('http', 'https') or not parsed.hostname:
+            return False
+        for info in socket.getaddrinfo(parsed.hostname, 443, proto=socket.IPPROTO_TCP):
+            ip = ipaddress.ip_address(info[4][0])
+            if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_multicast or ip.is_reserved or ip.is_unspecified:
+                return False
+        return True
+    except Exception:
+        return False
+
+
+def _fetch_bytes(url, limit, timeout=7):
+    if not _public_url(url):
+        return None, ''
+    request = urllib.request.Request(url, headers={'User-Agent': _FETCH_UA, 'Accept': '*/*'})
+    with urllib.request.urlopen(request, timeout=timeout) as response:
+        content_type = (response.headers.get('Content-Type') or '').split(';')[0].strip().lower()
+        data = response.read(limit + 1)
+    if len(data) > limit:
+        return None, content_type
+    return data, content_type
+
+
+def _link_meta(url):
+    try:
+        data, content_type = _fetch_bytes(url, 700 * 1024)
+        if not data or 'html' not in content_type:
+            return {}
+        text = data.decode('utf-8', 'ignore')
+        def pick(pattern):
+            match = re.search(pattern, text, re.I | re.S)
+            return match.group(1).strip() if match else ''
+        title = pick(r'<meta[^>]+property=["\']og:title["\'][^>]+content=["\']([^"\']+)')
+        title = title or pick(r'<meta[^>]+content=["\']([^"\']+)["\'][^>]+property=["\']og:title')
+        title = title or pick(r'<title[^>]*>(.*?)</title>')
+        image = pick(r'<meta[^>]+property=["\']og:image["\'][^>]+content=["\']([^"\']+)')
+        image = image or pick(r'<meta[^>]+content=["\']([^"\']+)["\'][^>]+property=["\']og:image')
+        image = image or pick(r'<meta[^>]+name=["\']twitter:image["\'][^>]+content=["\']([^"\']+)')
+        description = pick(r'<meta[^>]+property=["\']og:description["\'][^>]+content=["\']([^"\']+)')
+        if image.startswith('//'):
+            image = 'https:' + image
+        elif image.startswith('/'):
+            parsed = urllib.parse.urlparse(url)
+            image = f'{parsed.scheme}://{parsed.netloc}' + image
+        return {'title': title, 'image': image, 'description': description}
+    except Exception:
+        return {}
+
+
+def _store_media_bytes(user, workspace, name, data, mime):
+    sha = hashlib.sha256(data).hexdigest()
+    blob = BLOB_DIR / sha[:2] / sha
+    blob.parent.mkdir(parents=True, exist_ok=True)
+    if not blob.exists():
+        tmp = blob.with_suffix('.part')
+        tmp.write_bytes(data)
+        os.replace(tmp, blob)
+    logical = f"{user['id']}/{workspace}/{_safe_name(name)}"
+    now = _now()
+    with _db() as conn:
+        conn.execute("""insert into media(user_id,logical_path,sha256,size,mime,created_at,last_ref_at)
+                        values(?,?,?,?,?,?,?)
+                        on conflict(user_id,logical_path) do update set
+                          sha256=excluded.sha256,size=excluded.size,mime=excluded.mime,last_ref_at=excluded.last_ref_at""",
+                     (user['id'], logical, sha, len(data), mime or 'application/octet-stream', now, now))
+    return {'path': logical, 'sha256': sha, 'size': len(data), 'name': _safe_name(name)}
+
+
 def _capture_key():
     with _db() as conn:
         row = conn.execute("select value from settings where key='capture_key'").fetchone()
@@ -689,17 +765,39 @@ def _create_capture(handler):
         match = re.search(r'https?://\S+', url) or re.search(r'https?://\S+', text)
         if match:
             url = match.group(0)
-    if url and not title:
+    cover_url = str(body.get('cover_url') or '').strip()[:2000]
+    meta = {}
+    if url and (not title or not cover_url):
+        meta = _link_meta(url)
+    if url:
+        if not title:
+            title = (meta.get('title') or '')[:200]
+        if not title:
+            try:
+                title = urllib.parse.urlparse(url).netloc.replace('www.', '') or '收藏'
+            except Exception:
+                title = '收藏'
+        if not cover_url:
+            cover_url = meta.get('image') or ''
+    file_path = file_name = mime_type = None
+    if cover_url:
         try:
-            title = urllib.parse.urlparse(url).netloc.replace('www.', '') or '收藏'
+            image, image_type = _fetch_bytes(cover_url, 8 * 1024 * 1024)
+            if image and image_type.startswith('image/'):
+                stored = _store_media_bytes(user, workspace, 'cover-' + uuid.uuid4().hex[:12] + ('.png' if 'png' in image_type else '.jpg'), image, image_type)
+                file_path = stored['path']
+                file_name = '封面.' + ('png' if 'png' in image_type else 'jpg')
+                mime_type = image_type
         except Exception:
-            title = '收藏'
+            pass
     kind = 'link' if url else 'text'
+    if meta.get('description') and not text:
+        text = meta['description'][:4000]
     with _db() as conn:
         conn.execute("""insert into inbox(id,user_id,workspace,kind,title,body,source_url,file_path,file_name,mime_type,status,metadata,created_at,updated_at,imported_at)
                         values(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
                      (item_id, user['id'], workspace, kind, title or '收藏', text, url or None,
-                      None, None, None, 'inbox', metadata_text, now, now, None))
+                      file_path, file_name, mime_type, 'inbox', metadata_text, now, now, None))
     return {'ok': True, 'id': item_id, 'kind': kind}
 
 

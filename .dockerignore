@@ -10,6 +10,7 @@
 !studio_pdf.py
 !studio_upload.py
 !studio_sync.py
+!studio_ingest.py
 !requirements.txt
 !vendor/
 !vendor/presentation.js
