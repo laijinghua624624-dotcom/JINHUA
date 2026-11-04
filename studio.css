@@ -83,3 +83,7 @@
 .sync-progress .progress{margin:0;height:6px}
 .sync-progress small{font-size:10px;color:var(--muted)}
 .sync-live strong{font-size:13px}
+
+/* Mobile inbox badge: only visible while there are unread handoff records. */
+.nav-badge{display:inline-grid;place-items:center;min-width:16px;height:16px;padding:0 5px;margin-left:6px;border-radius:9px;background:var(--warm);color:#241c0f;font-size:10px;font-weight:700;line-height:1;vertical-align:1px}
+.nav-badge[hidden]{display:none}

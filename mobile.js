@@ -18,7 +18,7 @@ const initialTab=TABS.includes(location.hash.slice(1))?location.hash.slice(1):'r
 const initialDraft={workspace:'xinxuan',title:'',body:'',url:'',kind:'text',...readJSON(DRAFT_KEY,{})};
 const state={
   tab:initialTab,kind:labels[initialDraft.kind]?initialDraft.kind:'text',session:null,
-  items:[],projects:[],localItems:[],pending:0,message:null,recording:null,
+  items:[],projects:[],workbench:{xinxuan:null,personal:null},localItems:[],pending:0,message:null,recording:null,
   recordedFile:null,selectedFile:null,captureDraft:initialDraft,
   radarOffset:0,radarCurrent:[],radarSeen:[],radarRemaining:0,radarReset:false,radarDate:'',
   radarWorkspace:localStorage.getItem('jinhua_radar_workspace')||'xinxuan',
@@ -321,11 +321,30 @@ function projectsView(){
   if(!state.session)return header('PROJECTS','项目概览','登录后查看 Mac 发布的项目状态。')+loginCard();
   return header('PROJECTS','项目概览','这里只查看状态与方向，不在手机上做重型生成。')+`<div class="button-row"><button class="secondary" data-action="refresh">刷新</button></div><section class="mobile-list">${state.projects.map(item=>`<article class="mobile-item"><div class="item-head"><div><span class="pill">${item.workspace==='xinxuan'?'My·工作':'My·个人'} · ${item.kind==='project'?'项目':'脚本'}</span><h3>${esc(item.title)}</h3></div><span class="item-meta">${esc(item.status||'')}</span></div><p>${esc(item.summary||'')}</p>${item.target_date?`<div class="item-meta">目标日期：${esc(item.target_date)}</div>`:''}</article>`).join('')||'<div class="empty"><strong>Mac 还没有发布项目概览</strong><p>回到 Mac 工作台选择项目并发布，然后回此页点“刷新”。</p></div>'}</section>`;
 }
+function workbenchTime(value){
+  if(!value)return '';
+  const date=new Date(value);if(Number.isNaN(date.getTime()))return '';
+  const diff=Date.now()-date.getTime();
+  if(diff<24*3600*1000)return date.toLocaleString('zh-CN',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'});
+  return Math.floor(diff/86400000)+' 天前';
+}
+function workbenchStatusHTML(){
+  return ['xinxuan','personal'].map(space=>{
+    const row=state.workbench?.[space],label=space==='xinxuan'?'My·工作':'My·个人';
+    if(!row)return `<div class="wb-row"><strong>${label}</strong><span>还没有云端记录</span></div>`;
+    return `<div class="wb-row"><strong>${label}</strong><span>最近同步 ${esc(workbenchTime(row.updated_at))} · 只读镜像</span></div>`;
+  }).join('');
+}
+function installCardHTML(){
+  const installed=!!(globalThis.matchMedia&&matchMedia('(display-mode: standalone)').matches)||!!navigator.standalone;
+  if(installed)return `<section class="mobile-card"><h2>已安装到主屏幕</h2><p>当前是独立窗口，打开即用；记录仍以云端账号为准。</p></section>`;
+  return `<section class="mobile-card"><h2>装到主屏幕，像 App 一样用</h2><ol class="install-steps"><li>Safari 打开本页 → 点底部「分享」</li><li>向下滑，选择「添加到主屏幕」</li><li>名称保留「Lance随身」→ 添加</li></ol><p class="file-note">装好后可全屏打开、保持登录状态；记录仍以云端账号为准。</p></section>`;
+}
 function accountView(){
   if(!Cloud.configured())return header('ACCOUNT','随身版设置','当前为本机草稿模式。')+`<section class="mobile-card"><h2>还差一步云配置</h2><p>在 Supabase 执行随身版权限脚本，并填写新 publishable key 后即可跨设备同步。</p></section>`;
   if(!state.session)return header('ACCOUNT','我的同步账号','登录后管理同步状态。')+loginCard();
-  return header('ACCOUNT','我的同步账号','轻量采集，不调用付费AI。')+`<section class="mobile-card"><h2>${esc(state.session.user?.email||'已登录')}</h2><p>${state.pending?`还有 ${state.pending} 条本机草稿等待同步。`:'所有本机草稿均已同步。'}</p><div class="button-row"><button class="secondary" data-action="sync">立即同步</button><button class="danger-button" data-action="sign-out">退出登录</button></div></section>`+
-    `<section class="mobile-card"><h2>从其他网页一键收藏</h2><div class="mobile-share-guide"><strong>iPhone／iPad</strong><p>在喜欢的网页点系统“分享”，选择 Lance 随身；标题、链接和选中文字会自动带入。若分享菜单没有出现，先复制链接，再到“记录 → 链接”粘贴。</p><button class="primary" data-tab="capture" data-kind-open="link">打开链接收藏</button></div><div class="desktop-bookmarklet"><strong>Mac／电脑浏览器</strong><p>把下面按钮拖到书签栏。以后浏览任何网页时点一次，会在新页签打开 JINHUA 并带入页面信息。</p><div class="button-row"><a class="primary bookmarklet" href="${esc(bookmarklet())}">收藏到 JINHUA</a><button class="secondary" data-action="copy-bookmarklet">复制收藏按钮代码</button></div></div></section><div class="notice">把此页面添加到主屏幕后，可像应用一样打开。数据仍以云端账号为准。</div>`;
+  return header('ACCOUNT','我的同步账号','轻量采集，不调用付费AI。')+`<section class="mobile-card"><h2>${esc(state.session.user?.email||'已登录')}</h2><p>${state.pending?`还有 ${state.pending} 条本机草稿等待同步。`:'所有本机草稿均已同步。'}</p><div class="button-row"><button class="secondary" data-action="sync">立即同步</button><button class="danger-button" data-action="sign-out">退出登录</button></div></section>`+`<section class="mobile-card"><h2>云端工作台</h2><div class="wb-list">${workbenchStatusHTML()}</div><p class="file-note">手机只读；要恢复或清空，请在 Mac 上打开「更多工具 → 保存与恢复」。</p><div class="button-row"><button class="secondary" data-action="workbench-refresh">刷新状态</button></div></section>`+
+    `<section class="mobile-card"><h2>从其他网页一键收藏</h2><div class="mobile-share-guide"><strong>iPhone／iPad</strong><p>在喜欢的网页点系统“分享”，选择 Lance 随身；标题、链接和选中文字会自动带入。若分享菜单没有出现，先复制链接，再到“记录 → 链接”粘贴。</p><button class="primary" data-tab="capture" data-kind-open="link">打开链接收藏</button></div><div class="desktop-bookmarklet"><strong>Mac／电脑浏览器</strong><p>把下面按钮拖到书签栏。以后浏览任何网页时点一次，会在新页签打开 JINHUA 并带入页面信息。</p><div class="button-row"><a class="primary bookmarklet" href="${esc(bookmarklet())}">收藏到 JINHUA</a><button class="secondary" data-action="copy-bookmarklet">复制收藏按钮代码</button></div></div></section>${installCardHTML()}`;
 }
 
 function render(){
@@ -335,7 +354,11 @@ function render(){
 }
 async function loadCloud(shouldRender=true){
   state.session=await Cloud.session();await updatePending();if(!state.session){if(shouldRender)render();return;}
-  try{[state.items,state.projects]=await Promise.all([Cloud.listInbox(),Cloud.listProjects()]);}catch(error){show(error.message,'error');return;}
+  const results=await Promise.allSettled([Cloud.listInbox(),Cloud.listProjects(),typeof Cloud.getWorkbenchMeta==='function'?Cloud.getWorkbenchMeta('xinxuan'):null,typeof Cloud.getWorkbenchMeta==='function'?Cloud.getWorkbenchMeta('personal'):null]);
+  if(results[0].status==='fulfilled')state.items=results[0].value;
+  if(results[1].status==='fulfilled')state.projects=results[1].value;
+  state.workbench={xinxuan:results[2].status==='fulfilled'?results[2].value:null,personal:results[3].status==='fulfilled'?results[3].value:null};
+  if(results[0].status==='rejected'&&results[1].status==='rejected'){show(results[0].reason?.message||'云端暂时不可用','error');return;}
   if(shouldRender)render();
 }
 
@@ -378,7 +401,7 @@ async function navigate(tab,kind=null){
   if(state.tab==='capture')syncCaptureForm();state.tab=tab;
   if(kind&&labels[kind]){state.kind=kind;state.captureDraft.kind=kind;persistCaptureDraft();}
   history.replaceState(null,'',location.pathname+location.search+'#'+state.tab);render();scrollTopNow();
-  if(state.session&&['inbox','projects'].includes(state.tab))await loadCloud();
+  if(state.session&&['inbox','projects','account'].includes(state.tab))await loadCloud();
 }
 async function archiveItem(id){
   const item=state.items.find(value=>value.id===id);if(!item)return;
@@ -434,6 +457,7 @@ document.addEventListener('click',async event=>{
     if(button.dataset.action==='voice'){await toggleVoice();return;}
     if(button.dataset.action==='sync'){await withBusy(button,'同步中…',syncPending);return;}
     if(button.dataset.action==='refresh'){await withBusy(button,'刷新中…',async()=>{await loadCloud();show('已刷新云端状态','success');});return;}
+    if(button.dataset.action==='workbench-refresh'){await withBusy(button,'刷新中…',async()=>{await loadCloud();show('已刷新桌面同步状态','success');});return;}
     if(button.dataset.action==='local-delete'){if(!confirm('只删除当前设备上的这条未同步草稿，确定继续？'))return;await queueDelete(button.dataset.id);await updatePending();render();show('本机草稿已删除','success');return;}
     if(button.dataset.action==='archive'){await withBusy(button,'归档中…',()=>archiveItem(button.dataset.id));return;}
     if(button.dataset.action==='undo-archive'){await withBusy(button,'恢复中…',()=>undoArchive(button.dataset.id));return;}

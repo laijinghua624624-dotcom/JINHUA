@@ -1,10 +1,43 @@
 /* Desktop handoff for the lightweight mobile companion. No paid AI is called here. */
 'use strict';
-const MobileInbox={session:StudioCloud.readSession(),items:[],loading:false,loaded:false,error:''};
+const MobileInbox={session:StudioCloud.readSession(),items:[],loading:false,loaded:false,error:'',unread:0,lastAt:null};
 
 function mobileWorkspaceLabel(value){return value==='personal'?'My·个人':'My·工作';}
 function mobileKindLabel(value){return ({text:'文字灵感',voice:'语音灵感',image:'图片参考',video:'视频参考',document:'文档资料',link:'链接收藏'})[value]||'随身记录';}
 function mobileSafeLink(value){try{const url=new URL(value);return ['http:','https:'].includes(url.protocol)&&!url.username&&!url.password?url.href:'';}catch{return '';}}
+function refreshInboxBadge(){
+  const count=Number(MobileInbox.unread)||0;
+  document.querySelectorAll('[data-mobile-inbox-badge]').forEach(node=>{node.textContent=count?String(count):'';node.hidden=!count;});
+}
+function setInboxUnread(count){
+  MobileInbox.unread=Math.max(0,Number(count)||0);MobileInbox.lastAt=new Date().toISOString();refreshInboxBadge();
+}
+let mobileInboxFails=0,mobileInboxPollTimer=null;
+async function countMobileInbox(){
+  if(!StudioCloud.configured())return MobileInbox.unread||0;
+  try{
+    MobileInbox.session=MobileInbox.session||await StudioCloud.session();
+    if(!MobileInbox.session)return MobileInbox.unread||0;
+    setInboxUnread(await StudioCloud.countInbox());return MobileInbox.unread;
+  }catch{return null;/* keep the last known count; polling backs off after repeated failures */}
+}
+function scheduleMobileInboxPoll(delay){clearTimeout(mobileInboxPollTimer);mobileInboxPollTimer=setTimeout(pollMobileInbox,delay);}
+async function pollMobileInbox(){
+  if(document.visibilityState!=='visible'){scheduleMobileInboxPoll(60000);return;}
+  const before=MobileInbox.unread,next=await countMobileInbox();
+  if(next==null)mobileInboxFails++;else mobileInboxFails=0;
+  if(next!=null&&before>0&&next>before)notify(`随身收件箱还有 ${next} 条待处理`,'info');
+  if(route.view==='inbox'&&MobileInbox.session&&!MobileInbox.loading)await refreshMobileInbox();
+  scheduleMobileInboxPoll(mobileInboxFails>=3?300000:60000);
+}
+function startMobileInboxPolling(){mobileInboxFails=0;scheduleMobileInboxPoll(4000);}
+function publishMobileOverviewToPhone(force=false){
+  const KEY='jinhua_mobile_publish_v1_'+scope;
+  let last=0;try{last=Number(JSON.parse(localStorage.getItem(KEY)||'0'))||0;}catch{}
+  if(!force&&Date.now()-last<10*60*1000)return Promise.resolve(false);
+  const rows=mobileProjectRows();if(!rows.length)return Promise.resolve(false);
+  return StudioCloud.publishProjects(rows).then(result=>{localStorage.setItem(KEY,JSON.stringify(Date.now()));return true;}).catch(()=>false);
+}
 function mobileLoginCard(){return `<div class="panel mobile-inbox-login"><h2>登录私人同步空间</h2><p class="muted">iPhone、iPad 与 Mac 使用同一个邮箱账号。公开页面只使用 publishable key；管理员密钥永远不进入浏览器。</p><div class="formgrid"><label>邮箱<input id="mobile-cloud-email" type="email" autocomplete="email"></label><label>密码<input id="mobile-cloud-password" type="password" autocomplete="current-password" minlength="8"></label></div><div class="actions">${btn('登录','mobile-sign-in','',true)}${btn('注册','mobile-sign-up')}</div></div>`;}
 
 function renderMobileInbox(){
@@ -30,7 +63,7 @@ function mobileLinkDialog(item){
 async function refreshMobileInbox(){
   if(!StudioCloud.configured()||MobileInbox.loading)return;
   MobileInbox.loading=true;MobileInbox.error='';if(route.view==='inbox')render();
-  try{MobileInbox.session=await StudioCloud.session();MobileInbox.items=MobileInbox.session?await StudioCloud.listInbox():[];MobileInbox.loaded=true;}
+  try{MobileInbox.session=await StudioCloud.session();MobileInbox.items=MobileInbox.session?await StudioCloud.listInbox():[];MobileInbox.loaded=true;setInboxUnread(MobileInbox.items.filter(item=>item.status==='inbox').length);}
   catch(error){MobileInbox.error=error.message;MobileInbox.session=null;}
   finally{MobileInbox.loading=false;if(route.view==='inbox')render();}
 }
@@ -56,7 +89,7 @@ async function importMobileItem(item,options={}){
     const all=globalAssets();all.push(asset);saveAesthetic(all);
   }
   await StudioCloud.patchInbox(item.id,{status:'imported',imported_at:now,updated_at:now});
-  MobileInbox.items=await StudioCloud.listInbox();MobileInbox.loaded=true;
+  MobileInbox.items=await StudioCloud.listInbox();MobileInbox.loaded=true;setInboxUnread(MobileInbox.items.filter(row=>row.status==='inbox').length);
 }
 
 function mobileProjectRows(){

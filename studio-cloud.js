@@ -31,6 +31,8 @@
   }
   async function auth(){const s=await session();if(!s?.access_token||!s?.user?.id)throw Error('请先登录随身同步');return s;}
   async function listInbox(){const s=await auth();return request('/rest/v1/mobile_inbox?select=*&order=created_at.desc&limit=200',{token:s.access_token})||[];}
+  async function countInbox(){const s=await auth();const rows=await request('/rest/v1/mobile_inbox?select=id&status=eq.inbox&limit=200',{token:s.access_token});return Array.isArray(rows)?rows.length:0;}
+  async function getWorkbenchMeta(workspace){const s=await auth();const rows=await request('/rest/v1/workbench_snapshots?workspace=eq.'+encodeURIComponent(workspace)+'&select=workspace,revision,updated_at&limit=1',{token:s.access_token});return rows?.[0]||null;}
   async function createInbox(value){const s=await auth();const row={...value,user_id:s.user.id,status:value.status||'inbox'};const data=await request('/rest/v1/mobile_inbox',{method:'POST',token:s.access_token,headers:{Prefer:'return=representation'},body:row});return data?.[0]||row;}
   async function patchInbox(id,value){const s=await auth();const data=await request('/rest/v1/mobile_inbox?id=eq.'+encodeURIComponent(id),{method:'PATCH',token:s.access_token,headers:{Prefer:'return=representation'},body:value});return data?.[0]||value;}
   function safeName(name){return String(name||'file').normalize('NFKC').replace(/[^a-zA-Z0-9._-]+/g,'-').replace(/^[.-]+|-+$/g,'').slice(-90)||'file';}
@@ -110,5 +112,5 @@
     const s=await auth();
     return request('/storage/v1/object/list/'+WORKBENCH_BUCKET,{method:'POST',token:s.access_token,body:{prefix,limit,offset}})||[];
   }
-  return {SESSION_KEY,BUCKET,WORKBENCH_BUCKET,config,configured,readSession,saveSession,signUp,signIn,signOut,session,listInbox,createInbox,patchInbox,uploadFile,downloadFile,listProjects,removeBackedUpProjects,publishProjects,getWorkbench,putWorkbench,putWorkbenches,uploadWorkbenchMedia,backupWorkbench,signedWorkbenchMedia,signedWorkbenchMediaBatch,listWorkbenchMedia,safeName};
+  return {SESSION_KEY,BUCKET,WORKBENCH_BUCKET,config,configured,readSession,saveSession,signUp,signIn,signOut,session,listInbox,countInbox,getWorkbenchMeta,createInbox,patchInbox,uploadFile,downloadFile,listProjects,removeBackedUpProjects,publishProjects,getWorkbench,putWorkbench,putWorkbenches,uploadWorkbenchMedia,backupWorkbench,signedWorkbenchMedia,signedWorkbenchMediaBatch,listWorkbenchMedia,safeName};
 });
