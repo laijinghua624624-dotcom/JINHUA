@@ -24,7 +24,7 @@
 
 	# 手机随身版：公开页面；收件箱/工作台数据仍由 Supabase 登录保护
 	# 雷达只放行公开数据接口；radar-preview 在服务端有域名白名单，不是开放代理
-	@mobile path /mobile.html /mobile.js /mobile.css /mobile-sw.js /mobile.webmanifest /mobile-config.js /mobile-icon.svg /mobile-icon-180.png /mobile-icon-192.png /mobile-icon-512.png /studio-cloud.js /studio-radar.js /api/radar-feed /api/radar-preview
+	@mobile path /mobile.html /mobile.js /mobile.css /mobile-sw.js /mobile.webmanifest /mobile-config.js /mobile-icon.svg /mobile-icon-180.png /mobile-icon-192.png /mobile-icon-512.png /studio-cloud.js /studio-cloud-vps.js /studio-radar.js /api/radar-feed /api/radar-preview
 	handle @mobile {
 		reverse_proxy lance:10000
 	}

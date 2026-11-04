@@ -1,5 +1,16 @@
 /* Lightweight authenticated sync for the mobile companion and desktop inbox. */
-(function(root,factory){const api=factory(root);if(typeof module==='object')module.exports=api;else root.StudioCloud=api;})(globalThis,function(root){
+(function(root,factory){
+  const base=factory(root);
+  let mode='supabase';
+  try{
+    const params=new URLSearchParams((root.location&&root.location.search)||'');
+    const requested=params.get('mode');
+    if(requested==='vps'||requested==='supabase')root.localStorage.setItem('lance_sync_mode',requested);
+    mode=root.localStorage.getItem('lance_sync_mode')||'supabase';
+  }catch{}
+  const api=mode==='vps'&&root.StudioCloudVps?Object.assign({},base,root.StudioCloudVps):base;
+  if(typeof module==='object')module.exports=api;else root.StudioCloud=api;
+})(globalThis,function(root){
   'use strict';
   const SESSION_KEY='jinhua_cloud_session_v1';
   const BUCKET='mobile-inbox';
@@ -120,5 +131,5 @@
     const s=await auth();
     return request('/storage/v1/object/list/'+WORKBENCH_BUCKET,{method:'POST',token:s.access_token,body:{prefix,limit,offset}})||[];
   }
-  return {SESSION_KEY,BUCKET,WORKBENCH_BUCKET,config,configured,readSession,saveSession,signUp,signIn,signOut,sendOtp,verifyOtp,session,listInbox,countInbox,getWorkbenchMeta,createInbox,patchInbox,uploadFile,downloadFile,deleteInboxFile,listProjects,removeBackedUpProjects,publishProjects,getWorkbench,putWorkbench,putWorkbenches,uploadWorkbenchMedia,backupWorkbench,signedWorkbenchMedia,signedWorkbenchMediaBatch,listWorkbenchMedia,safeName};
+  return {provider:'supabase',SESSION_KEY,BUCKET,WORKBENCH_BUCKET,config,configured,readSession,saveSession,signUp,signIn,signOut,sendOtp,verifyOtp,session,listInbox,countInbox,getWorkbenchMeta,createInbox,patchInbox,uploadFile,downloadFile,deleteInboxFile,listProjects,removeBackedUpProjects,publishProjects,getWorkbench,putWorkbench,putWorkbenches,uploadWorkbenchMedia,backupWorkbench,signedWorkbenchMedia,signedWorkbenchMediaBatch,listWorkbenchMedia,safeName};
 });

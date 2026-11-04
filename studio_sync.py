@@ -454,6 +454,14 @@ def _get_workbench(handler, user):
     return _row_snapshot(row) if row else None
 
 
+def _get_workbench_meta(handler, user):
+    workspace = _workspace(_query(handler).get('workspace', [''])[0])
+    with _db() as conn:
+        row = conn.execute('select workspace,revision,updated_at from snapshots where user_id=? and workspace=?',
+                           (user['id'], workspace)).fetchone()
+    return dict(row) if row else None
+
+
 def _put_workbench(handler, user):
     body = _body(handler)
     workspace = _workspace(body.get('workspace'))
@@ -601,6 +609,26 @@ def _upload_media(handler, user):
                           sha256=excluded.sha256,size=excluded.size,mime=excluded.mime,last_ref_at=excluded.last_ref_at""",
                      (user['id'], logical, sha, size, mime, now, now))
     return {'path': logical, 'sha256': sha, 'size': size, 'mime': mime, 'deduped': deduped}
+
+
+def _delete_media(handler, user):
+    path = _query(handler).get('path', [''])[0]
+    if not path:
+        raise ApiError(400, '缺少素材路径')
+    with _db() as conn:
+        row = conn.execute('select sha256 from media where user_id=? and logical_path=?',
+                           (user['id'], path)).fetchone()
+        if not row:
+            return {'deleted': False}
+        conn.execute('delete from media where user_id=? and logical_path=?', (user['id'], path))
+        left = conn.execute('select count(*) from media where sha256=?', (row['sha256'],)).fetchone()[0]
+    if not left:
+        blob = BLOB_DIR / row['sha256'][:2] / row['sha256']
+        try:
+            blob.unlink()
+        except FileNotFoundError:
+            pass
+    return {'deleted': True}
 
 
 def _create_inbox(handler, user):
@@ -759,6 +787,8 @@ def handle(handler):
                 return _json(handler, _get_workbench(handler, user))
             if method in ('POST', 'PUT'):
                 return _json(handler, _put_workbench(handler, user))
+        if path == '/api/sync/workbench/meta' and method == 'GET':
+            return _json(handler, _get_workbench_meta(handler, user))
         if path == '/api/sync/workbenches' and method == 'POST':
             return _json(handler, _put_workbenches(handler, user))
         if path == '/api/sync/workbench/backup':
@@ -782,6 +812,8 @@ def handle(handler):
             return _json(handler, _delete_projects(handler, user))
         if path == '/api/sync/media' and method == 'POST':
             return _json(handler, _upload_media(handler, user))
+        if path == '/api/sync/media' and method == 'DELETE':
+            return _json(handler, _delete_media(handler, user))
         if path == '/api/sync/media/sign' and method == 'POST':
             return _json(handler, _sign_paths(handler, user))
         if path == '/api/sync/state' and method == 'GET':

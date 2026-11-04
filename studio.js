@@ -4,6 +4,7 @@ const C=StudioCore;
 const R=StudioReverse;
 const WC=StudioWorkspaceCloud;
 const FLAGS=Object.assign({radar:true,reverse:true,supply:true,legacy:true},window.LANCE_FLAGS||{});
+const VPS_SYNC=StudioCloud.provider==='vps';
 const $=s=>document.querySelector(s);
 const esc=x=>String(x??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const key=scope=>'lance_studio_v2_'+scope;
@@ -388,6 +389,7 @@ async function verifyAllWorkbenchMedia(){
 function base64UrlEncode(value){return btoa(unescape(encodeURIComponent(String(value||'')))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');}
 function mobilePairURL(){return location.origin+'/mobile.html#pair='+base64UrlEncode(cloudState.session?.user?.email||'');}
 function showMobilePairing(){
+  if(VPS_SYNC){notify('自建同步请用邮箱密码在手机登录（暂不支持扫码配对）','info');return;}
   const email=cloudState.session?.user?.email||'';
   if(!email){notify('请先登录同步账号，再配对手机','error');return;}
   const url=mobilePairURL();
@@ -400,9 +402,9 @@ function showMobilePairing(){
 }
 function showCloudSync(){
   if(!StudioCloud.configured()){dialog('保存与恢复','<p class="missing">跨设备保存尚未配置。</p>');return;}
-  if(!cloudState.session){dialog('登录云端同步',`<p class="muted">使用与手机随身收件箱相同的账号。这里填的是当时注册 JINHUA 时设置的密码，不是邮箱本身的密码。</p><div class="formgrid"><label>邮箱<input id="workbench-cloud-email" type="email" autocomplete="email"></label><label>密码<input id="workbench-cloud-password" type="password" autocomplete="current-password" minlength="8"></label></div>`,btn('登录','workbench-cloud-login','',true));return;}
+  if(!cloudState.session){dialog('登录云端同步',`<p class="muted">${VPS_SYNC?'使用自建云服务器上的同步账号（邮箱 + 密码）。':'使用与手机随身收件箱相同的账号。这里填的是当时注册 JINHUA 时设置的密码，不是邮箱本身的密码。'}</p><div class="formgrid"><label>邮箱<input id="workbench-cloud-email" type="email" autocomplete="email"></label><label>密码<input id="workbench-cloud-password" type="password" autocomplete="current-password" minlength="8"></label></div>`,btn('登录','workbench-cloud-login','',true));return;}
   const currentName=scope==='xinxuan'?'My·工作':'My·个人';
-  dialog('保存与恢复',`<p class="account-line">已登录：${esc(cloudState.session.user?.email||'')} · 本设备：${esc(workbenchDeviceId().slice(0,8))}</p><div id="sync-live">${syncLiveHTML()}</div><div id="sync-progress" class="sync-progress" ${cloudState.progress?'':'hidden'}>${syncProgressHTML()}</div><div class="sync-columns"><section><h3>当前设备</h3><div id="sync-local">${localSyncColumnsHTML()}</div></section><section><h3>云端主版本</h3><div id="sync-cloud">${cloudSyncColumnsHTML()}</div></section></div>${cloudState.error?`<p class="missing">${esc(cloudState.error)}</p>`:''}<details class="danger-zone"><summary>高级恢复（通常不需要）</summary><p class="muted">只处理当前的 ${currentName}。系统禁止空白版本覆盖已有云端成果。</p><div class="actions">${btn('从云端重新恢复','workbench-cloud-pull')}${btn('明确以本机为主','workbench-cloud-push','class="danger"')}</div></details><details class="danger-zone"><summary>重新开始（清空本地与公网）</summary><p class="muted">会同时清空 My·工作、My·个人的项目、收藏、反推、素材记录、文件夹、导出记录和AI用量。云端恢复备份会先自动保存；登录账号、收件箱、系统连接和个人资料底稿会保留。</p><div class="actions">${btn('清空全部工作内容','workbench-cloud-clean-request','class="danger"')}</div></details>`,btn('立即检查保存','workbench-cloud-sync-now','',true)+btn('校验素材','workbench-cloud-verify')+btn('手机扫码登录','workbench-cloud-pair')+btn('退出同步账号','workbench-cloud-signout'));
+  dialog('保存与恢复',`<p class="account-line">已登录：${esc(cloudState.session.user?.email||'')} · ${VPS_SYNC?'自建云服务器':'Supabase'} · 本设备：${esc(workbenchDeviceId().slice(0,8))}</p><div id="sync-live">${syncLiveHTML()}</div><div id="sync-progress" class="sync-progress" ${cloudState.progress?'':'hidden'}>${syncProgressHTML()}</div><div class="sync-columns"><section><h3>当前设备</h3><div id="sync-local">${localSyncColumnsHTML()}</div></section><section><h3>云端主版本</h3><div id="sync-cloud">${cloudSyncColumnsHTML()}</div></section></div>${cloudState.error?`<p class="missing">${esc(cloudState.error)}</p>`:''}<details class="danger-zone"><summary>高级恢复（通常不需要）</summary><p class="muted">只处理当前的 ${currentName}。系统禁止空白版本覆盖已有云端成果。</p><div class="actions">${btn('从云端重新恢复','workbench-cloud-pull')}${btn('明确以本机为主','workbench-cloud-push','class="danger"')}</div></details><details class="danger-zone"><summary>重新开始（清空本地与公网）</summary><p class="muted">会同时清空 My·工作、My·个人的项目、收藏、反推、素材记录、文件夹、导出记录和AI用量。云端恢复备份会先自动保存；登录账号、收件箱、系统连接和个人资料底稿会保留。</p><div class="actions">${btn('清空全部工作内容','workbench-cloud-clean-request','class="danger"')}</div></details>`,btn('立即检查保存','workbench-cloud-sync-now','',true)+btn('校验素材','workbench-cloud-verify')+(VPS_SYNC?'':btn('手机扫码登录','workbench-cloud-pair'))+btn('退出同步账号','workbench-cloud-signout'));
   refreshSyncUI(true);
 }
 function cloudBadge(){
@@ -521,7 +523,7 @@ function renderProjectsHub(){
   const detailBody=tab==='standalone'?`<section class="project-section"><div class="section-head"><div><h2>独立内容</h2><p class="muted">没有归入项目的脚本集中在这里；归入项目后只在对应项目里出现。</p></div></div><div class="work-list">${standaloneTopics.slice().reverse().map(simpleTopicCard).join('')||empty('没有独立内容','需要时可以单独建立一条内容，不必先建项目。',btn('新建单条内容','new-topic','',true))}</div></section>`:tab==='cancelled'?`<section class="project-section"><div class="section-head"><div><h2>已取消项目</h2><p class="muted">取消只停止项目，不删除脚本、图片、视频或参考资料；可以随时重新启动。</p></div></div><div class="work-list">${cancelled.slice().reverse().map(cancelledProjectCard).join('')||empty('没有已取消项目','不再推进但仍要保留成果的项目会放在这里。')}</div></section>`:tab==='archived'?`<section class="project-section"><div class="section-head"><div><h2>已归档项目</h2><p class="muted">归档用于整理已完成项目，不删除项目、脚本、图片、视频或参考资料。</p></div></div><div class="work-list">${archived.slice().reverse().map(archivedProjectCard).join('')||empty('没有归档项目','完成的项目可以在项目设置中归档。')}</div></section>`:tab==='trash'?`<section class="project-section"><div class="section-head"><div><h2>项目回收站</h2><p class="muted">项目与关联脚本、资料、反推和导出记录会一起保留；审美参考库和原始媒体不会被连带删除。</p></div></div><div class="work-list">${trash.slice().reverse().map(trashedProjectCard).join('')||empty('回收站是空的','从项目设置删除的项目会先来到这里，可随时恢复。')}</div></section>`:`<section class="project-section"><div class="section-head"><div><h2>${scope==='personal'?'我的项目':'正在进行的整体项目'}</h2><p class="muted">一个项目就是一个独立工作区：整体汇报、单条内容、项目资料分开管理。</p></div></div><div class="work-list">${projects.slice().reverse().map(simpleProjectCard).join('')||empty('还没有项目','先建立项目；整体方向完成后就可以单独导出汇报。',btn(scope==='personal'?'新建个人项目':'新建整体项目','new-project','',true))}</div></section>`;
   return hero('PROJECTS','项目中心','单条内容可以直接编辑、单独汇报；只有需要统筹多条时才建立项目。',btn('新建单条','new-topic','',true)+btn(scope==='personal'?'新建个人项目':'新建整体项目','new-project'))+`<div class="project-summary-strip"><span><strong>${projects.length}</strong> 个进行中项目</span><span><strong>${standaloneTopics.length}</strong> 条独立内容</span></div><div class="project-search"><input class="workbench-search" id="search" placeholder="搜索项目、脚本或想法" value="${esc(search)}"></div>${tabs}${tab==='all'?`<section class="project-section"><div class="work-list">${projects.slice().reverse().map(simpleProjectCard).join('')}</div></section><section class="project-section"><div class="section-head"><h2>${search?'匹配的单条内容':'独立内容'}</h2></div><div class="work-list">${(search?matchedTopics:standaloneTopics).slice().reverse().map(simpleTopicCard).join('')||(!projects.length?empty('从一条内容开始','不用先建整体项目，也不用凑齐一组脚本。',btn('新建单条内容','new-topic','',true)):'<p class="muted">项目内的内容请从上方对应项目进入。</p>')}</div></section>`:detailBody}`;
 }
-function showToolbox(){dialog('更多工具与系统',`<p class="muted">这些能力会保留，但不再挤占日常导航。</p><div class="tool-grid"><a class="tool-quote" href="/quote/" target="_blank" rel="noopener"><strong>拍摄器材报价</strong><small>器材库 · 组合 · 报价单 · 出库单</small></a><button data-action="workbench-cloud-open"><strong>保存与恢复</strong><small>${esc(WC.presentation(cloudState,cloudMeta()).label)} · 自动保持多设备一致</small></button><button data-action="nav" data-view="inbox"><strong>随身收件箱<span class="nav-badge" data-mobile-inbox-badge hidden></span></strong><small>处理手机和 iPad 记录</small></button>${FLAGS.reverse?`<button data-action="nav" data-view="reverse"><strong>视频反推</strong><small>拆解参考片与历史项目</small></button>`:''}${FLAGS.radar?`<button data-action="nav" data-view="radar"><strong>案例雷达</strong><small>寻找摄影、舞台与创意参考</small></button>`:''}${scope==='personal'||!FLAGS.supply?'':`<button data-action="nav" data-view="supply"><strong>AI创意补给</strong><small>工作创意方向补充</small></button>`}<button data-action="nav" data-view="profile"><strong>我的资料</strong><small>角色、经历与作品资料</small></button><button data-action="settings"><strong>系统连接</strong><small>${health?.ok?'服务已连接':'检查公网服务与模型'}</small></button></div><details class="danger-zone"><summary>数据管理</summary><p class="muted">用于清理演示或测试内容。登录账号、云端收件箱、系统连接和个人资料底稿不会删除。</p>${btn('清空本机工作台内容','reset-local-request','class="danger"')}</details><p class="tool-mobile-link"><a href="mobile.html" target="_blank" rel="noopener">打开 iPhone 随身版 ↗</a> ${btn('手机扫码配对','workbench-cloud-pair')}</p>`);if(typeof refreshInboxBadge==='function')refreshInboxBadge();}
+function showToolbox(){dialog('更多工具与系统',`<p class="muted">这些能力会保留，但不再挤占日常导航。</p><div class="tool-grid"><a class="tool-quote" href="/quote/" target="_blank" rel="noopener"><strong>拍摄器材报价</strong><small>器材库 · 组合 · 报价单 · 出库单</small></a><button data-action="workbench-cloud-open"><strong>保存与恢复</strong><small>${esc(WC.presentation(cloudState,cloudMeta()).label)} · 自动保持多设备一致</small></button><button data-action="nav" data-view="inbox"><strong>随身收件箱<span class="nav-badge" data-mobile-inbox-badge hidden></span></strong><small>处理手机和 iPad 记录</small></button>${FLAGS.reverse?`<button data-action="nav" data-view="reverse"><strong>视频反推</strong><small>拆解参考片与历史项目</small></button>`:''}${FLAGS.radar?`<button data-action="nav" data-view="radar"><strong>案例雷达</strong><small>寻找摄影、舞台与创意参考</small></button>`:''}${scope==='personal'||!FLAGS.supply?'':`<button data-action="nav" data-view="supply"><strong>AI创意补给</strong><small>工作创意方向补充</small></button>`}<button data-action="nav" data-view="profile"><strong>我的资料</strong><small>角色、经历与作品资料</small></button><button data-action="settings"><strong>系统连接</strong><small>${health?.ok?'服务已连接':'检查公网服务与模型'}</small></button></div><details class="danger-zone"><summary>数据管理</summary><p class="muted">用于清理演示或测试内容。登录账号、云端收件箱、系统连接和个人资料底稿不会删除。</p>${btn('清空本机工作台内容','reset-local-request','class="danger"')}</details><p class="tool-mobile-link"><a href="mobile.html" target="_blank" rel="noopener">打开 iPhone 随身版 ↗</a> ${VPS_SYNC?'':btn('手机扫码配对','workbench-cloud-pair')}</p>`);if(typeof refreshInboxBadge==='function')refreshInboxBadge();}
 function deleteBrowserDatabase(name){return new Promise(resolve=>{const request=indexedDB.deleteDatabase(name);request.onsuccess=request.onerror=request.onblocked=()=>resolve();});}
 async function resetLocalWorkspace(){
   clearBrowserContentKeys();
@@ -1029,10 +1031,45 @@ document.addEventListener('click',async event=>{
   }catch(error){showError(error);}
 });
 window.addEventListener('beforeunload',event=>{if(job||fragmentRecording||fragmentPending){event.preventDefault();event.returnValue='';}});
+async function prepareVpsMigration(){
+  if(!VPS_SYNC||localStorage.getItem('jinhua_vps_migrated_v1'))return;
+  const plans=[];
+  for(const space of ['xinxuan','personal']){
+    try{
+      const payload=workspacePayload(space),groups=WC.mediaGroups(payload.data,payload.aesthetic,payload.trash);
+      const linked=[...groups.values()].map(items=>items.find(item=>item.cloudPath)).filter(Boolean);
+      if(linked.length)plans.push({space,payload,linked});
+    }catch{}
+  }
+  if(!plans.length){localStorage.setItem('jinhua_vps_migrated_v1',new Date().toISOString());return;}
+  const sample=plans[0].linked.find(item=>item.cloudUrl);
+  if(sample){
+    const response=await fetch(mediaURL(sample));
+    if(!response.ok)throw Error('素材链接已过期，无法迁移到自建云。请先切回 Supabase 模式，点一次「立即检查保存」刷新素材链接，再切换回自建云。');
+  }
+  for(const {space,payload} of plans){
+    const groups=WC.mediaGroups(payload.data,payload.aesthetic,payload.trash);
+    for(const items of groups.values())for(const item of items){
+      if(item.cloudPath){delete item.cloudPath;delete item.cloudSize;delete item.cloudSha256;}
+      if(item.cloudAudioPath)delete item.cloudAudioPath;
+    }
+    const pairs=[[key(space),JSON.stringify(payload.data)],['lance_studio_aesthetic_'+space,JSON.stringify(payload.aesthetic)],['lance_studio_folders_'+space,JSON.stringify(payload.folders)],['lance_studio_aesthetic_trash_'+space,JSON.stringify(payload.trash||[])]];
+    for(const [name,value] of pairs){
+      try{
+        if(!localStorage.getItem('jinhua_vps_backup_'+name))localStorage.setItem('jinhua_vps_backup_'+name,localStorage.getItem(name)||'');
+        localStorage.setItem(name,value);
+      }catch{}
+    }
+  }
+  localStorage.setItem('jinhua_vps_migrated_v1',new Date().toISOString());
+  notify('首次使用自建云：本机素材会重新上传到云服务器，请保持页面打开。','info');
+}
+
 async function runWorkbenchSync(openPanel=false){
   try{
     await refreshCloudState();if(!cloudState.session){refreshSyncUI();if(openPanel)showCloudSync();return;}
     if(cloudState.fetchError)throw Error(cloudState.fetchError);
+    await prepareVpsMigration();
     const recovered=[];
     for(const space of ['xinxuan','personal']){
       const meta=cloudMeta(space),remote=cloudState.remotes?.[space],local=workspacePayload(space),decision=WC.syncDecision(local,remote,meta);

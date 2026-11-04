@@ -157,6 +157,27 @@ class SyncApiTest(unittest.TestCase):
         status, _ = self.request('POST', '/api/sync/media/sign', {'paths': [first['path']]})
         self.assertEqual(status, 401)
 
+    def test_workbench_meta_and_media_delete(self):
+        base = {'version': 1, 'data': {'version': 2, 'topics': [], 'projects': [], 'assets': [], 'reverse': [], 'fragments': [], 'exports': []}, 'aesthetic': [], 'folders': []}
+        status, _ = self.request('POST', '/api/sync/workbench', {'workspace': 'personal', 'payload': base, 'revision': 77, 'device_id': 't'}, self.token)
+        self.assertEqual(status, 200)
+        status, meta = self.request('GET', '/api/sync/workbench/meta?workspace=personal', token=self.token)
+        self.assertEqual(status, 200)
+        self.assertEqual(meta['revision'], 77)
+        self.assertIn('updated_at', meta)
+        blob = b'delete-me-media'
+        status, uploaded = self.request('POST', '/api/sync/media?workspace=personal&name=del.png', token=self.token, raw=blob, content_type='image/png')
+        self.assertEqual(status, 200)
+        status, signed = self.request('POST', '/api/sync/media/sign', {'paths': [uploaded['path']]}, self.token)
+        self.assertEqual(status, 200)
+        self.assertTrue(signed[0]['signedURL'])
+        status, deleted = self.request('DELETE', '/api/sync/media?path=' + uploaded['path'], token=self.token)
+        self.assertEqual(status, 200)
+        self.assertTrue(deleted['deleted'])
+        status, signed = self.request('POST', '/api/sync/media/sign', {'paths': [uploaded['path']]}, self.token)
+        self.assertEqual(status, 200)
+        self.assertFalse(signed[0]['signedURL'])
+
     def test_state_summary(self):
         status, body = self.request('GET', '/api/sync/state', token=self.token)
         self.assertEqual(status, 200)

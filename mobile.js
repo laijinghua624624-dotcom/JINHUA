@@ -2,6 +2,7 @@
 'use strict';
 
 const Cloud=StudioCloud;
+const VPS=Cloud.provider==='vps';
 const Radar=StudioRadar;
 const app=document.querySelector('#mobile-app');
 const syncState=document.querySelector('#sync-state');
@@ -81,6 +82,7 @@ function readShareIntent(){
 }
 function decodeBase64Url(value){let text=String(value||'').replace(/-/g,'+').replace(/_/g,'/');while(text.length%4)text+='=';return decodeURIComponent(escape(atob(text)));}
 function readPairIntent(){
+  if(VPS)return;
   const match=/^#pair=([A-Za-z0-9_-]+)$/.exec(location.hash||'');if(!match)return;
   try{
     const email=decodeBase64Url(match[1]);
@@ -330,6 +332,7 @@ function downloadRadarReminder(){
 }
 
 function loginCard(){
+  if(VPS)return `<section class="mobile-card login-box"><h2>登录自建同步</h2><p>使用云服务器上的同步账号（邮箱 + 密码）。这是自建服务器的密码，不是 Supabase 密码。</p><label>邮箱<input id="cloud-email" type="email" autocomplete="email" placeholder="你的邮箱"></label><label>密码<input id="cloud-password" type="password" autocomplete="current-password" minlength="8" placeholder="至少8位"></label><div class="button-row"><button class="primary" data-action="sign-in">登录</button></div><p class="file-note">忘记密码时，在服务器运行 studio_sync.py set-password 重置。</p></section>`;
   const pair=state.pairEmail||'',wait=otpCooldownLeft();
   const emailField=`<label>邮箱<input id="cloud-email" type="email" autocomplete="email" placeholder="你的邮箱" value="${esc(pair)}" ${pair?'readonly':''}></label>`;
   const otpSection=state.otpSent
@@ -502,6 +505,7 @@ document.addEventListener('click',async event=>{
       await withBusy(button,'处理中…',async()=>{state.session=await (button.dataset.action==='sign-in'?Cloud.signIn(email,password):Cloud.signUp(email,password));if(!state.session?.access_token){StudioCloud.signOut();state.session=null;throw Error('注册已提交，请先到邮箱确认，再返回登录');}state.pairEmail='';state.otpSent=false;state.otpFallback=false;stopOtpCooldown();await syncPending();});return;
     }
     if(button.dataset.action==='send-otp'){
+      if(VPS)throw Error('自建同步请用邮箱密码登录');
       const email=(state.pairEmail||document.querySelector('#cloud-email')?.value||'').trim();
       if(!email)throw Error('请先填写邮箱');
       if(otpCooldownLeft()>0)throw Error('请 '+otpCooldownLeft()+' 秒后再发送');
@@ -519,6 +523,7 @@ document.addEventListener('click',async event=>{
       });return;
     }
     if(button.dataset.action==='verify-otp'){
+      if(VPS)throw Error('自建同步请用邮箱密码登录');
       const email=(state.pairEmail||document.querySelector('#cloud-email')?.value||'').trim();
       const token=(document.querySelector('#otp-code')?.value||'').trim();
       if(!/^\d{6}$/.test(token))throw Error('请输入邮件里的 6 位数字');
