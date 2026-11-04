@@ -99,10 +99,10 @@
         const path=row?.path||chunk[index],url=row?.signedURL||row?.signedUrl;
         if(path&&url)out.set(path,/^https?:\/\//.test(url)?url:c.url+'/storage/v1'+url);
       });
-      for(const path of chunk){
-        if(out.has(path))continue;
+      const missing=chunk.filter(path=>!out.has(path));
+      await Promise.all(missing.map(async path=>{
         try{out.set(path,await signedWorkbenchMedia(path,expiresIn));}catch{/* leave missing so callers can report it */ }
-      }
+      }));
     }
     return out;
   }
