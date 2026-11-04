@@ -18,7 +18,7 @@ const initialTab=TABS.includes(location.hash.slice(1))?location.hash.slice(1):'r
 const initialDraft={workspace:'xinxuan',title:'',body:'',url:'',kind:'text',...readJSON(DRAFT_KEY,{})};
 const state={
   tab:initialTab,kind:labels[initialDraft.kind]?initialDraft.kind:'text',session:null,
-  items:[],projects:[],workbench:{xinxuan:null,personal:null},localItems:[],pending:0,pairEmail:'',otpSent:false,message:null,recording:null,
+  items:[],projects:[],workbench:{xinxuan:null,personal:null},localItems:[],pending:0,pairEmail:'',otpSent:false,otpCooldownUntil:0,otpFallback:false,message:null,recording:null,
   recordedFile:null,selectedFile:null,captureDraft:initialDraft,
   radarOffset:0,radarCurrent:[],radarSeen:[],radarRemaining:0,radarReset:false,radarDate:'',
   radarWorkspace:localStorage.getItem('jinhua_radar_workspace')||'xinxuan',
@@ -88,6 +88,32 @@ function readPairIntent(){
     state.pairEmail=email;state.tab='account';
   }catch{return;}
   history.replaceState(null,'',location.pathname+location.search+'#account');
+}
+let otpCooldownTimer=null;
+function otpCooldownLeft(){return Math.max(0,Math.ceil((Number(state.otpCooldownUntil||0)-Date.now())/1000));}
+function stopOtpCooldown(){clearInterval(otpCooldownTimer);otpCooldownTimer=null;state.otpCooldownUntil=0;}
+function startOtpCooldown(seconds){
+  const total=Math.max(1,Number(seconds)||60);
+  state.otpCooldownUntil=Date.now()+total*1000;
+  clearInterval(otpCooldownTimer);
+  otpCooldownTimer=setInterval(()=>{
+    const left=otpCooldownLeft();
+    if(left<=0){stopOtpCooldown();if(!state.session)render();return;}
+    document.querySelectorAll('[data-action="send-otp"]').forEach(button=>{
+      button.disabled=true;button.textContent=state.otpSent?'重新发送（'+left+'s）':'发送邮箱验证码（'+left+'s）';
+    });
+  },1000);
+}
+function friendlyOtpError(error){
+  const text=String(error?.message||error||'');
+  const wait=text.match(/after\s+(\d+)\s*seconds?/i);
+  if(wait)return {message:'发送太频繁，请 '+wait[1]+' 秒后再试；也可以改用邮箱密码登录',seconds:Number(wait[1])||60};
+  if(/rate limit|too many|email.*limit/i.test(text))return {message:'验证码发送太频繁，请稍后再试；也可以改用邮箱密码登录',seconds:60};
+  if(/invalid.*(email|format)|email.*invalid/i.test(text))return {message:'邮箱格式不正确'};
+  if(/signups? not allowed|user not found|email not confirmed/i.test(text))return {message:'这个邮箱还没有可用的同步账号'};
+  if(/invalid.*token|token.*(invalid|expired)|otp.*expired|expired.*otp/i.test(text))return {message:'验证码不正确或已过期，请重新发送',seconds:30};
+  if(/fetch|network|网络|Failed to fetch|timeout/i.test(text))return {message:'网络暂时不可用，请稍后重试',seconds:15};
+  return {message:'验证码处理失败：'+text,seconds:30};
 }
 function captureHome(){return new URL('./mobile.html',location.href).href.split(/[?#]/)[0];}
 function bookmarklet(){
@@ -304,12 +330,12 @@ function downloadRadarReminder(){
 }
 
 function loginCard(){
-  const pair=state.pairEmail||'';
+  const pair=state.pairEmail||'',wait=otpCooldownLeft();
   const emailField=`<label>邮箱<input id="cloud-email" type="email" autocomplete="email" placeholder="你的邮箱" value="${esc(pair)}" ${pair?'readonly':''}></label>`;
   const otpSection=state.otpSent
-    ?`<label>邮件验证码<input id="otp-code" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="6 位数字"></label><div class="button-row"><button class="primary" data-action="verify-otp">验证并登录</button><button class="secondary" data-action="send-otp">重新发送验证码</button></div>`
-    :`<div class="button-row"><button class="primary" data-action="send-otp">发送邮箱验证码（免密）</button></div>`;
-  return `<section class="mobile-card login-box"><h2>${pair?'扫码配对登录':'登录随身同步'}</h2><p>${pair?'配对链接只带入你的邮箱，不包含密码。点发送验证码，输入邮件里的 6 位数字即可。':'同一个账号用于 iPhone、iPad 和 Mac。可以直接用邮箱验证码登录，也可以使用密码。'}</p>${emailField}${otpSection}<details class="otp-fallback"><summary>改用邮箱密码登录</summary><label>密码<input id="cloud-password" type="password" autocomplete="current-password" minlength="8" placeholder="至少8位"></label><div class="button-row"><button class="primary" data-action="sign-in">登录</button><button class="secondary" data-action="sign-up">注册</button></div></details></section>`;
+    ?`<label>邮件验证码<input id="otp-code" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="6 位数字"></label><div class="button-row"><button class="primary" data-action="verify-otp">验证并登录</button><button class="secondary" data-action="send-otp" ${wait?'disabled':''}>${wait?'重新发送（'+wait+'s）':'重新发送验证码'}</button></div><p class="file-note">没收到？先检查垃圾邮件；如果邮件里没有 6 位数字，说明 Supabase 邮件模板还没加 {{ .Token }}，可以改用下方密码登录。</p>`
+    :`<div class="button-row"><button class="primary" data-action="send-otp" ${wait?'disabled':''}>${wait?'发送邮箱验证码（'+wait+'s）':'发送邮箱验证码（免密）'}</button></div>`;
+  return `<section class="mobile-card login-box"><h2>${pair?'扫码配对登录':'登录随身同步'}</h2><p>${pair?'配对链接只带入你的邮箱，不包含密码。点发送验证码，输入邮件里的 6 位数字即可。':'同一个账号用于 iPhone、iPad 和 Mac。可以直接用邮箱验证码登录，也可以使用密码。'}</p>${emailField}${otpSection}<details class="otp-fallback" ${state.otpFallback?'open':''}><summary>改用邮箱密码登录</summary><label>密码<input id="cloud-password" type="password" autocomplete="current-password" minlength="8" placeholder="至少8位"></label><div class="button-row"><button class="primary" data-action="sign-in">登录</button><button class="secondary" data-action="sign-up">注册</button></div></details></section>`;
 }
 function captureView(){
   if(!Cloud.configured())return header('MOBILE COMPANION','随手记下，回到 Mac 再完成。','当前页面可保存本机草稿；配置安全云同步后，所有设备会进入同一个收件箱。')+`<div class="notice">尚未配置云同步。你可以先记录，系统会保存本机草稿。</div>`+captureForm();
@@ -473,20 +499,43 @@ document.addEventListener('click',async event=>{
     if(button.dataset.action==='sign-in'||button.dataset.action==='sign-up'){
       const email=document.querySelector('#cloud-email').value.trim(),password=document.querySelector('#cloud-password').value;
       if(!email||password.length<8)throw Error('请输入邮箱和至少8位密码');
-      await withBusy(button,'处理中…',async()=>{state.session=await (button.dataset.action==='sign-in'?Cloud.signIn(email,password):Cloud.signUp(email,password));if(!state.session?.access_token){StudioCloud.signOut();state.session=null;throw Error('注册已提交，请先到邮箱确认，再返回登录');}state.pairEmail='';state.otpSent=false;await syncPending();});return;
+      await withBusy(button,'处理中…',async()=>{state.session=await (button.dataset.action==='sign-in'?Cloud.signIn(email,password):Cloud.signUp(email,password));if(!state.session?.access_token){StudioCloud.signOut();state.session=null;throw Error('注册已提交，请先到邮箱确认，再返回登录');}state.pairEmail='';state.otpSent=false;state.otpFallback=false;stopOtpCooldown();await syncPending();});return;
     }
     if(button.dataset.action==='send-otp'){
       const email=(state.pairEmail||document.querySelector('#cloud-email')?.value||'').trim();
       if(!email)throw Error('请先填写邮箱');
-      await withBusy(button,'发送中…',async()=>{await Cloud.sendOtp(email);state.pairEmail=email;state.otpSent=true;render();show('验证码已发送，请查收邮件；收不到时先确认 Supabase 邮件模板包含 {{ .Token }}','success',null,9000);});return;
+      if(otpCooldownLeft()>0)throw Error('请 '+otpCooldownLeft()+' 秒后再发送');
+      await withBusy(button,'发送中…',async()=>{
+        try{await Cloud.sendOtp(email);}
+        catch(error){
+          const info=friendlyOtpError(error);
+          startOtpCooldown(info.seconds||60);
+          if(/频繁|rate|limit/i.test(info.message)||(info.seconds||0)>=30)state.otpFallback=true;
+          state.otpSent=true;render();
+          show(info.message,'error',null,10000);return;
+        }
+        state.pairEmail=email;state.otpSent=true;startOtpCooldown(60);render();
+        show('验证码已发送。没收到请检查垃圾邮件，或改用邮箱密码登录','success',null,9000);
+      });return;
     }
     if(button.dataset.action==='verify-otp'){
       const email=(state.pairEmail||document.querySelector('#cloud-email')?.value||'').trim();
       const token=(document.querySelector('#otp-code')?.value||'').trim();
       if(!/^\d{6}$/.test(token))throw Error('请输入邮件里的 6 位数字');
-      await withBusy(button,'验证中…',async()=>{state.session=await Cloud.verifyOtp(email,token);if(!state.session?.access_token)throw Error('验证码不正确或已过期，请重新发送');state.pairEmail='';state.otpSent=false;await updatePending();await loadCloud();render();show('已登录随身版','success');});return;
+      await withBusy(button,'验证中…',async()=>{
+        let session;
+        try{session=await Cloud.verifyOtp(email,token);}
+        catch(error){
+          const info=friendlyOtpError(error);
+          if(/频繁/.test(info.message))startOtpCooldown(info.seconds||60);
+          throw Error(info.message);
+        }
+        if(!session?.access_token)throw Error('验证码不正确或已过期，请重新发送');
+        state.session=session;state.pairEmail='';state.otpSent=false;state.otpFallback=false;stopOtpCooldown();
+        await updatePending();await loadCloud();render();show('已登录随身版','success');
+      });return;
     }
-    if(button.dataset.action==='sign-out'){Cloud.signOut();state.session=null;state.items=[];state.projects=[];state.pairEmail='';state.otpSent=false;await updatePending();render();show('已退出登录','success');return;}
+    if(button.dataset.action==='sign-out'){Cloud.signOut();state.session=null;state.items=[];state.projects=[];state.pairEmail='';state.otpSent=false;state.otpFallback=false;stopOtpCooldown();await updatePending();render();show('已退出登录','success');return;}
     if(button.dataset.action==='capture-save'){await withBusy(button,'保存中…',saveCapture);return;}
     if(button.dataset.action==='paste-link'){syncCaptureForm();const text=await navigator.clipboard.readText(),url=publicLink(text);state.captureDraft.url=url;persistCaptureDraft();render();show('链接已粘贴，可补充收藏原因','success');return;}
     if(button.dataset.action==='copy-bookmarklet'){await navigator.clipboard.writeText(bookmarklet());show('收藏按钮代码已复制，可在电脑浏览器新建书签后粘贴到网址栏','success');return;}
