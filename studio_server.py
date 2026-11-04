@@ -947,6 +947,7 @@ class Handler(BaseHTTPRequestHandler):
             allowed_hosts={'127.0.0.1','localhost'}
             permitted={'http://127.0.0.1','http://localhost'}
         allowed_hosts.add('lance-content-studio.onrender.com')
+        allowed_hosts.update(filter(None,os.environ.get('LANCE_ALLOWED_HOSTS','').split(',')))
         permitted.update(filter(None,os.environ.get('LANCE_ALLOWED_ORIGINS','').split(',')))
         permitted.add('https://laijinghua624624-dotcom.github.io')
         public_origin=os.environ.get('LANCE_PUBLIC_ORIGIN','').rstrip('/')
