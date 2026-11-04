@@ -681,6 +681,14 @@ def _create_capture(handler):
     url = str(body.get('url') or body.get('source_url') or '').strip()[:2000]
     title = str(body.get('title') or '').strip()[:200]
     text = str(body.get('body') or '').strip()[:4000]
+    if not url:
+        match = re.search(r'https?://\S+', text)
+        if match:
+            url = match.group(0)
+    elif not re.match(r'^https?://', url):
+        match = re.search(r'https?://\S+', url) or re.search(r'https?://\S+', text)
+        if match:
+            url = match.group(0)
     if url and not title:
         try:
             title = urllib.parse.urlparse(url).netloc.replace('www.', '') or '收藏'

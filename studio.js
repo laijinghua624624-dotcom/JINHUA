@@ -1031,6 +1031,16 @@ document.addEventListener('click',async event=>{
   }catch(error){showError(error);}
 });
 window.addEventListener('beforeunload',event=>{if(job||fragmentRecording||fragmentPending){event.preventDefault();event.returnValue='';}});
+function cleanupEmptyShareFragments(){
+  try{
+    if(localStorage.getItem('jinhua_share_cleanup_v1'))return;
+    if(!Array.isArray(db.fragments))db.fragments=[];
+    const kept=db.fragments.filter(f=>!(f.mobileSource&&!f.body&&!f.sourceUrl&&!f.audioKey&&(!f.title||f.title==='收藏')));
+    if(kept.length!==db.fragments.length){db.fragments=kept;save(false);}
+    localStorage.setItem('jinhua_share_cleanup_v1',new Date().toISOString());
+  }catch{}
+}
+
 async function prepareVpsMigration(){
   if(!VPS_SYNC||localStorage.getItem('jinhua_vps_migrated_v1'))return;
   const plans=[];
@@ -1107,7 +1117,7 @@ function resumeWorkbenchSync(openPanel=false){
   return workbenchSyncPromise;
 }
 try{
-  db=read(scope);save(false);workspaceReady=true;render();applyProfileSeed();resumeWorkbenchSync(new URLSearchParams(location.search).get('sync')==='1');StudioCapture.handleIncoming();if(typeof startMobileInboxPolling==='function')startMobileInboxPolling();if(VPS_SYNC)setTimeout(()=>{if(!cloudState.session&&!$('#dialog')?.open)showCloudSync();},800);
+  db=read(scope);save(false);cleanupEmptyShareFragments();workspaceReady=true;render();applyProfileSeed();resumeWorkbenchSync(new URLSearchParams(location.search).get('sync')==='1');StudioCapture.handleIncoming();if(typeof startMobileInboxPolling==='function')startMobileInboxPolling();if(VPS_SYNC)setTimeout(()=>{if(!cloudState.session&&!$('#dialog')?.open)showCloudSync();},800);
   api('health',undefined,{timeout:5000}).then(h=>{health=h;refreshSyncUI();}).catch(()=>{});
 }catch(error){$('#app').textContent=error.message;}
 window.addEventListener('online',()=>resumeWorkbenchSync(false));
