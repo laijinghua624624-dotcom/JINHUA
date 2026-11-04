@@ -1069,7 +1069,6 @@ async function runWorkbenchSync(openPanel=false){
   try{
     await refreshCloudState();if(!cloudState.session){refreshSyncUI();if(openPanel)showCloudSync();return;}
     if(cloudState.fetchError)throw Error(cloudState.fetchError);
-    await prepareVpsMigration();
     const recovered=[];
     for(const space of ['xinxuan','personal']){
       const meta=cloudMeta(space),remote=cloudState.remotes?.[space],local=workspacePayload(space),decision=WC.syncDecision(local,remote,meta);
@@ -1079,7 +1078,7 @@ async function runWorkbenchSync(openPanel=false){
         await restoreWorkspaceRow(space,remote);
         recovered.push((space==='xinxuan'?'My·工作':'My·个人')+(wasEmpty?'成果已自动找回':'已更新'));continue;
       }
-      if(decision.action==='push'){await uploadWorkspace(space,false);continue;}
+      if(decision.action==='push'){await prepareVpsMigration();await uploadWorkspace(space,false);continue;}
       if(decision.action==='pair'){setCloudMeta({...cloudMeta(space),paired:true,lastRevision:Number(remote?.revision)||0,dirtyAt:null,lastSyncedAt:new Date().toISOString()},space);continue;}
       if(decision.action==='conflict')throw Error(decision.reason);
       if(decision.action==='refresh'){const payload=await addSignedMedia(C.clone(local));acknowledgeWorkspaceUpload(space,payload,{...remote,revision:meta.lastRevision});}
