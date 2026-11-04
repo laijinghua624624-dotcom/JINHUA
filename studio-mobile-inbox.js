@@ -89,6 +89,11 @@ async function importMobileItem(item,options={}){
     const all=globalAssets();all.push(asset);saveAesthetic(all);
   }
   await StudioCloud.patchInbox(item.id,{status:'imported',imported_at:now,updated_at:now});
+  // The desktop now owns a copy (local upload or reference). Release the phone-side
+  // object so one photo does not occupy storage twice.
+  if(item.file_path&&typeof StudioCloud.deleteInboxFile==='function'){
+    try{await StudioCloud.deleteInboxFile(item.file_path);}catch{/* keep the import successful even if cleanup fails */}
+  }
   MobileInbox.items=await StudioCloud.listInbox();MobileInbox.loaded=true;setInboxUnread(MobileInbox.items.filter(row=>row.status==='inbox').length);
 }
 

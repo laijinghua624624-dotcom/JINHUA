@@ -18,7 +18,7 @@ const initialTab=TABS.includes(location.hash.slice(1))?location.hash.slice(1):'r
 const initialDraft={workspace:'xinxuan',title:'',body:'',url:'',kind:'text',...readJSON(DRAFT_KEY,{})};
 const state={
   tab:initialTab,kind:labels[initialDraft.kind]?initialDraft.kind:'text',session:null,
-  items:[],projects:[],workbench:{xinxuan:null,personal:null},localItems:[],pending:0,message:null,recording:null,
+  items:[],projects:[],workbench:{xinxuan:null,personal:null},localItems:[],pending:0,pairEmail:'',otpSent:false,message:null,recording:null,
   recordedFile:null,selectedFile:null,captureDraft:initialDraft,
   radarOffset:0,radarCurrent:[],radarSeen:[],radarRemaining:0,radarReset:false,radarDate:'',
   radarWorkspace:localStorage.getItem('jinhua_radar_workspace')||'xinxuan',
@@ -79,6 +79,16 @@ function readShareIntent(){
   state.captureDraft={workspace:state.captureDraft.workspace||'xinxuan',title:(params.get('title')||'').slice(0,100),body:text.replace(/https?:\/\/\S+/g,'').trim(),url:sharedUrl,kind:state.kind};
   persistCaptureDraft();history.replaceState(null,'',location.pathname+'#capture');
 }
+function decodeBase64Url(value){let text=String(value||'').replace(/-/g,'+').replace(/_/g,'/');while(text.length%4)text+='=';return decodeURIComponent(escape(atob(text)));}
+function readPairIntent(){
+  const match=/^#pair=([A-Za-z0-9_-]+)$/.exec(location.hash||'');if(!match)return;
+  try{
+    const email=decodeBase64Url(match[1]);
+    if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email))return;
+    state.pairEmail=email;state.tab='account';
+  }catch{return;}
+  history.replaceState(null,'',location.pathname+location.search+'#account');
+}
 function captureHome(){return new URL('./mobile.html',location.href).href.split(/[?#]/)[0];}
 function bookmarklet(){
   const target=JSON.stringify(captureHome());
@@ -115,7 +125,8 @@ const queuePut=value=>queueStore('put',value);
 const queueDelete=id=>queueStore('delete',id);
 async function updatePending(){
   state.localItems=await queueAll();state.pending=state.localItems.length;
-  syncState.textContent=state.session?(state.pending?`${state.pending}条待同步`:'云端已连接'):(state.pending?`${state.pending}条本机草稿`:'本机草稿');
+  const failed=state.localItems.filter(item=>item.lastError).length;
+  syncState.textContent=state.session?(state.pending?`${state.pending}条待同步${failed?` · ${failed}条失败`:''}`:'云端已连接'):(state.pending?`${state.pending}条本机草稿`:'本机草稿');
   syncState.classList.toggle('offline',!state.session||state.pending>0);
 }
 function header(kicker,title,copy){return `<section class="mobile-hero"><div class="mobile-kicker">${kicker}</div><h1>${title}</h1><p>${copy}</p></section>`;}
@@ -293,7 +304,12 @@ function downloadRadarReminder(){
 }
 
 function loginCard(){
-  return `<section class="mobile-card login-box"><h2>登录随身同步</h2><p>同一个账号用于 iPhone、iPad 和 Mac。第一次使用可注册；如果开启邮件确认，请先到邮箱完成确认。</p><label>邮箱<input id="cloud-email" type="email" autocomplete="email" placeholder="你的邮箱"></label><label>密码<input id="cloud-password" type="password" autocomplete="current-password" minlength="8" placeholder="至少8位"></label><div class="button-row"><button class="primary" data-action="sign-in">登录</button><button class="secondary" data-action="sign-up">注册</button></div></section>`;
+  const pair=state.pairEmail||'';
+  const emailField=`<label>邮箱<input id="cloud-email" type="email" autocomplete="email" placeholder="你的邮箱" value="${esc(pair)}" ${pair?'readonly':''}></label>`;
+  const otpSection=state.otpSent
+    ?`<label>邮件验证码<input id="otp-code" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="6 位数字"></label><div class="button-row"><button class="primary" data-action="verify-otp">验证并登录</button><button class="secondary" data-action="send-otp">重新发送验证码</button></div>`
+    :`<div class="button-row"><button class="primary" data-action="send-otp">发送邮箱验证码（免密）</button></div>`;
+  return `<section class="mobile-card login-box"><h2>${pair?'扫码配对登录':'登录随身同步'}</h2><p>${pair?'配对链接只带入你的邮箱，不包含密码。点发送验证码，输入邮件里的 6 位数字即可。':'同一个账号用于 iPhone、iPad 和 Mac。可以直接用邮箱验证码登录，也可以使用密码。'}</p>${emailField}${otpSection}<details class="otp-fallback"><summary>改用邮箱密码登录</summary><label>密码<input id="cloud-password" type="password" autocomplete="current-password" minlength="8" placeholder="至少8位"></label><div class="button-row"><button class="primary" data-action="sign-in">登录</button><button class="secondary" data-action="sign-up">注册</button></div></details></section>`;
 }
 function captureView(){
   if(!Cloud.configured())return header('MOBILE COMPANION','随手记下，回到 Mac 再完成。','当前页面可保存本机草稿；配置安全云同步后，所有设备会进入同一个收件箱。')+`<div class="notice">尚未配置云同步。你可以先记录，系统会保存本机草稿。</div>`+captureForm();
@@ -309,7 +325,10 @@ function captureForm(){
     `${state.kind==='voice'?`<button class="secondary voice-button ${state.recording?'recording':''}" data-action="voice"><span class="record-dot"></span>${state.recording?'停止并保存录音':'开始录音'}</button>`:''}<div class="button-row capture-submit"><button class="primary" data-action="capture-save">保存到随身收件箱</button><small>已开启本机草稿自动保存</small></div></section>`;
 }
 function localDrafts(){
-  return `<section class="mobile-list">${state.localItems.map(item=>`<article class="mobile-item"><div class="item-head"><div><span class="pill">本机草稿 · ${esc(labels[item.kind]||'记录')}</span><h3>${esc(item.title||labels[item.kind]||'未命名')}</h3></div><span class="item-meta">${esc(new Date(item.created_at).toLocaleDateString('zh-CN'))}</span></div><p>${esc((item.body||item.source_url||item.file_name||'').slice(0,280))}</p><button class="danger-button" data-action="local-delete" data-id="${esc(item.localId)}">删除这条本机草稿</button></article>`).join('')||'<div class="empty">当前设备没有待同步草稿。</div>'}</section>`;
+  return `<section class="mobile-list">${state.localItems.map(item=>{
+    const failed=!!item.lastError,label=labels[item.kind]||'记录';
+    return `<article class="mobile-item"><div class="item-head"><div><span class="pill ${failed?'pill-bad':''}">${failed?'同步失败':'待同步'} · ${esc(label)}</span><h3>${esc(item.title||label)}</h3></div><span class="item-meta">${esc(new Date(item.created_at).toLocaleDateString('zh-CN'))}</span></div><p>${esc((item.body||item.source_url||item.file_name||'').slice(0,280))}</p>${failed?`<p class="file-note error-text">上次失败：${esc(item.lastError)}</p>`:''}<div class="button-row">${failed?`<button class="secondary" data-action="local-retry" data-id="${esc(item.localId)}">立即重试</button>`:''}<button class="danger-button" data-action="local-delete" data-id="${esc(item.localId)}">删除</button></div></article>`;
+  }).join('')||'<div class="empty">当前设备没有待同步草稿。</div>'}</section>`;
 }
 function inboxView(){
   if(!Cloud.configured())return header('INBOX','随身收件箱','配置云同步后，手机记录会集中出现在这里。')+`<div class="notice">尚未配置云同步；本机有 ${state.pending} 条待同步草稿。</div>`+localDrafts();
@@ -362,16 +381,22 @@ async function loadCloud(shouldRender=true){
   if(shouldRender)render();
 }
 
+async function sendQueueItem(item){
+  let filePath=item.file_path||null;
+  if(item.file)filePath=await Cloud.uploadFile(new File([item.file],item.file_name,{type:item.mime_type}));
+  return Cloud.createInbox({...item,file:undefined,localId:undefined,file_path:filePath});
+}
 async function syncPending(){
   if(!state.session)throw Error('请先登录');
-  const pending=await queueAll();
+  const pending=await queueAll();let synced=0,failed=0;
   for(const item of pending){
-    let filePath=item.file_path||null;
-    if(item.file)filePath=await Cloud.uploadFile(new File([item.file],item.file_name,{type:item.mime_type}));
-    await Cloud.createInbox({...item,file:undefined,localId:undefined,file_path:filePath});
-    await queueDelete(item.localId);
+    try{await sendQueueItem(item);await queueDelete(item.localId);synced++;}
+    catch(error){failed++;await queuePut({...item,lastError:error.message||String(error),lastTriedAt:new Date().toISOString()});}
+    await updatePending();if(state.tab==='inbox'||state.tab==='account')render();
   }
-  await loadCloud();show(pending.length?`已同步 ${pending.length} 条本机草稿`:'没有待同步草稿','success');
+  await loadCloud();
+  if(failed)show(`已同步 ${synced} 条，${failed} 条失败；点“立即重试”再试`,'warning',null,9000);
+  else show(synced?`已同步 ${synced} 条本机草稿`:'没有待同步草稿','success');
 }
 async function saveCapture(){
   syncCaptureForm();
@@ -448,9 +473,20 @@ document.addEventListener('click',async event=>{
     if(button.dataset.action==='sign-in'||button.dataset.action==='sign-up'){
       const email=document.querySelector('#cloud-email').value.trim(),password=document.querySelector('#cloud-password').value;
       if(!email||password.length<8)throw Error('请输入邮箱和至少8位密码');
-      await withBusy(button,'处理中…',async()=>{state.session=await (button.dataset.action==='sign-in'?Cloud.signIn(email,password):Cloud.signUp(email,password));if(!state.session?.access_token){StudioCloud.signOut();state.session=null;throw Error('注册已提交，请先到邮箱确认，再返回登录');}await syncPending();});return;
+      await withBusy(button,'处理中…',async()=>{state.session=await (button.dataset.action==='sign-in'?Cloud.signIn(email,password):Cloud.signUp(email,password));if(!state.session?.access_token){StudioCloud.signOut();state.session=null;throw Error('注册已提交，请先到邮箱确认，再返回登录');}state.pairEmail='';state.otpSent=false;await syncPending();});return;
     }
-    if(button.dataset.action==='sign-out'){Cloud.signOut();state.session=null;state.items=[];state.projects=[];await updatePending();render();show('已退出登录','success');return;}
+    if(button.dataset.action==='send-otp'){
+      const email=(state.pairEmail||document.querySelector('#cloud-email')?.value||'').trim();
+      if(!email)throw Error('请先填写邮箱');
+      await withBusy(button,'发送中…',async()=>{await Cloud.sendOtp(email);state.pairEmail=email;state.otpSent=true;render();show('验证码已发送，请查收邮件；收不到时先确认 Supabase 邮件模板包含 {{ .Token }}','success',null,9000);});return;
+    }
+    if(button.dataset.action==='verify-otp'){
+      const email=(state.pairEmail||document.querySelector('#cloud-email')?.value||'').trim();
+      const token=(document.querySelector('#otp-code')?.value||'').trim();
+      if(!/^\d{6}$/.test(token))throw Error('请输入邮件里的 6 位数字');
+      await withBusy(button,'验证中…',async()=>{state.session=await Cloud.verifyOtp(email,token);if(!state.session?.access_token)throw Error('验证码不正确或已过期，请重新发送');state.pairEmail='';state.otpSent=false;await updatePending();await loadCloud();render();show('已登录随身版','success');});return;
+    }
+    if(button.dataset.action==='sign-out'){Cloud.signOut();state.session=null;state.items=[];state.projects=[];state.pairEmail='';state.otpSent=false;await updatePending();render();show('已退出登录','success');return;}
     if(button.dataset.action==='capture-save'){await withBusy(button,'保存中…',saveCapture);return;}
     if(button.dataset.action==='paste-link'){syncCaptureForm();const text=await navigator.clipboard.readText(),url=publicLink(text);state.captureDraft.url=url;persistCaptureDraft();render();show('链接已粘贴，可补充收藏原因','success');return;}
     if(button.dataset.action==='copy-bookmarklet'){await navigator.clipboard.writeText(bookmarklet());show('收藏按钮代码已复制，可在电脑浏览器新建书签后粘贴到网址栏','success');return;}
@@ -459,6 +495,15 @@ document.addEventListener('click',async event=>{
     if(button.dataset.action==='refresh'){await withBusy(button,'刷新中…',async()=>{await loadCloud();show('已刷新云端状态','success');});return;}
     if(button.dataset.action==='workbench-refresh'){await withBusy(button,'刷新中…',async()=>{await loadCloud();show('已刷新桌面同步状态','success');});return;}
     if(button.dataset.action==='local-delete'){if(!confirm('只删除当前设备上的这条未同步草稿，确定继续？'))return;await queueDelete(button.dataset.id);await updatePending();render();show('本机草稿已删除','success');return;}
+    if(button.dataset.action==='local-retry'){
+      const item=state.localItems.find(value=>value.localId===button.dataset.id);
+      if(!item)throw Error('这条草稿已经不在本机');
+      if(!state.session)throw Error('请先登录后再重试');
+      await withBusy(button,'重试中…',async()=>{
+        try{await sendQueueItem(item);await queueDelete(item.localId);await updatePending();await loadCloud();show('这条草稿已同步','success');}
+        catch(error){await queuePut({...item,lastError:error.message||String(error),lastTriedAt:new Date().toISOString()});await updatePending();if(state.tab==='inbox'||state.tab==='account')render();throw error;}
+      });return;
+    }
     if(button.dataset.action==='archive'){await withBusy(button,'归档中…',()=>archiveItem(button.dataset.id));return;}
     if(button.dataset.action==='undo-archive'){await withBusy(button,'恢复中…',()=>undoArchive(button.dataset.id));return;}
     if(button.dataset.action==='toast-inbox'){state.message=null;await navigate('inbox');return;}
@@ -474,7 +519,7 @@ if('serviceWorker'in navigator)navigator.serviceWorker.register('./mobile-sw.js'
 
 (async()=>{
   try{
-    readShareIntent();ensureDailyRadar();render();
+    readPairIntent();readShareIntent();ensureDailyRadar();render();
     await updatePending();render();
     if(Cloud.configured())await loadCloud();
   }catch(error){

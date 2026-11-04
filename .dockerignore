@@ -12,6 +12,7 @@
 !requirements.txt
 !vendor/
 !vendor/presentation.js
+!vendor/qr.min.js
 !legacy.html
 !api-guide.html
 !tutorial.html

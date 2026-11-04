@@ -21,6 +21,8 @@
   }
   async function signUp(email,password){const result=await request('/auth/v1/signup',{method:'POST',body:{email,password}});return result?.access_token?saveSession(result):result;}
   async function signIn(email,password){return saveSession(await request('/auth/v1/token?grant_type=password',{method:'POST',body:{email,password}}));}
+  async function sendOtp(email){return request('/auth/v1/otp',{method:'POST',body:{email,create_user:false}});}
+  async function verifyOtp(email,token){return saveSession(await request('/auth/v1/verify',{method:'POST',body:{type:'email',email,token}}));}
   function signOut(){saveSession(null);}
   async function session(){
     const current=readSession();if(!current?.access_token)return null;
@@ -43,6 +45,12 @@
     return path;
   }
   async function downloadFile(path){const s=await auth();const c=config(),response=await root.fetch(c.url+'/storage/v1/object/'+BUCKET+'/'+encodePath(path),{headers:{apikey:c.key,Authorization:'Bearer '+s.access_token}});if(!response.ok)throw Error('随身文件下载失败');return response.blob();}
+  async function deleteInboxFile(path){
+    if(!path)return false;
+    const s=await auth();
+    await request('/storage/v1/object/'+BUCKET,{method:'DELETE',token:s.access_token,body:{prefixes:[path]}});
+    return true;
+  }
   async function listProjects(){const s=await auth();return request('/rest/v1/mobile_projects?select=*&order=updated_at.desc&limit=300',{token:s.access_token})||[];}
   async function removeBackedUpProjects(items){
     const s=await auth();
@@ -112,5 +120,5 @@
     const s=await auth();
     return request('/storage/v1/object/list/'+WORKBENCH_BUCKET,{method:'POST',token:s.access_token,body:{prefix,limit,offset}})||[];
   }
-  return {SESSION_KEY,BUCKET,WORKBENCH_BUCKET,config,configured,readSession,saveSession,signUp,signIn,signOut,session,listInbox,countInbox,getWorkbenchMeta,createInbox,patchInbox,uploadFile,downloadFile,listProjects,removeBackedUpProjects,publishProjects,getWorkbench,putWorkbench,putWorkbenches,uploadWorkbenchMedia,backupWorkbench,signedWorkbenchMedia,signedWorkbenchMediaBatch,listWorkbenchMedia,safeName};
+  return {SESSION_KEY,BUCKET,WORKBENCH_BUCKET,config,configured,readSession,saveSession,signUp,signIn,signOut,sendOtp,verifyOtp,session,listInbox,countInbox,getWorkbenchMeta,createInbox,patchInbox,uploadFile,downloadFile,deleteInboxFile,listProjects,removeBackedUpProjects,publishProjects,getWorkbench,putWorkbench,putWorkbenches,uploadWorkbenchMedia,backupWorkbench,signedWorkbenchMedia,signedWorkbenchMediaBatch,listWorkbenchMedia,safeName};
 });
