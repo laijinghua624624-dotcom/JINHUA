@@ -157,6 +157,15 @@ async function updatePending(){
   syncState.textContent=state.session?(state.pending?`${state.pending}条待同步${failed?` · ${failed}条失败`:''}`:'云端已连接'):(state.pending?`${state.pending}条本机草稿`:'本机草稿');
   syncState.classList.toggle('offline',!state.session||state.pending>0);
 }
+function switchSyncProvider(mode){
+  try{
+    localStorage.setItem('lance_sync_mode',mode);
+    localStorage.removeItem('jinhua_cloud_session_v1');
+    const url=new URL(location.href);url.searchParams.delete('mode');
+    history.replaceState(null,'',url.pathname+url.search+'#account');
+    location.reload();
+  }catch(error){show(error.message||String(error),'error');}
+}
 function header(kicker,title,copy){return `<section class="mobile-hero"><div class="mobile-kicker">${kicker}</div><h1>${title}</h1><p>${copy}</p></section>`;}
 
 function radarSaved(){const value=readJSON('jinhua_mobile_radar_saved',[]);return Array.isArray(value)?value:[];}
@@ -332,13 +341,13 @@ function downloadRadarReminder(){
 }
 
 function loginCard(){
-  if(VPS)return `<section class="mobile-card login-box"><h2>登录自建同步</h2><p>使用云服务器上的同步账号（邮箱 + 密码）。这是自建服务器的密码，不是 Supabase 密码。</p><label>邮箱<input id="cloud-email" type="email" autocomplete="email" placeholder="你的邮箱"></label><label>密码<input id="cloud-password" type="password" autocomplete="current-password" minlength="8" placeholder="至少8位"></label><div class="button-row"><button class="primary" data-action="sign-in">登录</button></div><p class="file-note">忘记密码时，在服务器运行 studio_sync.py set-password 重置。</p></section>`;
+  if(VPS)return `<section class="mobile-card login-box"><h2>登录自建同步</h2><p>使用云服务器上的同步账号（邮箱 + 密码）。这是自建服务器的密码，不是 Supabase 密码。</p><label>邮箱<input id="cloud-email" type="email" autocomplete="email" placeholder="你的邮箱"></label><label>密码<input id="cloud-password" type="password" autocomplete="current-password" minlength="8" placeholder="至少8位"></label><div class="button-row"><button class="primary" data-action="sign-in">登录</button></div><p class="file-note">忘记密码时，在服务器运行 studio_sync.py set-password 重置。</p><p class="file-note">要回到 Supabase 同步？<button class="link-button" data-action="switch-provider" data-mode="supabase">切回 Supabase</button></p></section>`;
   const pair=state.pairEmail||'',wait=otpCooldownLeft();
   const emailField=`<label>邮箱<input id="cloud-email" type="email" autocomplete="email" placeholder="你的邮箱" value="${esc(pair)}" ${pair?'readonly':''}></label>`;
   const otpSection=state.otpSent
     ?`<label>邮件验证码<input id="otp-code" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="6 位数字"></label><div class="button-row"><button class="primary" data-action="verify-otp">验证并登录</button><button class="secondary" data-action="send-otp" ${wait?'disabled':''}>${wait?'重新发送（'+wait+'s）':'重新发送验证码'}</button></div><p class="file-note">没收到？先检查垃圾邮件；如果邮件里没有 6 位数字，说明 Supabase 邮件模板还没加 {{ .Token }}，可以改用下方密码登录。</p>`
     :`<div class="button-row"><button class="primary" data-action="send-otp" ${wait?'disabled':''}>${wait?'发送邮箱验证码（'+wait+'s）':'发送邮箱验证码（免密）'}</button></div>`;
-  return `<section class="mobile-card login-box"><h2>${pair?'扫码配对登录':'登录随身同步'}</h2><p>${pair?'配对链接只带入你的邮箱，不包含密码。点发送验证码，输入邮件里的 6 位数字即可。':'同一个账号用于 iPhone、iPad 和 Mac。可以直接用邮箱验证码登录，也可以使用密码。'}</p>${emailField}${otpSection}<details class="otp-fallback" ${state.otpFallback?'open':''}><summary>改用邮箱密码登录</summary><label>密码<input id="cloud-password" type="password" autocomplete="current-password" minlength="8" placeholder="至少8位"></label><div class="button-row"><button class="primary" data-action="sign-in">登录</button><button class="secondary" data-action="sign-up">注册</button></div></details></section>`;
+  return `<section class="mobile-card login-box"><h2>${pair?'扫码配对登录':'登录随身同步'}</h2><p>${pair?'配对链接只带入你的邮箱，不包含密码。点发送验证码，输入邮件里的 6 位数字即可。':'同一个账号用于 iPhone、iPad 和 Mac。可以直接用邮箱验证码登录，也可以使用密码。'}</p>${emailField}${otpSection}<details class="otp-fallback" ${state.otpFallback?'open':''}><summary>改用邮箱密码登录</summary><label>密码<input id="cloud-password" type="password" autocomplete="current-password" minlength="8" placeholder="至少8位"></label><div class="button-row"><button class="primary" data-action="sign-in">登录</button><button class="secondary" data-action="sign-up">注册</button></div></details><p class="file-note">已开通自建云？<button class="link-button" data-action="switch-provider" data-mode="vps">切换到自建云同步</button></p></section>`;
 }
 function captureView(){
   if(!Cloud.configured())return header('MOBILE COMPANION','随手记下，回到 Mac 再完成。','当前页面可保存本机草稿；配置安全云同步后，所有设备会进入同一个收件箱。')+`<div class="notice">尚未配置云同步。你可以先记录，系统会保存本机草稿。</div>`+captureForm();
@@ -539,6 +548,13 @@ document.addEventListener('click',async event=>{
         state.session=session;state.pairEmail='';state.otpSent=false;state.otpFallback=false;stopOtpCooldown();
         await updatePending();await loadCloud();render();show('已登录随身版','success');
       });return;
+    }
+    if(button.dataset.action==='switch-provider'){
+      const mode=button.dataset.mode==='vps'?'vps':'supabase';
+      const current=Cloud.provider==='vps'?'vps':'supabase';
+      if(mode===current)return;
+      if(!confirm(mode==='vps'?'切换后需要重新登录自建云账号，手机历史收件箱不会自动迁移。继续？':'切回 Supabase 后需要重新登录 Supabase 账号。继续？'))return;
+      switchSyncProvider(mode);return;
     }
     if(button.dataset.action==='sign-out'){Cloud.signOut();state.session=null;state.items=[];state.projects=[];state.pairEmail='';state.otpSent=false;state.otpFallback=false;stopOtpCooldown();await updatePending();render();show('已退出登录','success');return;}
     if(button.dataset.action==='capture-save'){await withBusy(button,'保存中…',saveCapture);return;}
