@@ -86,5 +86,29 @@
     if(!url)throw Error('云端素材地址生成失败');
     return /^https?:\/\//.test(url)?url:c.url+'/storage/v1'+url;
   }
-  return {SESSION_KEY,BUCKET,WORKBENCH_BUCKET,config,configured,readSession,saveSession,signUp,signIn,signOut,session,listInbox,createInbox,patchInbox,uploadFile,downloadFile,listProjects,removeBackedUpProjects,publishProjects,getWorkbench,putWorkbench,putWorkbenches,uploadWorkbenchMedia,backupWorkbench,signedWorkbenchMedia,safeName};
+  // Signing one request per asset turns a 278-asset restore into a request storm.
+  // The storage API accepts a path array, so sign in batches and fall back to the
+  // single-path call for anything the batch response does not cover.
+  async function signedWorkbenchMediaBatch(paths,expiresIn=604800){
+    const unique=[...new Set((paths||[]).filter(Boolean))],out=new Map();
+    for(let start=0;start<unique.length;start+=100){
+      const chunk=unique.slice(start,start+100),s=await auth(),c=config();
+      let rows=null;
+      try{rows=await request('/storage/v1/object/sign/'+WORKBENCH_BUCKET,{method:'POST',token:s.access_token,body:{expiresIn,paths:chunk}});}catch{rows=null;}
+      if(Array.isArray(rows))rows.forEach((row,index)=>{
+        const path=row?.path||chunk[index],url=row?.signedURL||row?.signedUrl;
+        if(path&&url)out.set(path,/^https?:\/\//.test(url)?url:c.url+'/storage/v1'+url);
+      });
+      for(const path of chunk){
+        if(out.has(path))continue;
+        try{out.set(path,await signedWorkbenchMedia(path,expiresIn));}catch{/* leave missing so callers can report it */ }
+      }
+    }
+    return out;
+  }
+  async function listWorkbenchMedia(prefix,{limit=100,offset=0}={}){
+    const s=await auth();
+    return request('/storage/v1/object/list/'+WORKBENCH_BUCKET,{method:'POST',token:s.access_token,body:{prefix,limit,offset}})||[];
+  }
+  return {SESSION_KEY,BUCKET,WORKBENCH_BUCKET,config,configured,readSession,saveSession,signUp,signIn,signOut,session,listInbox,createInbox,patchInbox,uploadFile,downloadFile,listProjects,removeBackedUpProjects,publishProjects,getWorkbench,putWorkbench,putWorkbenches,uploadWorkbenchMedia,backupWorkbench,signedWorkbenchMedia,signedWorkbenchMediaBatch,listWorkbenchMedia,safeName};
 });

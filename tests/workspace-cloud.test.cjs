@@ -52,3 +52,51 @@ test('a deliberate clean reset is still a paired cloud version, not an unknown e
   assert.equal(Cloud.empty(reset),false);
   assert.equal(Cloud.syncDecision(filled(),{revision:20,payload:reset},{paired:true,lastRevision:10}).action,'pull');
 });
+
+test('coverage counts cloud media and reports the missing ones',()=>{
+  const uploaded={localId:'a.jpg',kind:'image',cloudPath:'user/xinxuan/a.jpg',cloudSize:1200};
+  const missing={localId:'b.jpg',kind:'image'};
+  const payload={version:1,data:{version:2,projects:[],topics:[],reverse:[],assets:[{files:[uploaded,missing]}]},aesthetic:[],folders:[]};
+  assert.deepEqual(Cloud.coverage(payload),{uploaded:1,verified:1,missing:1,total:2});
+});
+
+test('transport metadata never changes the content stamp',()=>{
+  const bare={version:1,data:{version:2,projects:[],topics:[],reverse:[],assets:[{files:[{localId:'a.jpg',kind:'image'}]}]},aesthetic:[],folders:[]};
+  const stamped=JSON.parse(JSON.stringify(bare));
+  Object.assign(stamped.data.assets[0].files[0],{cloudPath:'u/a.jpg',cloudUrl:'https://signed',cloudSyncedAt:'now',cloudSize:1024,cloudSha256:'abc',cloudVerifiedAt:'now'});
+  assert.equal(Cloud.contentStamp(bare),Cloud.contentStamp(stamped));
+});
+
+test('a read-only dialog does not block automatic restore',()=>{
+  assert.equal(Cloud.restoreBlocked({dialogOpen:true,dialogHasInput:false,editing:false}),false);
+  assert.equal(Cloud.restoreBlocked({dialogOpen:true,dialogHasInput:true,editing:false}),true);
+  assert.equal(Cloud.restoreBlocked({dialogOpen:false,dialogHasInput:false,editing:true}),true);
+  assert.equal(Cloud.restoreBlocked({dialogOpen:false,dialogHasInput:false,editing:false}),false);
+});
+
+test('presentation never reports "checking" once ready',()=>{
+  const ready=Cloud.presentation({session:{},phase:'ready',error:''},{paired:true,lastSyncedAt:'2026-11-05T01:12:00.000Z',dirtyAt:null});
+  assert.equal(ready.tone,'ok');
+  assert.equal(ready.label,'已同步至云端');
+  assert.ok(!ready.label.includes('正在核对云端'));
+});
+
+test('every sync phase has a human readable label',()=>{
+  for(const phase of ['signedout','checking','pulling','pushing','waiting','offline','conflict','error','ready','dirty','pull-needed','working']){
+    const state={session:phase==='signedout'?null:{},phase,error:phase==='error'?'boom':'',progress:{done:12,total:278}};
+    const view=Cloud.presentation(state,{});
+    assert.equal(typeof view.label,'string');
+    assert.ok(view.label.length>0,phase);
+  }
+});
+
+test('presentation shows restore progress counts',()=>{
+  const view=Cloud.presentation({session:{},phase:'pulling',error:'',progress:{done:12,total:278}},{});
+  assert.match(view.label,/12\/278/);
+  assert.equal(view.tone,'pending');
+});
+
+test('presentation prefers conflict wording over a generic error',()=>{
+  const view=Cloud.presentation({session:{},phase:'conflict',error:'本机与云端都有新修改'},{});
+  assert.equal(view.label,'需要选择保留版本');
+});

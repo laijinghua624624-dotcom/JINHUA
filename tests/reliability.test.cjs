@@ -147,3 +147,20 @@ test('download recovery points to the correct source and export format',()=>{
   assert.match(h.run("archiveSourceButton({sourceId:'p',mode:'overview-pdf'})"),/data-action="project-pdf"/);
   assert.equal(h.run("archiveSourceButton({sourceId:'missing'})"),'');
 });
+
+test('the read-only save dialog no longer blocks an automatic restore',async()=>{
+  const h=appHarness(),payload=blank();payload.data.topics=[{id:'cloud',title:'cloud'}];
+  h.rows.set('xinxuan',{workspace:'xinxuan',revision:20,payload});h.ctx.row=h.rows.get('xinxuan');
+  const readOnlyDialog={open:true,querySelector:()=>null};
+  h.ctx.document.querySelector=selector=>selector==='#dialog'?readOnlyDialog:null;
+  await h.run('restoreWorkspaceRow("xinxuan",row)');
+  assert.equal(h.run('db.topics[0].title'),'cloud');
+  assert.equal(h.run('cloudMeta("xinxuan").paired'),true);
+
+  payload.data.topics=[{id:'cloud2',title:'cloud2'}];
+  h.rows.set('xinxuan',{workspace:'xinxuan',revision:21,payload});h.ctx.row=h.rows.get('xinxuan');
+  const formDialog={open:true,querySelector:selector=>/input|textarea|select/.test(selector)?{}:null};
+  h.ctx.document.querySelector=selector=>selector==='#dialog'?formDialog:null;
+  await assert.rejects(h.run('restoreWorkspaceRow("xinxuan",row)'),error=>error.code==='SYNC_EDITING');
+  assert.equal(h.run('db.topics[0].title'),'cloud');
+});
