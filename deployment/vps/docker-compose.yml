@@ -7,9 +7,9 @@ services:
     env_file: .env
     environment:
       PORT: "10000"
-      RENDER_EXTERNAL_URL: https://${DOMAIN}
-      LANCE_PUBLIC_ORIGIN: https://${DOMAIN}
-      LANCE_ALLOWED_HOSTS: ${DOMAIN}
+      RENDER_EXTERNAL_URL: ${PUBLIC_URL}
+      LANCE_PUBLIC_ORIGIN: ${PUBLIC_URL}
+      LANCE_ALLOWED_HOSTS: ${ALLOWED_HOSTS}
     volumes:
       - lance_data:/data
     expose:

@@ -1,4 +1,4 @@
-{$DOMAIN} {
+{$SITE_ADDR} {
 	encode gzip
 	reverse_proxy lance:10000
 }
