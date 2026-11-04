@@ -1,0 +1,35 @@
+services:
+  lance:
+    build:
+      context: ../..
+      dockerfile: Dockerfile.render
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      PORT: "10000"
+      RENDER_EXTERNAL_URL: https://${DOMAIN}
+      LANCE_PUBLIC_ORIGIN: https://${DOMAIN}
+      LANCE_ALLOWED_HOSTS: ${DOMAIN}
+    volumes:
+      - lance_data:/data
+    expose:
+      - "10000"
+
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    depends_on:
+      - lance
+    ports:
+      - "80:80"
+      - "443:443"
+    env_file: .env
+    volumes:
+      - ./Caddyfile.vps:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+
+volumes:
+  lance_data:
+  caddy_data:
+  caddy_config:
