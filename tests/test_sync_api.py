@@ -4,6 +4,7 @@ import tempfile
 import threading
 import unittest
 import urllib.error
+import urllib.parse
 import urllib.request
 from http.server import ThreadingHTTPServer
 
@@ -177,6 +178,24 @@ class SyncApiTest(unittest.TestCase):
         status, signed = self.request('POST', '/api/sync/media/sign', {'paths': [uploaded['path']]}, self.token)
         self.assertEqual(status, 200)
         self.assertFalse(signed[0]['signedURL'])
+
+    def test_share_capture(self):
+        with studio_sync._db() as conn:
+            key = conn.execute("select value from settings where key='capture_key'").fetchone()[0]
+        status, body = self.request('POST', '/api/sync/capture?key=' + key,
+                                    {'url': 'https://example.com/case', 'title': '参考案例', 'body': '构图和光很好', 'workspace': 'xinxuan'})
+        self.assertEqual(status, 200, body)
+        self.assertEqual(body['kind'], 'link')
+        status, inbox = self.request('GET', '/api/sync/inbox', token=self.token)
+        row = next(item for item in inbox if item['id'] == body['id'])
+        self.assertEqual(row['kind'], 'link')
+        self.assertEqual(row['source_url'], 'https://example.com/case')
+        status, uploaded = self.request('POST', '/api/sync/capture?key=' + key + '&workspace=personal&name=shot.png&title=' + urllib.parse.quote('截图'),
+                                        raw=b'\x89PNG-fake', content_type='image/png')
+        self.assertEqual(status, 200, uploaded)
+        self.assertEqual(uploaded['kind'], 'image')
+        status, _ = self.request('POST', '/api/sync/capture?key=wrong', {'url': 'https://example.com'})
+        self.assertEqual(status, 401)
 
     def test_state_summary(self):
         status, body = self.request('GET', '/api/sync/state', token=self.token)

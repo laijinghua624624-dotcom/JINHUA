@@ -128,6 +128,8 @@ def _ensure():
             """)
             if not conn.execute("select 1 from settings where key='signing_secret'").fetchone():
                 conn.execute("insert into settings(key,value) values('signing_secret',?)", (secrets.token_hex(32),))
+            if not conn.execute("select 1 from settings where key='capture_key'").fetchone():
+                conn.execute("insert into settings(key,value) values('capture_key',?)", (secrets.token_urlsafe(24),))
         _ready = True
 
 
@@ -631,6 +633,68 @@ def _delete_media(handler, user):
     return {'deleted': True}
 
 
+def _capture_key():
+    with _db() as conn:
+        row = conn.execute("select value from settings where key='capture_key'").fetchone()
+    return row[0] if row else ''
+
+
+def _capture_user():
+    with _db() as conn:
+        return conn.execute('select id,email from users order by created_at limit 1').fetchone()
+
+
+def _create_capture(handler):
+    """Mobile share-sheet entry: personal key + optional raw image/video.
+
+    POST /api/sync/capture?key=...&workspace=&title=&name=
+      JSON body {url,title,body}  -> link/text item
+      raw image/video/audio body  -> media item
+    """
+    query = _query(handler)
+    key = query.get('key', [''])[0]
+    expected = _capture_key()
+    if not expected or not key or not hmac.compare_digest(key, expected):
+        raise ApiError(401, '收藏口令无效')
+    user = _capture_user()
+    if not user:
+        raise ApiError(503, '尚未创建同步账号')
+    workspace_value = query.get('workspace', [''])[0]
+    workspace = _workspace(workspace_value) if workspace_value else 'xinxuan'
+    ctype = (handler.headers.get('Content-Type') or '').split(';')[0].strip().lower()
+    now = _now()
+    item_id = str(uuid.uuid4())
+    metadata_text = json.dumps({'capture': 'simple', 'source': 'share'}, ensure_ascii=False)
+    if ctype.startswith(('image/', 'video/', 'audio/')):
+        uploaded = _upload_media(handler, user)
+        kind = 'image' if ctype.startswith('image/') else 'video' if ctype.startswith('video/') else 'voice'
+        title = (query.get('title', [''])[0] or '').strip()[:200] or uploaded.get('name') or '分享的素材'
+        with _db() as conn:
+            conn.execute("""insert into inbox(id,user_id,workspace,kind,title,body,source_url,file_path,file_name,mime_type,status,metadata,created_at,updated_at,imported_at)
+                            values(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                         (item_id, user['id'], workspace, kind, title, '', None, uploaded['path'],
+                          query.get('name', [''])[0] or title, ctype, 'inbox', metadata_text, now, now, None))
+        return {'ok': True, 'id': item_id, 'path': uploaded['path'], 'kind': kind}
+    body = _body(handler)
+    if body.get('workspace'):
+        workspace = _workspace(body.get('workspace'))
+    url = str(body.get('url') or body.get('source_url') or '').strip()[:2000]
+    title = str(body.get('title') or '').strip()[:200]
+    text = str(body.get('body') or '').strip()[:4000]
+    if url and not title:
+        try:
+            title = urllib.parse.urlparse(url).netloc.replace('www.', '') or '收藏'
+        except Exception:
+            title = '收藏'
+    kind = 'link' if url else 'text'
+    with _db() as conn:
+        conn.execute("""insert into inbox(id,user_id,workspace,kind,title,body,source_url,file_path,file_name,mime_type,status,metadata,created_at,updated_at,imported_at)
+                        values(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                     (item_id, user['id'], workspace, kind, title or '收藏', text, url or None,
+                      None, None, None, 'inbox', metadata_text, now, now, None))
+    return {'ok': True, 'id': item_id, 'kind': kind}
+
+
 def _create_inbox(handler, user):
     body = _body(handler)
     workspace = _workspace(body.get('workspace'))
@@ -779,6 +843,8 @@ def handle(handler):
             return _json(handler, _refresh(handler))
         if path == '/api/sync/auth/logout' and method == 'POST':
             return _json(handler, _logout(handler))
+        if path == '/api/sync/capture' and method == 'POST':
+            return _json(handler, _create_capture(handler))
         user = _user(handler)
         if path == '/api/sync/auth/session' and method == 'GET':
             return _json(handler, {'user': {'id': user['id'], 'email': user['email']}})
@@ -880,6 +946,8 @@ def main(argv=None):
     password.add_argument('email')
     password.add_argument('password')
     sub.add_parser('show-user')
+    sub.add_parser('capture-key')
+    sub.add_parser('rotate-capture-key')
     serve = sub.add_parser('serve')
     serve.add_argument('--host', default='127.0.0.1')
     serve.add_argument('--port', type=int, default=8139)
@@ -892,6 +960,15 @@ def main(argv=None):
         _ensure()
         with _db() as conn:
             print(json.dumps([dict(row) for row in conn.execute('select id,email,created_at from users')], ensure_ascii=False))
+    elif args.command == 'capture-key':
+        _ensure()
+        print(_capture_key())
+    elif args.command == 'rotate-capture-key':
+        _ensure()
+        fresh = secrets.token_urlsafe(24)
+        with _db() as conn:
+            conn.execute("insert into settings(key,value) values('capture_key',?) on conflict(key) do update set value=excluded.value", (fresh,))
+        print(fresh)
     elif args.command == 'serve':
         from http.server import ThreadingHTTPServer
         _ensure()

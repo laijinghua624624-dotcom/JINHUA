@@ -74,7 +74,7 @@ async function autoImportSimpleCaptures(){
     if(!pending.length)return;
     let done=0;
     for(const item of pending){
-      try{await importMobileItem(item,{destination:'fragment'});done++;}
+      try{await importMobileItem(item,item.kind==='link'?{}:{destination:'fragment'});done++;}
       catch(error){console.warn('auto capture import failed',item.id,error);}
     }
     if(done){

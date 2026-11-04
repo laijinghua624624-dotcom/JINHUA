@@ -3,7 +3,7 @@
   const $=s=>document.querySelector(s);
   const Cloud=window.StudioCloud;
   const QUEUE_KEY='lance_capture_queue_v1';
-  const state={session:null,space:'xinxuan',kind:'text',file:null,previewUrl:'',recorder:null,chunks:[],recording:false,saving:false,timer:null,seconds:0};
+  const state={session:null,space:'xinxuan',kind:'text',file:null,linkUrl:'',linkTitle:'',previewUrl:'',recorder:null,chunks:[],recording:false,saving:false,timer:null,seconds:0};
   const note=$('#note'),saveBtn=$('#save'),preview=$('#preview'),statusEl=$('#status'),recent=$('#recent-list'),conn=$('#conn');
   const esc=value=>String(value==null?'':value).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const kindLabel={text:'文字',link:'链接',voice:'语音',image:'图片',video:'视频',document:'文档'};
@@ -68,16 +68,22 @@
     document.querySelectorAll('.space').forEach(button=>button.classList.toggle('active',button.dataset.space===space));
   }
   function reset(){
-    state.kind='text';state.file=null;
+    state.kind='text';state.file=null;state.linkUrl='';state.linkTitle='';
+    note.placeholder='现在想到什么…一句话、一个画面、一个链接都可以';
     if(state.previewUrl)URL.revokeObjectURL(state.previewUrl);
     state.previewUrl='';preview.hidden=true;preview.innerHTML='';
     note.value='';note.focus();
     document.querySelectorAll('.quick button').forEach(button=>button.classList.remove('active'));
     setStatus('');
   }
-  function clearFile(){state.file=null;if(state.previewUrl)URL.revokeObjectURL(state.previewUrl);state.previewUrl='';preview.hidden=true;preview.innerHTML='';state.kind='text';}
+  function clearFile(){state.file=null;state.linkUrl='';state.linkTitle='';if(state.previewUrl)URL.revokeObjectURL(state.previewUrl);state.previewUrl='';preview.hidden=true;preview.innerHTML='';state.kind='text';}
 
   function showPreview(){
+    if(state.linkUrl&&!state.file){
+      let host=state.linkUrl;try{host=new URL(state.linkUrl).hostname.replace(/^www\./,'');}catch{}
+      preview.innerHTML=`<div class="meta"><strong>${esc(host)}</strong><br>${esc(state.linkUrl)}</div><button class="remove" data-remove>移除</button>`;
+      preview.hidden=false;return;
+    }
     if(!state.file){preview.hidden=true;preview.innerHTML='';return;}
     if(state.previewUrl)URL.revokeObjectURL(state.previewUrl);
     state.previewUrl=URL.createObjectURL(state.file);
@@ -159,13 +165,12 @@
     if(!body&&!state.file){setStatus('写一句，或者拍/录点东西','bad');note.focus();return;}
     if(!state.session){showLogin();return;}
     state.saving=true;saveBtn.disabled=true;saveBtn.textContent='保存中…';
-    const snapshot={kind:state.kind,file:state.file,space:state.space};
+    const snapshot={kind:state.kind,file:state.file,space:state.space,linkUrl:state.linkUrl,linkTitle:state.linkTitle};
     try{
-      let kind=snapshot.kind||'text',source_url='';
+      let kind=snapshot.kind||'text',source_url=snapshot.linkUrl||'';
       if(!snapshot.file){
-        const match=body.match(/https?:\/\/\S+/);
-        if(match){kind='link';source_url=match[0];}
-        else kind='text';
+        if(!source_url){const match=body.match(/https?:\/\/\S+/);if(match)source_url=match[0];}
+        kind=source_url?'link':'text';
       }
       let file_path=null,file_name='',mime_type='';
       if(snapshot.file){
@@ -174,10 +179,12 @@
         file_path=await uploadFile(upload,upload.name,snapshot.space);
         file_name=upload.name;mime_type=upload.type||snapshot.file.type;
       }
-      const item={id:(crypto.randomUUID?crypto.randomUUID():'cap-'+Date.now()+'-'+Math.random().toString(36).slice(2)),workspace:snapshot.space,kind,title:titleFor(kind,body),body,source_url,file_path,file_name,mime_type,status:'inbox',created_at:new Date().toISOString(),updated_at:new Date().toISOString(),metadata:{capture:'simple'}};
+      let title=titleFor(kind,body);
+      if(kind==='link'){let host='';try{host=new URL(source_url).hostname.replace(/^www\./,'');}catch{}title=snapshot.linkTitle||host||'链接收藏';}
+      const item={id:(crypto.randomUUID?crypto.randomUUID():'cap-'+Date.now()+'-'+Math.random().toString(36).slice(2)),workspace:snapshot.space,kind,title,body,source_url,file_path,file_name,mime_type,status:'inbox',created_at:new Date().toISOString(),updated_at:new Date().toISOString(),metadata:{capture:'simple'}};
       try{
         await Cloud.createInbox(item);
-        reset();setStatus('已收进灵感 · Mac 上会自动出现','ok');refreshRecent();
+        reset();setStatus(kind==='link'||kind==='image'||kind==='video'?'已收进参考库 · Mac 上会自动出现':'已收进灵感 · Mac 上会自动出现','ok');refreshRecent();
       }catch(error){
         if(!snapshot.file){enqueue(item);reset();}
         else setStatus(friendly(error)+'，内容还在，可直接重试','bad');
@@ -191,7 +198,8 @@
     try{
       const items=await Cloud.listInbox();
       const rows=(items||[]).filter(item=>item.status!=='archived').slice(0,10);
-      recent.innerHTML=rows.length?rows.map(item=>`<article class="item"><div class="row"><span>${esc(item.workspace==='personal'?'My·个人':'My·工作')} · ${esc(kindLabel[item.kind]||'记录')}</span><span class="badge">${item.status==='imported'?'已收进 Mac':'已保存'}</span></div><p>${esc(item.body||item.source_url||item.file_name||'')}</p><div class="row"><span>${esc(new Date(item.created_at).toLocaleString('zh-CN',{month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'}))}</span></div></article>`).join(''):'<div class="empty">还没有记录。写第一句，或拍一张。</div>';
+      const doneLabel=item=>item.kind==='link'||item.kind==='image'||item.kind==='video'?'已收进参考库':'已收进 Mac';
+      recent.innerHTML=rows.length?rows.map(item=>`<article class="item"><div class="row"><span>${esc(item.workspace==='personal'?'My·个人':'My·工作')} · ${esc(kindLabel[item.kind]||'记录')}</span><span class="badge">${item.status==='imported'?doneLabel(item):'已保存'}</span></div><p>${esc(item.body||item.source_url||item.file_name||'')}</p><div class="row"><span>${esc(new Date(item.created_at).toLocaleString('zh-CN',{month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'}))}</span></div></article>`).join(''):'<div class="empty">还没有记录。写第一句，或拍一张。</div>';
     }catch(error){/* keep the last list */}
   }
 
@@ -209,7 +217,11 @@
       if(act==='photo')$('#camera').click();
       if(act==='library')$('#library').click();
       if(act==='voice')toggleVoice();
-      if(act==='link'){note.focus();if(navigator.clipboard&&navigator.clipboard.readText){navigator.clipboard.readText().then(text=>{if(text&&/^https?:\/\//.test(text)){note.value=text;note.focus();}}).catch(()=>{});}}
+      if(act==='link'){
+        const take=text=>{const match=String(text||'').match(/https?:\/\/\S+/);if(match){state.linkUrl=match[0];state.kind='link';showPreview();note.placeholder='写一句为什么收藏…';note.focus();setStatus('已读取链接。写一句为什么收藏，再保存','');}else{note.focus();setStatus('没读到链接，可以直接把链接粘贴到输入框','bad');}};
+        if(navigator.clipboard&&navigator.clipboard.readText)navigator.clipboard.readText().then(take).catch(()=>note.focus());
+        else note.focus();
+      }
     }));
     $('#camera').addEventListener('change',event=>{pickFile(event.target.files&&event.target.files[0]);event.target.value='';});
     $('#library').addEventListener('change',event=>{pickFile(event.target.files&&event.target.files[0]);event.target.value='';});
@@ -221,6 +233,12 @@
       if(!confirm('退出手机登录？'))return;
       Cloud.signOut();state.session=null;showLogin();
     });
+    const shared=new URLSearchParams(location.search);
+    if(shared.get('url')){
+      state.linkUrl=shared.get('url');state.linkTitle=shared.get('title')||'';state.kind='link';
+      note.value=state.linkTitle;note.placeholder='写一句为什么收藏…';showPreview();
+      setStatus('已读取分享链接，写一句为什么收藏再保存','');
+    }
     (async()=>{
       try{state.session=await Cloud.session();}catch{state.session=null;}
       if(state.session)showHome();else showLogin();
