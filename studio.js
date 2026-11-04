@@ -17,8 +17,9 @@ const AUTO_SYNC_INTERVAL_MS=30*60*1000;
 function isNetworkError(error){return /fetch|network|网络|Failed to fetch|timeout|Load failed|NetworkError/i.test(error?.message||String(error||''));}
 function setSyncPhase(phase,extra={}){
   const changed=cloudState.phase!==phase;
+  const startedAt=changed||!cloudState.progress?Date.now():(cloudState.progress.at||Date.now());
   cloudState.phase=phase;
-  cloudState.progress=extra&&Number(extra.total)>0?{space:extra.space||scope,done:Math.max(0,Number(extra.done)||0),total:Number(extra.total),at:Date.now()}:null;
+  cloudState.progress=extra&&Number(extra.total)>0?{space:extra.space||scope,done:Math.max(0,Number(extra.done)||0),total:Number(extra.total),at:startedAt}:null;
   refreshSyncUI(changed);
 }
 // Kept intentionally invisible. Older cached pages treat it as non-empty,
