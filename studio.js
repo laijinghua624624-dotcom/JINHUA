@@ -307,7 +307,7 @@ async function uploadAllWorkspaces(force=false){for(const space of ['xinxuan','p
 async function pullWorkspace(space=scope){
   const row=await StudioCloud.getWorkbench(space);if(!row)throw Error((space==='xinxuan'?'My·工作':'My·个人')+'云端还没有数据');
   try{return await restoreWorkspaceRow(space,row);}
-  catch(error){cloudState.progress=null;cloudState.phase=isNetworkError(error)?'offline':'error';cloudState.error=friendlySyncError(error);throw error;}
+  catch(error){cloudState.progress=null;cloudState.phase=isNetworkError(error)?'offline':'error';cloudState.error=friendlySyncError(error);refreshSyncUI(true);throw error;}
 }
 async function pullAllWorkspaces(){cloudState.busy=true;cloudState.status='正在取回云端数据';cloudState.phase='working';refreshSyncUI();try{for(const space of ['xinxuan','personal']){const row=await StudioCloud.getWorkbench(space);if(row)await restoreWorkspaceRow(space,row);}cloudState.error='';cloudState.status='云端已同步';cloudState.phase='ready';cloudState.progress=null;await refreshCloudState();}finally{cloudState.busy=false;refreshSyncUI(true);}}
 async function refreshCloudState(){
@@ -455,7 +455,7 @@ async function workbenchCloudAction(action){
   }
   if(action==='workbench-cloud-pull'){
     if(!confirm(`从云端重新恢复当前的 ${scope==='xinxuan'?'My·工作':'My·个人'}。本机原版本会保留恢复副本。继续吗？`))return;
-    close();await pullWorkspace(scope);cloudState.error='';await refreshCloudState();render();notify('云端成果已恢复到当前设备。');return;
+    close();await pullWorkspace(scope);cloudState.error='';await refreshCloudState();render();refreshSyncUI(true);notify('云端成果已恢复到当前设备。');return;
   }
   if(action==='workbench-cloud-signout'){if(cloudState.busy||workbenchSyncPromise)throw Error('请等本轮同步结束再退出');clearTimeout(cloudState.timer);StudioCloud.signOut();cloudState={session:null,remote:null,busy:false,status:'未登录',phase:'signedout',progress:null,verify:null,error:'',timer:null};close();render();return;}
 }
