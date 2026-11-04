@@ -947,7 +947,14 @@ class Handler(BaseHTTPRequestHandler):
             allowed_hosts={'127.0.0.1','localhost'}
             permitted={'http://127.0.0.1','http://localhost'}
         allowed_hosts.add('lance-content-studio.onrender.com')
-        allowed_hosts.update(filter(None,os.environ.get('LANCE_ALLOWED_HOSTS','').split(',')))
+        extra_hosts=[x.strip() for x in os.environ.get('LANCE_ALLOWED_HOSTS','').split(',') if x.strip()]
+        wild_hosts=[x[1:] for x in extra_hosts if x.startswith('*.')]
+        exact_hosts={x for x in extra_hosts if not x.startswith('*.')}
+        def host_matches(value):
+            return bool(value) and (value in allowed_hosts or value in exact_hosts or any(value.endswith(w) for w in wild_hosts))
+        def origin_host(value):
+            try: return urllib.parse.urlparse(value or '').netloc
+            except Exception: return ''
         permitted.update(filter(None,os.environ.get('LANCE_ALLOWED_ORIGINS','').split(',')))
         permitted.add('https://laijinghua624624-dotcom.github.io')
         public_origin=os.environ.get('LANCE_PUBLIC_ORIGIN','').rstrip('/')
@@ -956,7 +963,7 @@ class Handler(BaseHTTPRequestHandler):
             # owner's GitHub Pages may also call this API for full features.
             permitted.add(public_origin)
             allowed_hosts.add(urllib.parse.urlparse(public_origin).netloc)
-        return host in allowed_hosts and (not origin or origin in permitted)
+        return host_matches(host) and (not origin or origin in permitted or host_matches(origin_host(origin)))
 
     def send_json(self,value,status=200):
         if isinstance(value,dict) and value.get('error'):value={**value,'error':safe_error(value['error'])}
