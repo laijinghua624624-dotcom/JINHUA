@@ -67,3 +67,14 @@ docker compose pull && docker compose up -d --build   # 更新
 - 报价系统的手机打卡/报销上传（Node 8137）还没并进 Lance；如需外网手机上传，后面再作为独立服务加 Caddy 路由；
 - Render 上的旧实例可以继续保留做备份，确认新站稳定后再停；
 - `.env` 含模型密钥，权限设 600，不要提交 Git。
+
+## 当前线上状态（2026-11-05）
+
+- 域名：`lance.lance624.com`（腾讯云 DNSPod，A 记录 → 119.28.20.166）
+- Lance：https://lance.lance624.com/
+- 报价系统：https://lance.lance624.com/quote/
+- HTTPS：Let's Encrypt，Caddy 自动续期
+- 防火墙：已放行 80/443
+- 服务器进程：Docker Compose（lance + caddy），开机自启
+
+免费测试域名可用 `119.28.20.166.sslip.io`；IP 直连需域名证书匹配，请始终用域名访问。
