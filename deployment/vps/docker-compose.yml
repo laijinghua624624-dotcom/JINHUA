@@ -15,11 +15,26 @@ services:
     expose:
       - "10000"
 
+  # 现场打卡 / 报销上传（原本机 Node 8137），与主站同域，由 Caddy 按路径分流。
+  # 数据（照片、记录）落在 checkin_data 卷；公网地址靠 PUBLIC_BASE_URL 生成分享链接。
+  checkin:
+    build:
+      context: ../../checkin
+    restart: unless-stopped
+    environment:
+      PORT: "8137"
+      PUBLIC_BASE_URL: ${PUBLIC_URL}
+    volumes:
+      - checkin_data:/app/data
+    expose:
+      - "8137"
+
   caddy:
     image: caddy:2
     restart: unless-stopped
     depends_on:
       - lance
+      - checkin
     ports:
       - "80:80"
       - "443:443"
@@ -31,5 +46,6 @@ services:
 
 volumes:
   lance_data:
+  checkin_data:
   caddy_data:
   caddy_config:

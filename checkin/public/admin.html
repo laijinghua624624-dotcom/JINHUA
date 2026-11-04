@@ -1,0 +1,48 @@
+<!DOCTYPE html><html lang="zh-CN"><head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>现场管理与报销</title>
+<style>
+body{margin:0;font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;background:#f4f6fa;color:#0f172a}
+.wrap{max-width:1100px;margin:0 auto;padding:18px}
+.head{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:14px}
+.head h1{font-size:18px;margin:0}
+.head .sp{flex:1}
+.tabs{display:flex;gap:8px;margin-bottom:14px}
+.tabs button{padding:9px 16px;border:1px solid #d5dbe6;border-radius:9px;background:#fff;font-size:14px;font-weight:700;cursor:pointer}
+.tabs button.on{background:#0f172a;color:#fff;border-color:#0f172a}
+select,input,button{padding:8px 10px;border:1px solid #d5dbe6;border-radius:9px;background:#fff;font-size:13px}
+button{cursor:pointer}
+button.primary{background:#0f172a;color:#fff;border-color:#0f172a}
+button.mini{padding:3px 8px;font-size:11px;border-radius:7px;background:#eff6ff;color:#1d4ed8;border-color:#bfdbfe;cursor:pointer}
+button.mini.danger{background:#fef2f2;color:#b91c1c;border-color:#fecaca}
+.stats{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px}
+.stat{background:#fff;border:1px solid #e5e9f2;border-radius:12px;padding:10px 16px;min-width:110px}
+.stat .k{font-size:11px;color:#64748b}.stat .v{font-size:20px;font-weight:800;margin-top:2px}
+.card{background:#fff;border:1px solid #e5e9f2;border-radius:14px;margin-bottom:12px;overflow:hidden}
+.card h3{margin:0;padding:12px 16px;font-size:14px;background:#f8fafc;border-bottom:1px solid #eef2f7}
+.row{padding:12px 16px;border-bottom:1px solid #f1f5f9;display:flex;gap:16px;align-items:center;flex-wrap:wrap}
+.row:last-child{border-bottom:0}
+.who{min-width:180px}.who b{font-size:14px}.who div{font-size:12px;color:#64748b;margin-top:3px}
+.ph{width:150px;border:1px solid #e5e9f2;border-radius:10px;overflow:hidden;background:#f8fafc;cursor:pointer}
+.ph img{width:100%;height:105px;object-fit:cover;display:block}
+.ph .t{font-size:11px;padding:4px 6px;color:#475569;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tag{font-size:10px;font-weight:700;padding:1px 6px;border-radius:99px;margin-right:4px}
+.tag.in{background:#dcfce7;color:#166534}.tag.out{background:#fef3c7;color:#92400e}
+.fees{font-size:12px;color:#475569;line-height:1.7;min-width:210px}
+.fees b{font-size:15px;color:#0f172a}
+.note{font-size:12px;color:#64748b;max-width:240px}
+.empty{padding:40px;text-align:center;color:#94a3b8}
+</style></head><body><div class="wrap">
+<div class="head"><h1 id="title">现场管理与报销</h1><span class="sp"></span>
+<select id="projFilter"><option value="">全部项目</option></select>
+<select id="dateFilter"><option value="">全部日期</option></select>
+<select id="deptFilter"><option value="">全部部门</option></select>
+<button id="refresh">刷新</button>
+<button id="csv">导出 CSV</button>
+<button class="primary" id="formLink">打开手机页</button>
+</div>
+<div class="tabs"><button id="tabCheckin" class="on">打卡记录</button><button id="tabExpense">报销记录</button></div>
+<div class="stats" id="stats"></div>
+<div id="list"></div>
+</div>
+<script src="/admin.js"></script></body></html>

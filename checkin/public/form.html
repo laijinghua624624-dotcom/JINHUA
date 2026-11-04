@@ -1,0 +1,36 @@
+<!DOCTYPE html><html lang="zh-CN"><head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
+<title>现场凭证上传</title><link rel="stylesheet" href="/style.css"></head><body>
+<div class="wrap">
+  <div class="mtabs"><a class="on" href="/m">打卡凭证</a><a href="/expense">报销凭证</a></div>
+  <div class="head"><h1 id="project">现场打卡</h1><p>选职位、填姓名、拍水印照片即可，照片自动带时间和项目信息</p></div>
+  <div id="formCard">
+    <div class="card">
+      <label class="f">日期</label><input type="date" id="date">
+      <label class="f">部门 / 组</label><select id="dept"></select>
+      <label class="f">职位</label><select id="role"></select>
+      <label class="f">姓名</label><input type="text" id="name" placeholder="请输入你的姓名" autocomplete="off">
+    </div>
+    <div class="card">
+      <label class="f">打卡类型</label>
+      <div class="types">
+        <label class="type on"><input type="radio" name="type" value="in" checked>到场</label>
+        <label class="type"><input type="radio" name="type" value="out">离场</label>
+      </div>
+      <label class="f">打卡凭证（水印照片）</label>
+      <button class="shoot" id="shootBtn">📷 拍打卡凭证</button>
+      <input type="file" id="file" accept="image/*" capture="environment" style="display:none">
+      <img class="preview" id="preview" alt="预览">
+      <p class="hint" id="gpsHint">定位：未获取（不影响打卡）</p>
+      <label class="f">备注（可选）</label><textarea id="note" placeholder="例如：拼车 / 收工直接回家"></textarea>
+      <div class="err" id="err"></div>
+    </div>
+  </div>
+  <div class="ok" id="okView">
+    <div class="big">✅</div><h2 id="okTitle">打卡成功</h2><p id="okInfo"></p>
+    <button id="againBtn">继续打卡</button>
+  </div>
+</div>
+<div class="submit"><button id="submitBtn" disabled>提交打卡</button></div>
+<script src="/form.js"></script>
+</body></html>
