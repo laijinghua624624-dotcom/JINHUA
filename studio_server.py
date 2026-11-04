@@ -21,6 +21,7 @@ import socket
 import subprocess
 import sys
 import studio_upload as uploads
+import studio_sync
 import tempfile
 import threading
 import time
@@ -994,10 +995,12 @@ class Handler(BaseHTTPRequestHandler):
         self.send_response(302);self.send_header('Location',url);self.send_header('Cache-Control','no-store');self.end_headers()
 
     def do_OPTIONS(self):
+        if self.path.startswith('/api/sync/'): return studio_sync.handle(self)
         if not self.allowed(): return self.send_json({'error':'来源不被允许'},403)
         self.send_response(204);self.send_header('Access-Control-Allow-Origin',self.headers.get('Origin',''));self.send_header('Access-Control-Allow-Methods','GET,POST,OPTIONS');self.send_header('Access-Control-Allow-Headers','Content-Type,Authorization,X-File-Name');self.end_headers()
 
     def do_GET(self):
+        if self.path.startswith('/api/sync/'): return studio_sync.handle(self)
         if not self.allowed(): return self.send_json({'error':'来源不被允许'},403)
         path=urllib.parse.unquote(urllib.parse.urlparse(self.path).path)
         try:
@@ -1096,6 +1099,7 @@ class Handler(BaseHTTPRequestHandler):
         except Exception as error:self.send_json({'error':str(error)},400)
 
     def do_POST(self):
+        if self.path.startswith('/api/sync/'): return studio_sync.handle(self)
         if not self.allowed():return self.send_json({'error':'来源不被允许'},403)
         try:
             length=int(self.headers.get('Content-Length',0))
@@ -1281,6 +1285,18 @@ class Handler(BaseHTTPRequestHandler):
         except uploads.UploadError as error:self.send_json({'error':str(error),'code':error.code},error.status)
         except socket.timeout:self.send_json({'error':'上传连接中断或长时间没有数据，请重新选择文件。','code':'UPLOAD_INTERRUPTED'},408)
         except Exception as error:self.send_json({'error':safe_error(error)},400)
+
+    def do_PUT(self):
+        if self.path.startswith('/api/sync/'): return studio_sync.handle(self)
+        return self.send_json({'error':'不支持该请求'},405)
+
+    def do_PATCH(self):
+        if self.path.startswith('/api/sync/'): return studio_sync.handle(self)
+        return self.send_json({'error':'不支持该请求'},405)
+
+    def do_DELETE(self):
+        if self.path.startswith('/api/sync/'): return studio_sync.handle(self)
+        return self.send_json({'error':'不支持该请求'},405)
 
     def log_message(self,fmt,*args):
         # Paths only, never log headers, payloads, or credentials.

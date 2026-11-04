@@ -15,8 +15,20 @@
     # The full workbench is always the root page, including on iPad. The
     # lightweight capture companion remains available explicitly at
     # /mobile.html. API credentials stay in the Render environment.
-    reverse_proxy unix//tmp/studio.sock {
-        header_up Host localhost
-        header_up -Authorization
+    #
+    # The self-hosted sync API authenticates with Bearer tokens, so its
+    # Authorization header must survive the proxy. Everything else keeps
+    # stripping it.
+    @sync path /api/sync/*
+    handle @sync {
+        reverse_proxy unix//tmp/studio.sock {
+            header_up Host localhost
+        }
+    }
+    handle {
+        reverse_proxy unix//tmp/studio.sock {
+            header_up Host localhost
+            header_up -Authorization
+        }
     }
 }
