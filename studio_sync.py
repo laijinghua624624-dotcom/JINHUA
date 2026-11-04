@@ -709,6 +709,70 @@ def _store_media_bytes(user, workspace, name, data, mime):
     return {'path': logical, 'sha256': sha, 'size': len(data), 'name': _safe_name(name)}
 
 
+def _html(handler, body, status=200):
+    payload = body.encode('utf-8')
+    handler.send_response(status)
+    handler.send_header('Content-Type', 'text/html; charset=utf-8')
+    handler.send_header('Content-Length', str(len(payload)))
+    handler.send_header('Cache-Control', 'no-store')
+    handler.end_headers()
+    try:
+        handler.wfile.write(payload)
+    except (BrokenPipeError, ConnectionResetError):
+        pass
+    return None
+
+
+def _redirect(handler, location):
+    handler.send_response(302)
+    handler.send_header('Location', location)
+    handler.send_header('Cache-Control', 'no-store')
+    handler.end_headers()
+    return None
+
+
+def _pinterest_key_ok(handler):
+    key = _query(handler).get('key', [''])[0]
+    expected = _capture_key()
+    return bool(expected and key and hmac.compare_digest(key, expected))
+
+
+def _pinterest_start(handler):
+    import studio_pinterest as pinterest
+    if not _pinterest_key_ok(handler):
+        raise ApiError(401, '收藏口令无效')
+    if not pinterest.configured():
+        raise ApiError(503, '请先在服务器 .env 配置 PINTEREST_CLIENT_ID 和 PINTEREST_CLIENT_SECRET')
+    return _redirect(handler, pinterest.auth_url(pinterest.make_state()))
+
+
+def _pinterest_callback(handler):
+    import studio_pinterest as pinterest
+    query = _query(handler)
+    if query.get('error'):
+        return _html(handler, '<h2>Pinterest 授权未完成</h2><p>可以关闭此页，重新发起授权。</p>')
+    code = query.get('code', [''])[0]
+    state = query.get('state', [''])[0]
+    if not pinterest.verify_state(state):
+        return _html(handler, '<h2>授权状态已失效</h2><p>请回到 Lance 重新打开授权链接。</p>', 400)
+    if not code:
+        return _html(handler, '<h2>缺少授权码</h2>', 400)
+    try:
+        tokens = pinterest.exchange_code(code)
+        account = tokens.get('account') or {}
+        username = account.get('username') or 'Pinterest 账号'
+        return _html(handler, f'<h2>Pinterest 授权成功</h2><p>已连接：<strong>{username}</strong></p><p>可以关闭此页，回到 Lance 等待同步。</p>')
+    except Exception as error:
+        return _html(handler, f'<h2>授权失败</h2><p>{str(error)[:300]}</p>', 500)
+
+
+def _pinterest_status(handler):
+    import studio_pinterest as pinterest
+    if not _pinterest_key_ok(handler):
+        raise ApiError(401, '收藏口令无效')
+    return _json(handler, pinterest.status())
+
+
 def _capture_key():
     with _db() as conn:
         row = conn.execute("select value from settings where key='capture_key'").fetchone()
@@ -951,6 +1015,12 @@ def handle(handler):
             return _json(handler, _logout(handler))
         if path == '/api/sync/capture' and method == 'POST':
             return _json(handler, _create_capture(handler))
+        if path == '/api/sync/pinterest/start' and method == 'GET':
+            return _pinterest_start(handler)
+        if path == '/api/sync/pinterest/callback' and method == 'GET':
+            return _pinterest_callback(handler)
+        if path == '/api/sync/pinterest/status' and method == 'GET':
+            return _pinterest_status(handler)
         user = _user(handler)
         if path == '/api/sync/auth/session' and method == 'GET':
             return _json(handler, {'user': {'id': user['id'], 'email': user['email']}})

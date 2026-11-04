@@ -11,6 +11,7 @@
 !studio_upload.py
 !studio_sync.py
 !studio_ingest.py
+!studio_pinterest.py
 !requirements.txt
 !vendor/
 !vendor/presentation.js
