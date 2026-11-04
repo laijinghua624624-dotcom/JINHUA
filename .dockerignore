@@ -30,6 +30,9 @@
 !mobile-icon-512.png
 !mobile-sw.js
 !mobile.webmanifest
+!capture.html
+!capture.css
+!capture.js
 !deliverables/
 !deliverables/*.pptx
 !deployment/

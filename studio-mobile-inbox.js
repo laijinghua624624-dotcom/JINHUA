@@ -27,8 +27,9 @@ async function pollMobileInbox(){
   const before=MobileInbox.unread,next=await countMobileInbox();
   if(next==null)mobileInboxFails++;else mobileInboxFails=0;
   if(next!=null&&before>0&&next>before)notify(`随身收件箱还有 ${next} 条待处理`,'info');
+  if(next>0&&MobileInbox.session&&typeof autoImportSimpleCaptures==='function')autoImportSimpleCaptures();
   if(route.view==='inbox'&&MobileInbox.session&&!MobileInbox.loading)await refreshMobileInbox();
-  scheduleMobileInboxPoll(mobileInboxFails>=3?300000:60000);
+  scheduleMobileInboxPoll(mobileInboxFails>=3?300000:30000);
 }
 function startMobileInboxPolling(){mobileInboxFails=0;scheduleMobileInboxPoll(4000);}
 function publishMobileOverviewToPhone(force=false){
@@ -58,6 +59,31 @@ function mobileLinkDialog(item){
   const url=mobileSafeLink(item.source_url),host=url?new URL(url).hostname.replace(/^www\./,''):'',shotdeck=/(^|\.)shotdeck\.com$/i.test(host),categories=[...new Set([...A.CATEGORIES,...globalAssets().map(a=>a.category)])];
   dialog('整理网页收藏',`<div class="callout"><strong>${shotdeck?'ShotDeck 内部参考模式':'先确认，再进入正式审美库'}</strong><br>${shotdeck?'只保存原始链接、你的说明及主动上传的截图／PDF；不会自动抓取网站内容。':'系统不会因为一条链接自动判断你的审美，先补充“为什么喜欢”再归档。'}</div><div class="formgrid"><label>标题<input id="mobile-link-title" value="${esc(item.title||host||'网页参考')}"></label><label>分类<input id="mobile-link-category" list="mobile-link-categories" value="摄影参考"><datalist id="mobile-link-categories">${categories.map(c=>`<option value="${esc(c)}">`).join('')}</datalist></label><label class="wide">标签（逗号分隔）<input id="mobile-link-tags" value="${esc(shotdeck?'ShotDeck，待整理':'网页收藏，待整理')}"></label><label>使用范围标记<select id="mobile-link-usage"><option value="internal-reference" selected>仅内部视觉参考</option><option value="link-only">只保存链接</option><option value="owned">本人／团队原创素材</option><option value="licensed">已确认授权素材</option></select></label><label>来源网站<input id="mobile-link-site" value="${esc(host)}"></label><label class="wide">为什么喜欢／准备借鉴什么<textarea id="mobile-link-notes">${esc(item.body||'')}</textarea></label></div>${folderMembership({folderIds:[]})}${item.file_name?`<p class="muted">将同时导入附件：${esc(item.file_name)}</p>`:''}`,
     btn('确认进入审美库','mobile-link-import',`data-id="${esc(item.id)}"`,true)+btn('改存为灵感文字','mobile-link-fragment',`data-id="${esc(item.id)}"`));
+}
+
+let autoCaptureBusy=false;
+async function autoImportSimpleCaptures(){
+  if(autoCaptureBusy||!StudioCloud.configured())return;
+  autoCaptureBusy=true;
+  const startScope=scope;
+  try{
+    MobileInbox.session=MobileInbox.session||await StudioCloud.session();
+    if(!MobileInbox.session)return;
+    const items=await StudioCloud.listInbox();
+    const pending=(items||[]).filter(item=>item.status==='inbox'&&item.metadata&&item.metadata.capture==='simple');
+    if(!pending.length)return;
+    let done=0;
+    for(const item of pending){
+      try{await importMobileItem(item,{destination:'fragment'});done++;}
+      catch(error){console.warn('auto capture import failed',item.id,error);}
+    }
+    if(done){
+      if(scope!==startScope){scope=startScope;localStorage.setItem('lance_studio_scope',scope);db=read(scope);save(false);}
+      render();
+      notify(`已把手机上的 ${done} 条记录收进资料库`,'info');
+    }
+  }catch(error){console.warn('auto capture import',error);}
+  finally{autoCaptureBusy=false;}
 }
 
 async function refreshMobileInbox(){
@@ -108,7 +134,7 @@ async function mobileInboxAction(action,e){
     const email=$('#mobile-cloud-email')?.value.trim(),password=$('#mobile-cloud-password')?.value||'';if(!email||password.length<8)throw Error('请输入邮箱和至少8位密码');
     const result=await (action==='mobile-sign-in'?StudioCloud.signIn(email,password):StudioCloud.signUp(email,password));
     if(!result?.access_token){StudioCloud.signOut();throw Error('注册已提交，请先到邮箱确认，再返回登录');}
-    MobileInbox.session=result;MobileInbox.loaded=false;await refreshMobileInbox();notify('随身同步已登录');return;
+    MobileInbox.session=result;MobileInbox.loaded=false;await refreshMobileInbox();if(typeof autoImportSimpleCaptures==='function')autoImportSimpleCaptures();notify('随身同步已登录');return;
   }
   if(action==='mobile-sign-out'){StudioCloud.signOut();MobileInbox.session=null;MobileInbox.items=[];MobileInbox.loaded=false;render();return;}
   if(action==='mobile-refresh'){MobileInbox.loaded=false;await refreshMobileInbox();return;}

@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#11140f">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>记一笔 · Lance</title>
+<link rel="icon" href="mobile-icon.svg">
+<link rel="apple-touch-icon" href="mobile-icon-180.png">
+<link rel="stylesheet" href="capture.css?v=20261105-c1">
+</head>
+<body>
+<main id="app">
+  <section id="login" class="login" hidden>
+    <h1>记一笔</h1>
+    <p class="muted">登录一次。手机、iPad 和 Mac 看到的是同一份资料。</p>
+    <label>邮箱<input id="email" type="email" autocomplete="email" inputmode="email" placeholder="你的邮箱"></label>
+    <label>密码<input id="password" type="password" autocomplete="current-password" placeholder="自建云同步密码"></label>
+    <button id="signin" class="primary">登录</button>
+    <p id="login-error" class="error" hidden></p>
+  </section>
+
+  <section id="home" hidden>
+    <header class="top">
+      <div><small>LANCE · 随手记</small><h1>记一笔</h1></div>
+      <button id="conn" class="conn" title="同步状态">已连接</button>
+    </header>
+
+    <nav class="spaces" aria-label="空间">
+      <button class="space active" data-space="xinxuan">My·工作</button>
+      <button class="space" data-space="personal">My·个人</button>
+    </nav>
+
+    <textarea id="note" rows="4" placeholder="现在想到什么…一句话、一个画面、一个链接都可以"></textarea>
+
+    <div class="quick">
+      <button data-act="photo"><span>📷</span>拍照</button>
+      <button data-act="library"><span>🖼️</span>相册</button>
+      <button data-act="voice"><span>🎙️</span>语音</button>
+      <button data-act="link"><span>🔗</span>链接</button>
+    </div>
+
+    <div id="preview" class="preview" hidden></div>
+    <input id="camera" type="file" accept="image/*" capture="environment" hidden>
+    <input id="library" type="file" accept="image/*,video/*" hidden>
+
+    <button id="save" class="primary save">保存到灵感</button>
+    <p class="hint">保存后自动进入 Mac 的资料库，不用再打开收件箱导入。</p>
+    <p id="status" class="status" role="status" hidden></p>
+
+    <section class="recent">
+      <div class="recent-head"><h2>最近记录</h2><button id="refresh" class="link">刷新</button></div>
+      <div id="recent-list" class="list"></div>
+    </section>
+
+    <p class="old">需要雷达或项目概览？<a href="mobile.html">打开旧版随身版</a> · <a href="/?desktop=1">完整工作台</a></p>
+  </section>
+</main>
+<script src="mobile-config.js"></script>
+<script src="studio-cloud-vps.js?v=20261105-c1"></script>
+<script src="studio-cloud.js?v=20261105-c1"></script>
+<script src="capture.js?v=20261105-c1"></script>
+</body>
+</html>

@@ -1,0 +1,57 @@
+:root{--bg:#0f120e;--panel:#171c14;--panel2:#20261b;--ink:#f2f6ea;--muted:#9aa692;--lime:#d9ff6b;--line:#2c3526;--danger:#ff8b7b}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 -apple-system,BlinkMacSystemFont,"PingFang SC","Hiragino Sans GB",sans-serif}
+body{padding:max(18px,env(safe-area-inset-top)) 18px max(28px,env(safe-area-inset-bottom));max-width:620px;margin:0 auto}
+h1,h2{margin:0;font-weight:650}
+h1{font-size:26px;letter-spacing:.5px}
+h2{font-size:15px}
+small,.muted{color:var(--muted)}
+button{font:inherit;border:0;border-radius:14px;background:var(--panel2);color:var(--ink);padding:12px 14px;min-height:48px}
+button:active{transform:scale(.98)}
+button.primary{background:var(--lime);color:#11140f;font-weight:700}
+button:disabled{opacity:.5}
+input,textarea{width:100%;border:1px solid var(--line);border-radius:14px;background:var(--panel);color:var(--ink);padding:14px;font:inherit}
+textarea{resize:vertical;min-height:112px}
+.login{display:flex;flex-direction:column;gap:14px;padding-top:12vh}
+.login h1{font-size:34px}
+.login label{display:flex;flex-direction:column;gap:6px;color:var(--muted);font-size:13px}
+.login button{margin-top:6px}
+.error{color:var(--danger);font-size:13px;margin:0}
+.top{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:16px}
+.top small{font-size:11px;letter-spacing:1.5px}
+.top h1{font-size:30px;margin-top:2px}
+.conn{font-size:12px;padding:8px 12px;min-height:38px;border:1px solid var(--line);background:transparent;color:var(--muted)}
+.conn.ok{color:var(--lime);border-color:#40521f}
+.conn.off{color:var(--danger)}
+.spaces{display:flex;gap:8px;margin-bottom:12px}
+.spaces .space{flex:1;border:1px solid var(--line);background:transparent;color:var(--muted)}
+.spaces .space.active{background:var(--lime);color:#11140f;border-color:var(--lime);font-weight:600}
+.quick{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin:12px 0}
+.quick button{display:flex;flex-direction:column;align-items:center;gap:4px;padding:12px 4px;font-size:13px;color:var(--muted);border:1px solid var(--line);background:var(--panel)}
+.quick button span{font-size:22px}
+.quick button.active{border-color:var(--lime);color:var(--lime)}
+.preview{margin:10px 0;padding:12px;background:var(--panel);border:1px solid var(--line);border-radius:16px;display:flex;gap:12px;align-items:center}
+.preview img,.preview video{width:88px;height:88px;object-fit:cover;border-radius:12px;background:#000}
+.preview audio{width:100%}
+.preview .meta{flex:1;min-width:0;font-size:13px;color:var(--muted);word-break:break-all}
+.preview .remove{padding:8px 10px;min-height:36px;background:transparent;border:1px solid var(--line);color:var(--muted)}
+.record{display:flex;align-items:center;gap:10px;color:var(--danger)}
+.dot{width:10px;height:10px;border-radius:50%;background:var(--danger);animation:pulse 1.2s infinite}
+@keyframes pulse{50%{opacity:.3}}
+.save{width:100%;margin-top:6px;font-size:17px}
+.hint{font-size:12px;color:var(--muted);text-align:center;margin:10px 0 0}
+.status{font-size:13px;text-align:center;margin:8px 0 0}
+.status.ok{color:var(--lime)}
+.status.bad{color:var(--danger)}
+.recent{margin-top:26px}
+.recent-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
+.link{background:transparent;padding:6px;min-height:auto;color:var(--lime);font-size:13px}
+.list{display:flex;flex-direction:column;gap:8px}
+.item{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:12px 14px}
+.item .row{display:flex;justify-content:space-between;gap:8px;font-size:11px;color:var(--muted);margin-bottom:4px}
+.item .badge{color:var(--lime)}
+.item p{margin:0;font-size:14px;white-space:pre-wrap;word-break:break-word;max-height:88px;overflow:hidden}
+.empty{color:var(--muted);font-size:13px;padding:16px 0;text-align:center}
+.old{margin-top:24px;text-align:center;font-size:12px;color:var(--muted)}
+.old a{color:var(--muted)}
+@media(min-width:760px){body{padding-top:44px}.quick button{font-size:15px}}
