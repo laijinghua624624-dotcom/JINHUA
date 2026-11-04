@@ -1,12 +1,17 @@
 /* Lightweight authenticated sync for the mobile companion and desktop inbox. */
 (function(root,factory){
   const base=factory(root);
-  let mode='supabase';
+  let mode='vps';
   try{
     const params=new URLSearchParams((root.location&&root.location.search)||'');
     const requested=params.get('mode');
-    if(requested==='vps'||requested==='supabase')root.localStorage.setItem('lance_sync_mode',requested);
-    mode=root.localStorage.getItem('lance_sync_mode')||'supabase';
+    const stored=root.localStorage.getItem('lance_sync_mode');
+    if((requested==='vps'||requested==='supabase')&&requested!==stored){
+      root.localStorage.setItem('lance_sync_mode',requested);
+      root.localStorage.removeItem('jinhua_cloud_session_v1');
+      root.localStorage.removeItem('jinhua_vps_session_v1');
+    }
+    mode=(requested==='vps'||requested==='supabase'?requested:stored)||'vps';
   }catch{}
   const api=mode==='vps'&&root.StudioCloudVps?Object.assign({},base,root.StudioCloudVps):base;
   if(typeof module==='object')module.exports=api;else root.StudioCloud=api;

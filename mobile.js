@@ -161,6 +161,7 @@ function switchSyncProvider(mode){
   try{
     localStorage.setItem('lance_sync_mode',mode);
     localStorage.removeItem('jinhua_cloud_session_v1');
+    localStorage.removeItem('jinhua_vps_session_v1');
     const url=new URL(location.href);url.searchParams.delete('mode');
     history.replaceState(null,'',url.pathname+url.search+'#account');
     location.reload();

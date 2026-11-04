@@ -29,11 +29,17 @@
 		reverse_proxy lance:10000
 	}
 
-	# 工作台 + 报价系统：要密码
-	handle {
+	# 工作台 UI 公开：只有一个自建云登录；报价、媒体、后台和普通 API 仍要站点密码
+	@private path /quote /quote/* /media/* /admin* /api/* /deliverables/*
+	handle @private {
 		basic_auth {
 			lance {$LANCE_PASSWORD_HASH}
 		}
+		reverse_proxy lance:10000
+	}
+
+	# 其余静态页面（工作台 UI）公开，数据由自建云账号保护
+	handle {
 		reverse_proxy lance:10000
 	}
 }

@@ -402,7 +402,7 @@ function showMobilePairing(){
 }
 function showCloudSync(){
   if(!StudioCloud.configured()){dialog('保存与恢复','<p class="missing">跨设备保存尚未配置。</p>');return;}
-  if(!cloudState.session){dialog('登录云端同步',`<p class="muted">${VPS_SYNC?'使用自建云服务器上的同步账号（邮箱 + 密码）。':'使用与手机随身收件箱相同的账号。这里填的是当时注册 JINHUA 时设置的密码，不是邮箱本身的密码。'}</p><div class="formgrid"><label>邮箱<input id="workbench-cloud-email" type="email" autocomplete="email"></label><label>密码<input id="workbench-cloud-password" type="password" autocomplete="current-password" minlength="8"></label></div>`,btn('登录','workbench-cloud-login','',true));return;}
+  if(!cloudState.session){dialog(VPS_SYNC?'登录 Lance':'登录云端同步',`<p class="muted">${VPS_SYNC?'使用自建云服务器上的同步账号（邮箱 + 密码）。':'使用与手机随身收件箱相同的账号。这里填的是当时注册 JINHUA 时设置的密码，不是邮箱本身的密码。'}</p><div class="formgrid"><label>邮箱<input id="workbench-cloud-email" type="email" autocomplete="email"></label><label>密码<input id="workbench-cloud-password" type="password" autocomplete="current-password" minlength="8"></label></div>`,btn('登录','workbench-cloud-login','',true));return;}
   const currentName=scope==='xinxuan'?'My·工作':'My·个人';
   dialog('保存与恢复',`<p class="account-line">已登录：${esc(cloudState.session.user?.email||'')} · ${VPS_SYNC?'自建云服务器':'Supabase'} · 本设备：${esc(workbenchDeviceId().slice(0,8))}</p><div id="sync-live">${syncLiveHTML()}</div><div id="sync-progress" class="sync-progress" ${cloudState.progress?'':'hidden'}>${syncProgressHTML()}</div><div class="sync-columns"><section><h3>当前设备</h3><div id="sync-local">${localSyncColumnsHTML()}</div></section><section><h3>云端主版本</h3><div id="sync-cloud">${cloudSyncColumnsHTML()}</div></section></div>${cloudState.error?`<p class="missing">${esc(cloudState.error)}</p>`:''}<details class="danger-zone"><summary>高级恢复（通常不需要）</summary><p class="muted">只处理当前的 ${currentName}。系统禁止空白版本覆盖已有云端成果。</p><div class="actions">${btn('从云端重新恢复','workbench-cloud-pull')}${btn('明确以本机为主','workbench-cloud-push','class="danger"')}</div></details><details class="danger-zone"><summary>重新开始（清空本地与公网）</summary><p class="muted">会同时清空 My·工作、My·个人的项目、收藏、反推、素材记录、文件夹、导出记录和AI用量。云端恢复备份会先自动保存；登录账号、收件箱、系统连接和个人资料底稿会保留。</p><div class="actions">${btn('清空全部工作内容','workbench-cloud-clean-request','class="danger"')}</div></details>`,btn('立即检查保存','workbench-cloud-sync-now','',true)+btn('校验素材','workbench-cloud-verify')+(VPS_SYNC?'':btn('手机扫码登录','workbench-cloud-pair'))+btn('退出同步账号','workbench-cloud-signout'));
   refreshSyncUI(true);
@@ -1107,7 +1107,7 @@ function resumeWorkbenchSync(openPanel=false){
   return workbenchSyncPromise;
 }
 try{
-  db=read(scope);save(false);workspaceReady=true;render();applyProfileSeed();resumeWorkbenchSync(new URLSearchParams(location.search).get('sync')==='1');StudioCapture.handleIncoming();if(typeof startMobileInboxPolling==='function')startMobileInboxPolling();
+  db=read(scope);save(false);workspaceReady=true;render();applyProfileSeed();resumeWorkbenchSync(new URLSearchParams(location.search).get('sync')==='1');StudioCapture.handleIncoming();if(typeof startMobileInboxPolling==='function')startMobileInboxPolling();if(VPS_SYNC)setTimeout(()=>{if(!cloudState.session&&!$('#dialog')?.open)showCloudSync();},800);
   api('health',undefined,{timeout:5000}).then(h=>{health=h;refreshSyncUI();}).catch(()=>{});
 }catch(error){$('#app').textContent=error.message;}
 window.addEventListener('online',()=>resumeWorkbenchSync(false));

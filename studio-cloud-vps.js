@@ -10,7 +10,7 @@
 })(globalThis, function(root) {
   'use strict';
 
-  const SESSION_KEY = 'jinhua_cloud_session_v1';
+  const SESSION_KEY = 'jinhua_vps_session_v1';
   const BASE = '/api/sync';
 
   function configured() { return true; }

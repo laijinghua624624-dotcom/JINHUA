@@ -1,4 +1,4 @@
-const CACHE='jinhua-mobile-v34';
+const CACHE='jinhua-mobile-v36';
 const ASSETS=['./mobile.html','./mobile.css','./mobile.js','./mobile-config.js','./studio-cloud.js','./studio-cloud-vps.js','./studio-radar.js','./mobile.webmanifest','./mobile-icon.svg','./mobile-icon-180.png','./mobile-icon-192.png','./mobile-icon-512.png'];
 self.addEventListener('install',event=>event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(ASSETS)).then(()=>self.skipWaiting())));
 self.addEventListener('activate',event=>event.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(key=>key!==CACHE).map(key=>caches.delete(key)))).then(()=>self.clients.claim())));
