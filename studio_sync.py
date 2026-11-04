@@ -221,8 +221,15 @@ def _issue_tokens(user, device_id=''):
             'user': {'id': user_id, 'email': email}}
 
 
+def _client_ip(handler):
+    forwarded = (handler.headers.get('X-Forwarded-For') or '').split(',')[0].strip()
+    if forwarded and re.fullmatch(r'[0-9a-fA-F:.]+', forwarded):
+        return forwarded
+    return handler.client_address[0] if getattr(handler, 'client_address', None) else 'local'
+
+
 def _login_guard(handler):
-    ip = handler.client_address[0] if getattr(handler, 'client_address', None) else 'local'
+    ip = _client_ip(handler)
     now = time.time()
     with _login_lock:
         hits = [t for t in _login_failures.get(ip, []) if now - t < 600]
@@ -232,7 +239,7 @@ def _login_guard(handler):
 
 
 def _login_failed(handler):
-    ip = handler.client_address[0] if getattr(handler, 'client_address', None) else 'local'
+    ip = _client_ip(handler)
     with _login_lock:
         _login_failures.setdefault(ip, []).append(time.time())
 
