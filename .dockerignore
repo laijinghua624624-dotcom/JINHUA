@@ -30,3 +30,6 @@
 !deployment/
 !deployment/Caddyfile.render
 !deployment/start-render.sh
+
+!quote/
+!quote/**
