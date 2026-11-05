@@ -1718,10 +1718,12 @@
       '<div class="modal-body"><div class="picker-search"><input type="search" data-search="picker" placeholder="搜索名称 / 型号，例如 FX3、图传、灯光助理…">' +
       '<div class="chips" data-picker-cats>' + chips + '</div></div>' +
       '<div class="picker-list"><table class="grid"><thead><tr><th style="width:36px"></th><th>名称</th><th>分类</th><th>单位</th><th class="num">报价单价</th><th class="num">库存</th></tr></thead><tbody>' + rows + '</tbody></table></div>' +
-      '<details style="margin-top:12px"><summary class="muted small" style="cursor:pointer">找不到？手动新增一条（会同时加入器材库）</summary><div class="form-grid" style="grid-template-columns:2fr 1fr 1fr 1fr;margin-top:10px">' +
-      '<label class="field">名称<input data-custom="name" placeholder="例如：Sony FX6 机身"></label>' +
+      '<details style="margin-top:12px"><summary class="muted small" style="cursor:pointer">找不到？手动新增一条（会同时加入器材库）</summary><div class="form-grid" style="grid-template-columns:2fr .8fr 1fr 1fr 1fr 1fr;margin-top:10px">' +
+      '<label class="field">名称<input data-custom="name" placeholder="例如：Sony FX6 机身 / 跟机员"></label>' +
       '<label class="field">单位<input data-custom="unit" value="台"></label>' +
-      '<label class="field">报价单价<input type="number" data-custom="quote" value="0"></label>' +
+      '<label class="field">底价<input type="number" step="0.01" data-custom="bottom" placeholder="0"></label>' +
+      '<label class="field">报价<input type="number" step="0.01" data-custom="quote" placeholder="0"></label>' +
+      '<label class="field">核价<input type="number" step="0.01" data-custom="approved" placeholder="0"></label>' +
       '<label class="field">类型<select data-custom="type"><option value="equipment">器材</option><option value="crew">人员</option></select></label>' +
       '<button class="btn light" data-act="picker-custom" style="grid-column:1/-1">新增并添加</button></div></details></div>' +
       '<div class="modal-foot"><span class="muted">已选 <b data-pick-count>0</b> 项</span><span class="spacer"></span>' +
@@ -2519,16 +2521,19 @@
     var target = state.ui.pickerTarget || {};
     var name = $('#modal-root [data-custom="name"]').value.trim();
     if (!name) { toast('请先填名称', 'warn'); return; }
-    var unit = $('#modal-root [data-custom="unit"]').value.trim() || '个';
-    var quote = M.num($('#modal-root [data-custom="quote"]').value);
     var type = $('#modal-root [data-custom="type"]').value;
+    var unit = $('#modal-root [data-custom="unit"]').value.trim() || (type === 'crew' ? '人' : '个');
+    var bottomIn = M.num($('#modal-root [data-custom="bottom"]').value);
+    var quote = M.num($('#modal-root [data-custom="quote"]').value);
+    var approvedIn = M.num($('#modal-root [data-custom="approved"]').value);
+    var bottom = bottomIn > 0 ? bottomIn : M.round2(quote / (1 + M.num(state.project.markupRate)));
+    var approved = approvedIn > 0 ? approvedIn : M.round2(quote * (1 - M.num(state.project.cutRate)));
     var ce = state.catalog.filter(function (x) { return M.normalizeName(x.name) === M.normalizeName(name); })[0];
     if (!ce) {
       ce = {
-        id: uid('eq'), key: M.normalizeName(name), name: name, cat: type === 'crew' ? '人员' : '其他', unit: unit, type: type,
-        bottom: M.round2(quote / (1 + M.num(state.project.markupRate))),
-        quote: quote, approved: M.round2(quote * (1 - M.num(state.project.cutRate))),
-        stock: null, note: ''
+        id: uid('eq'), key: M.normalizeName(name), name: name, cat: type === 'crew' ? '人员' : M.classifyName(name, 'equipment'), unit: unit, type: type,
+        bottom: bottom, quote: quote, approved: approved,
+        stock: null, note: type === 'crew' ? ruleForCrew(name) : ''
       };
       state.catalog.push(ce);
     }
