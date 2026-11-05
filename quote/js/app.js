@@ -348,6 +348,251 @@
     walkAllItems(function (it) { if (M.normalizeName(it.name) === k) n += 1; });
     return n;
   }
+  var smartImport = null;
+
+  function openSmartImport() {
+    openModal('<div class="modal" style="width:min(720px,100%)"><div class="modal-head"><h3>智能识别导入</h3><button class="x-btn" data-act="modal-close">✕</button></div>' +
+      '<div class="modal-body"><div id="smart-drop" style="border:1.5px dashed var(--line-2);border-radius:12px;padding:28px 18px;text-align:center;background:#fafbf9">' +
+      '<div style="font-size:30px;line-height:1">📄</div><p style="margin:10px 0 4px;font-weight:700">把供应商的器材表格拖到这里，或选择文件</p>' +
+      '<p class="muted small" style="margin:0 0 14px">支持 .xlsx / .csv / .tsv；自动识别名称、型号、分类、底价/报价、单位、库存</p>' +
+      '<input id="smart-file" type="file" accept=".xlsx,.csv,.tsv,.txt" style="display:none">' +
+      '<button class="btn primary" data-act="smart-pick">选择文件</button>' +
+      '<p class="muted small" style="margin:14px 0 0">旧版 .xls 请先用 Excel 另存为 .xlsx 或 CSV。</p></div></div>' +
+      '<div class="modal-foot"><span class="spacer"></span><button class="btn light" data-act="modal-close">取消</button></div></div>');
+  }
+  function smartPickFile() { var f = $('#smart-file'); if (f) f.click(); }
+  function smartFileText(file) {
+    return new Promise(function (resolve, reject) {
+      var r = new FileReader();
+      r.onerror = function () { reject(new Error('文件读取失败')); };
+      if (/\.(csv|tsv|txt)$/i.test(file.name)) { r.onload = function () { resolve({ text: String(r.result || '') }); }; r.readAsText(file, 'utf-8'); }
+      else { r.onload = function () { resolve({ buffer: r.result }); }; r.readAsArrayBuffer(file); }
+    });
+  }
+  function smartCellText(cell) {
+    if (!cell) return '';
+    var v = cell.value;
+    if (v === null || v === undefined) return '';
+    if (typeof v === 'object') {
+      if (v.richText) return v.richText.map(function (x) { return x.text || ''; }).join('');
+      if (v.text !== undefined) return String(v.text);
+      if (v.result !== undefined) return String(v.result);
+      if (v.hyperlink !== undefined) return String(v.text || v.hyperlink);
+      if (v.formula !== undefined) return '';
+    }
+    return String(v);
+  }
+  function smartSplitLine(line, d) {
+    var out = [], cur = '', q = false;
+    for (var i = 0; i < line.length; i++) {
+      var ch = line[i];
+      if (ch === '"') { if (q && line[i + 1] === '"') { cur += '"'; i++; } else q = !q; }
+      else if (ch === d && !q) { out.push(cur); cur = ''; }
+      else cur += ch;
+    }
+    out.push(cur);
+    return out.map(function (x) { return x.trim(); });
+  }
+  function smartParseDelimited(text) {
+    var lines = String(text || '').replace(/\r/g, '').split('\n').filter(function (l) { return l.trim() !== ''; });
+    if (!lines.length) return [];
+    var head = lines.slice(0, 6).join('\n');
+    var counts = { '\t': (head.match(/\t/g) || []).length, ',': (head.match(/,/g) || []).length, ';': (head.match(/;/g) || []).length };
+    var d = '\t'; Object.keys(counts).forEach(function (k) { if (counts[k] > counts[d]) d = k; });
+    return lines.map(function (l) { return smartSplitLine(l, d); });
+  }
+  var SMART_COLS = {
+    name: ['名称', '品名', '器材', '设备', '产品', '物料', '道具', '项目', '品名规格'],
+    model: ['型号', '规格型号', '规格', '型号规格'],
+    brand: ['品牌', '厂商', '厂家'],
+    cat: ['类别', '分类', '类型', '品类'],
+    unit: ['单位'],
+    stock: ['库存', '数量', '现有', '在库', '可租'],
+    bottom: ['底价', '成本价', '成本', '进货价', '采购价', '结算价', '同行价'],
+    quote: ['报价', '销售价', '售价', '租价', '租金', '日租', '单价', '价格'],
+    supplier: ['供应商', '供货商', '商家', '公司'],
+    note: ['备注', '说明', '参数', '配置', '描述', '备注说明'],
+    spec: ['规格', '型号', '参数']
+  };
+  function smartMatchHeader(cell) {
+    var t = String(cell || '').replace(/\s/g, '');
+    if (!t) return null;
+    var order = ['bottom', 'name', 'model', 'brand', 'cat', 'unit', 'stock', 'quote', 'supplier', 'note'];
+    for (var i = 0; i < order.length; i++) {
+      var k = order[i], arr = SMART_COLS[k];
+      for (var j = 0; j < arr.length; j++) if (t.indexOf(arr[j]) >= 0) return k;
+    }
+    return null;
+  }
+  function smartDetectHeader(rows) {
+    var best = { idx: -1, score: 0, map: null };
+    var max = Math.min(rows.length, 20);
+    for (var i = 0; i < max; i++) {
+      var row = rows[i] || [], map = {}, score = 0;
+      for (var c = 0; c < row.length; c++) {
+        var k = smartMatchHeader(row[c]);
+        if (k && map[k] === undefined) { map[k] = c; score += (k === 'name' ? 3 : (k === 'bottom' || k === 'quote' ? 2 : 1)); }
+      }
+      if (map.name === undefined && map.model !== undefined) { map.name = map.model; }
+      if (map.name !== undefined && score > best.score) best = { idx: i, score: score, map: map };
+    }
+    if (best.idx < 0) {
+      // 没有表头时按位置兜底：第一列名称，后面的数字列作为价格
+      var fallback = { idx: -1, score: 0, map: { name: 0 } };
+      return fallback;
+    }
+    return best;
+  }
+  function smartNum(v) {
+    if (v === null || v === undefined) return null;
+    var s = String(v).replace(/[¥￥,，\s元]/g, '');
+    var m = s.match(/-?\d+(?:\.\d+)?/);
+    return m ? Number(m[0]) : null;
+  }
+  function smartPriceSet(value, kind) {
+    var rate = M.num(state.settings.markupRate) || 30, cut = M.num(state.settings.cutRate) || 20;
+    var bottom = 0, quote = 0;
+    if (value === null || value === undefined || isNaN(value)) return { bottom: 0, quote: 0, approved: 0 };
+    if (kind === 'bottom') { bottom = M.round2(value); quote = M.round2(bottom * (1 + rate / 100)); }
+    else { quote = M.round2(value); bottom = M.round2(quote / (1 + rate / 100)); }
+    return { bottom: bottom, quote: quote, approved: M.round2(quote * (1 - cut / 100)) };
+  }
+  function smartRowsFromSheets(sheets) {
+    var out = [], debug = [];
+    sheets.forEach(function (sh) {
+      var rows = sh.rows || [];
+      if (!rows.length) return;
+      var found = smartDetectHeader(rows);
+      var map = found.map || {}, start = found.idx + 1;
+      var hasBottom = map.bottom !== undefined, hasQuote = map.quote !== undefined;
+      for (var i = start; i < rows.length; i++) {
+        var r = rows[i] || [];
+        var rawName = String(r[map.name] === undefined ? '' : r[map.name]).trim();
+        var rawModel = String(map.model === undefined ? '' : (r[map.model] || '')).trim();
+        var name = rawName || rawModel;
+        if (!name || name.length < 2) continue;
+        if (/^(合计|小计|总计|备注|说明|序号|名称|品名|器材|设备)/.test(name)) continue;
+        var cat = String(map.cat === undefined ? '' : (r[map.cat] || '')).trim();
+        var unit = String(map.unit === undefined ? '' : (r[map.unit] || '')).trim();
+        var stock = map.stock === undefined ? null : smartNum(r[map.stock]);
+        var note = String(map.note === undefined ? '' : (r[map.note] || '')).trim();
+        var brand = String(map.brand === undefined ? '' : (r[map.brand] || '')).trim();
+        if (rawModel && name.indexOf(rawModel) < 0) note = [note, '型号 ' + rawModel].filter(Boolean).join('；');
+        if (brand && name.indexOf(brand) < 0) note = [note, brand].filter(Boolean).join('；');
+        var value = null, kind = null;
+        if (hasBottom) { value = smartNum(r[map.bottom]); kind = 'bottom'; }
+        else if (hasQuote) {
+          value = smartNum(r[map.quote]);
+          var qh = String(r[map.quote] || '');
+          kind = /单价|价格/.test(qh) && !/报价|销售|售价|租/.test(qh) ? 'generic' : 'quote';
+        }
+        if (value === null) {
+          // 无表头兜底：取该行第一个数字作为价格
+          for (var c = 1; c < r.length; c++) { var n = smartNum(r[c]); if (n !== null && n > 0) { value = n; kind = 'generic'; break; } }
+        }
+        out.push({ name: name, cat: cat || M.classifyName(name, 'equipment'), unit: unit || '个', stock: stock, note: note, value: value, kind: kind || 'generic', sheet: sh.name || '' });
+      }
+      debug.push(sh.name + ':' + Math.max(0, rows.length - start));
+    });
+    return out;
+  }
+  function smartCalcRow(r, mode) {
+    if (r.value === null || r.value === undefined) return { bottom: 0, quote: 0, approved: 0 };
+    var kind = r.kind;
+    if (kind === 'generic') kind = mode === 'bottom' ? 'bottom' : 'quote';
+    return smartPriceSet(r.value, kind);
+  }
+  function smartRenderPreview() {
+    if (!smartImport) return;
+    var rows = smartImport.rows || [];
+    var mode = smartImport.mode || 'auto';
+    var body = rows.slice(0, 50).map(function (r, i) {
+      var p = smartCalcRow(r, mode);
+      return '<tr><td>' + (i + 1) + '</td><td>' + esc(r.name) + '</td><td>' + esc(r.cat || '') + '</td><td class="center">' + esc(r.unit || '') + '</td><td class="num">' + (r.stock === null ? '—' : r.stock) + '</td>' +
+        '<td class="num">' + money(p.bottom) + '</td><td class="num">' + money(p.quote) + '</td><td class="num muted">' + money(p.approved) + '</td>' +
+        '<td class="muted small">' + esc(r.note || '') + '</td></tr>';
+    }).join('');
+    openModal('<div class="modal" style="width:min(1180px,100%)"><div class="modal-head"><h3>识别结果 · ' + rows.length + ' 项</h3><button class="x-btn" data-act="modal-close">✕</button></div>' +
+      '<div class="modal-body"><div class="toolbar" style="margin:0 0 12px;flex-wrap:wrap">' +
+      '<span class="muted small">来源：' + esc(smartImport.fileName || '') + '</span>' +
+      '<select id="smart-price-mode" style="padding:8px 10px;border:1px solid var(--line-2);border-radius:9px">' +
+      '<option value="auto"' + (mode === 'auto' ? ' selected' : '') + '>价格按表头识别</option>' +
+      '<option value="bottom"' + (mode === 'bottom' ? ' selected' : '') + '>整列按底价</option>' +
+      '<option value="quote"' + (mode === 'quote' ? ' selected' : '') + '>整列按报价</option>' +
+      '</select>' +
+      '<input id="smart-supplier" value="' + esc(smartImport.supplier || '') + '" placeholder="供应商名称" style="padding:8px 10px;border:1px solid var(--line-2);border-radius:9px;min-width:160px">' +
+      '<select id="smart-dedupe" style="padding:8px 10px;border:1px solid var(--line-2);border-radius:9px">' +
+      '<option value="skip">同名器材：跳过</option><option value="update">同名器材：更新价格</option><option value="add">同名也新增</option></select>' +
+      '<span class="spacer"></span><span class="muted small">预览前 50 行；底价/报价按当前加价率换算</span></div>' +
+      '<div style="max-height:52vh;overflow:auto;border:1px solid var(--line);border-radius:10px"><table class="tbl"><thead><tr><th>#</th><th>名称</th><th>分类</th><th>单位</th><th>库存</th><th>底价</th><th>报价</th><th>核价</th><th>备注</th></tr></thead><tbody>' + body + '</tbody></table></div>' +
+      (rows.length > 50 ? '<p class="muted small" style="margin:8px 0 0">仅预览前 50 行，导入会包含全部 ' + rows.length + ' 项。</p>' : '') +
+      '</div><div class="modal-foot"><span class="spacer"></span><button class="btn light" data-act="modal-close">取消</button>' +
+      '<button class="btn primary" data-act="smart-import-confirm">导入 ' + rows.length + ' 项</button></div></div>');
+  }
+  function smartReadFile(file) {
+    toast('正在识别「' + file.name + '」…', 'ok');
+    smartFileText(file).then(function (data) {
+      var sheets = [];
+      if (data.text !== undefined) {
+        sheets.push({ name: 'CSV', rows: smartParseDelimited(data.text) });
+      } else {
+        if (!window.ExcelJS) throw new Error('Excel 解析组件未加载，请刷新页面');
+        var wb = new ExcelJS.Workbook();
+        return wb.xlsx.load(data.buffer).then(function () {
+          wb.eachSheet(function (ws) {
+            var rows = [];
+            ws.eachRow({ includeEmpty: false }, function (row) {
+              var vals = [], n = Math.min(row.cellCount || 0, 40);
+              for (var c = 1; c <= n; c++) vals.push(smartCellText(row.getCell(c)));
+              rows.push(vals);
+            });
+            sheets.push({ name: ws.name, rows: rows });
+          });
+          return sheets;
+        });
+      }
+      return sheets;
+    }).then(function (sheets) {
+      var rows = smartRowsFromSheets(sheets || []);
+      if (!rows.length) { toast('没有识别到器材行，请确认表格含名称/价格列', 'err'); return; }
+      smartImport = { rows: rows, fileName: file.name, mode: 'auto', supplier: file.name.replace(/\.[^.]+$/, '') };
+      smartRenderPreview();
+      toast('识别到 ' + rows.length + ' 项，请预览确认', 'ok');
+    }).catch(function (e) { toast(e.message || '识别失败', 'err'); });
+  }
+  function smartConfirmImport() {
+    if (!smartImport) return;
+    var mode = ($('#smart-dedupe') || {}).value || 'skip';
+    var priceMode = ($('#smart-price-mode') || {}).value || 'auto';
+    var supplier = (($('#smart-supplier') || {}).value || '').trim() || smartImport.supplier || '供应商导入';
+    var rows = smartImport.rows || [];
+    var existing = {};
+    state.catalog.forEach(function (e) { if (e.type !== 'crew') existing[M.normalizeName(e.name)] = e; });
+    var added = 0, updated = 0, skipped = 0;
+    rows.forEach(function (r) {
+      var key = M.normalizeName(r.name);
+      var old = existing[key];
+      var p = smartCalcRow(r, priceMode);
+      if (old && mode === 'skip') { skipped++; return; }
+      if (old && mode === 'update') {
+        old.bottom = p.bottom; old.quote = p.quote; old.approved = p.approved;
+        if (r.stock !== null) old.stock = r.stock;
+        if (r.unit) old.unit = r.unit;
+        if (r.cat) old.cat = r.cat;
+        if (r.note) old.note = r.note;
+        updated++; return;
+      }
+      var item = {
+        id: uid('eq'), key: key, name: r.name, cat: r.cat || M.classifyName(r.name, 'equipment'), unit: r.unit || '个', type: 'equipment',
+        bottom: p.bottom, quote: p.quote, approved: p.approved, stock: r.stock === null ? null : r.stock,
+        note: r.note || '', supplier: supplier, group: '供应商导入', src: '智能导入'
+      };
+      state.catalog.push(item); existing[key] = item; added++;
+    });
+    commit(); closeModal(); smartImport = null; render();
+    toast('导入完成：新增 ' + added + ' 项 · 更新 ' + updated + ' 项 · 跳过 ' + skipped + ' 项', 'ok');
+  }
+
   function addCatalog() {
     var name = prompt('新增器材名称（含型号），例如：Sony FX6 Camera摄影机机身：');
     if (!name) return;
@@ -1283,6 +1528,7 @@
       (crewMode
         ? '<button class="btn solid" data-act="sync-prices">价格同步到当前项目</button>'
         : '<button class="btn solid" data-act="sync-prices">价格同步到当前项目</button>' +
+          '<button class="btn solid" data-act="catalog-smart-import">智能识别导入</button>' +
           '<button class="btn light" data-act="auto-cat">自动识别分类</button>' +
           '<button class="btn light" data-act="cat-health">数据体检</button>') +
       (crewMode
@@ -1908,6 +2154,17 @@
   $('#modal-root').addEventListener('change', function (e) {
     var t = e.target;
     if (t.dataset.kitPick) updateKitPickCount();
+    if (t.id === 'smart-file' && t.files && t.files[0]) { smartReadFile(t.files[0]); t.value = ''; }
+    if (t.id === 'smart-price-mode' && smartImport) { smartImport.mode = t.value; smartRenderPreview(); }
+  });
+  $('#modal-root').addEventListener('dragover', function (e) {
+    if ($('#smart-drop')) { e.preventDefault(); $('#smart-drop').style.borderColor = 'var(--brand, #2f6f4f)'; }
+  });
+  $('#modal-root').addEventListener('drop', function (e) {
+    if (!$('#smart-drop')) return;
+    e.preventDefault();
+    var f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+    if (f) smartReadFile(f);
   });
   $('#modal-root').addEventListener('input', function (e) {
     if (e.target.dataset.search === 'picker') {
@@ -2080,6 +2337,8 @@
       case 'crew-star-filter': state.ui.starOnly = !state.ui.starOnly; commit(); render(); break;
       case 'catalog-del': delCatalog(el.dataset.eid); break;
       case 'catalog-export': downloadText(JSON.stringify(state.catalog, null, 2), '器材库_' + today() + '.json'); break;
+      case 'catalog-smart-import': openSmartImport(); break;
+      case 'smart-pick': smartPickFile(); break;
       case 'catalog-import': importFile(function (json) {
         if (!Array.isArray(json)) throw new Error('格式不对');
         state.catalog = json.map(function (e) { e.id = e.id || uid('eq'); return e; });
@@ -2107,6 +2366,7 @@
       case 'crew-add-save': saveCrewAdd(); break;
       case 'crew-card-save': saveCrewCard(el.dataset.eid); break;
       case 'profit-pin-ok': checkProfitPin(); break;
+      case 'smart-import-confirm': smartConfirmImport(); break;
       case 'share-copy': (function () {
         var u = window.__shareUrls || {}, t = el.dataset.target;
         var txt = t === 'checkin' ? u.checkin : (t === 'expense' ? u.expense : ('打卡/报销：' + u.checkin + '\n报销直达：' + u.expense));
