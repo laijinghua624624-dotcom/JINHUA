@@ -854,6 +854,13 @@
       '<span class="spacer"></span>' +
       '<button class="btn solid" data-act="go-order">去下单报价改数量 / 报价 →</button>' +
       '</div></div></section>' +
+      (state.catalog.filter(function (e) { return e.star; }).length ? '<section class="card"><div class="card-head"><h2>标星关注 · 有利润空间</h2><span class="sub">在下方逐行明细里点 ★ 标记；只在这里显示</span></div>' +
+        '<div class="table-wrap"><table class="grid"><thead><tr><th>名称</th><th>类型</th><th class="num">底价</th><th class="num">报价</th><th class="num">核价</th><th></th></tr></thead><tbody>' +
+        state.catalog.filter(function (e) { return e.star; }).map(function (e) {
+          return '<tr><td><span class="cat-tag ' + (e.type === 'crew' ? 'crew' : '') + '">' + (e.type === 'crew' ? '人员' : '器材') + '</span> ' + esc(e.name) + '</td>' +
+            '<td>' + esc(e.cat || '') + '</td><td class="num">' + money(e.bottom) + '</td><td class="num">' + money(e.quote) + '</td><td class="num">' + money(e.approved) + '</td>' +
+            '<td style="text-align:center"><button class="btn sm light" data-act="profit-star" data-eid="' + e.id + '">取消标星</button></td></tr>';
+        }).join('') + '</tbody></table></div></section>' : '') +
       '<section class="card"><div class="card-head"><h2>整组报价组（按组计费）</h2><span class="sub">伸缩炮组这类按整组给价的：勾选后按整组价格计费，明细只用于出库</span></div>' +
       '<div class="table-wrap"><table class="grid"><thead><tr><th style="min-width:160px">机位组</th><th>整组</th><th class="num">整组底价</th><th class="num">整组报价</th><th class="num">整组核价</th><th class="num">组数</th><th class="num">利润</th></tr></thead><tbody>' +
       p.groups.map(pkgGroupRow).join('') + '</tbody></table></div></section>' +
@@ -863,7 +870,7 @@
       '</tr></thead><tbody>' + p.groups.map(profitGroupRow).join('') + profitTotalRow(t) + '</tbody></table></div></section>' +
       '<section class="card"><div class="card-head"><h2>逐行明细</h2><span class="sub">底价 / 核价可直接改，利润自动重算；核价改过会记为你手动核价</span></div>' +
       '<div class="table-wrap"><table class="grid"><thead><tr>' +
-      '<th style="min-width:120px">机位组</th><th style="min-width:230px">器材 / 人员</th><th>单位</th><th class="num">数量</th><th class="num">底价</th><th class="num">报价</th><th class="num">核价</th><th class="num">返点</th><th class="num">利润</th><th class="num">利润率</th>' +
+      '<th style="min-width:120px">机位组</th><th style="min-width:230px">器材 / 人员</th><th>单位</th><th class="num">数量</th><th class="num">底价</th><th class="num">报价</th><th class="num">核价</th><th class="num">返点</th><th class="num">利润</th><th class="num">利润率</th><th style="width:44px">★</th>' +
       '</tr></thead><tbody>' + p.groups.map(profitDetailRows).join('') + '</tbody></table></div></section>' +
       '<div class="totals-bar">' +
       '<div class="t-item"><span class="t-label">我的利润</span><span class="t-val green" data-pt="profit">' + money(t.profit) + '</span></div>' +
@@ -935,6 +942,10 @@
         '<td class="num" data-dcell="rebate">' + money(prb) + '</td>' +
         '<td class="num profit-cell ' + (pp < 0 ? 'neg' : '') + '" data-dcell="profit">' + money(pp) + '</td>' +
         '<td class="num rate" data-dcell="rate">' + rate + '%</td>' +
+        '<td style="text-align:center">' + (function () {
+          var ce = state.catalog.filter(function (x) { return M.normalizeName(x.name) === M.normalizeName(it.name); })[0];
+          return ce ? '<button class="btn sm ' + (ce.star ? 'solid' : 'light') + '" data-act="profit-star" data-eid="' + ce.id + '" title="标记有利润空间">' + (ce.star ? '★' : '☆') + '</button>' : '<span class="muted">—</span>';
+        })() + '</td>' +
         '</tr>';
     }).join('');
   }
@@ -1519,10 +1530,7 @@
     var grpOpts = Object.keys(grps).sort().map(function (x) {
       return '<option value="' + esc(x) + '">' + esc(x) + '（' + grps[x] + '）</option>';
     }).join('');
-    var starOnly = crewMode && state.ui.starOnly;
-    var list = state.catalog.filter(function (e) { return crewMode ? e.type === 'crew' : true; }).filter(function (e) {
-      return !starOnly || e.star;
-    });
+    var list = state.catalog.filter(function (e) { return crewMode ? e.type === 'crew' : true; });
     var rows = list.map(crewMode ? crewRowHtml : catRowHtml).join('');
     var eqN = state.catalog.filter(function (e) { return e.type !== 'crew'; }).length;
     var crewN = state.catalog.length - eqN;
@@ -1538,8 +1546,7 @@
       (crewMode ? '' : '<select data-major-filter style="padding:8px 10px;border:1px solid var(--line-2);border-radius:9px"><option value="">全部大类</option><option value="摄影器材">摄影器材</option><option value="灯光器材">灯光器材</option><option value="其他">其他</option></select>') +
       '<select data-sup-filter style="padding:8px 10px;border:1px solid var(--line-2);border-radius:9px"><option value="">全部供应商</option>' + supOpts + '</select>' +
       '<select data-group-filter style="padding:8px 10px;border:1px solid var(--line-2);border-radius:9px;max-width:220px"><option value="">全部板块</option>' + grpOpts + '</select>' +
-      '<span class="lib-stats"><span>共 <b>' + state.catalog.length + '</b> 项</span><span>器材 <b>' + eqN + '</b></span><span>人员 <b>' + crewN + '</b></span>' + (crewMode ? '<span>标星 <b>' + state.catalog.filter(function (e) { return e.type === 'crew' && e.star; }).length + '</b></span>' : '') + '</span>' +
-      (crewMode ? '<button class="btn sm ' + (state.ui.starOnly ? 'solid' : 'light') + '" data-act="crew-star-filter">★ 只看有利润</button>' : '') +
+      '<span class="lib-stats"><span>共 <b>' + state.catalog.length + '</b> 项</span><span>器材 <b>' + eqN + '</b></span><span>人员 <b>' + crewN + '</b></span>' + '</span>' +
       '<span class="spacer"></span>' +
       (crewMode
         ? '<button class="btn solid" data-act="sync-prices">价格同步到当前项目</button>'
@@ -1575,7 +1582,6 @@
       '<td><input class="note" data-efield="note" value="' + esc(e.note || '') + '" placeholder="例如：加班费14小时开始算加班费，加班费为300/小时"></td>' +
       '<td style="text-align:center;white-space:nowrap">' +
       '<button class="btn sm light" data-act="crew-card" data-eid="' + e.id + '" title="岗位资料卡（加班费标准）">📇</button> ' +
-      '<button class="btn sm ' + (isStar(e) ? 'solid' : 'light') + '" data-act="catalog-star" data-eid="' + e.id + '" title="标记有利润空间">' + (isStar(e) ? '★' : '☆') + '</button> ' +
       '<button class="btn sm ' + (isLock(e) ? 'solid' : 'light') + '" data-act="catalog-lock" data-eid="' + e.id + '" title="锁定/解锁价格">' + (isLock(e) ? '🔒' : '🔓') + '</button> ' +
       '<button class="del" data-act="catalog-del" data-eid="' + e.id + '">✕</button></td></tr>';
   }
@@ -2357,6 +2363,7 @@
       case 'imp-expense': importExpense(); break;
       case 'summary-export': exportSummary(); break;
       case 'catalog-star': toggleCatalogStar(el.dataset.eid); break;
+      case 'profit-star': toggleCatalogStar(el.dataset.eid); render(); break;
       case 'crew-card': openCrewCard(el.dataset.eid); break;
       case 'catalog-lock': toggleCatalogLock(el.dataset.eid); break;
       case 'crew-star-filter': state.ui.starOnly = !state.ui.starOnly; commit(); render(); break;
