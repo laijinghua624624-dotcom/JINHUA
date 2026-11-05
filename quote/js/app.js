@@ -624,8 +624,10 @@
       '<label class="field">报价（元/天）<input id="ca-quote" type="number" step="0.01" value="600"></label>' +
       '<label class="field">底价（元/天）<input id="ca-bottom" type="number" step="0.01" value="600"></label>' +
       '<label class="field">核价（元/天）<input id="ca-approved" type="number" step="0.01" value="600"></label>' +
-      '<label class="field">加班费标准<input id="ca-note" placeholder="留空则用默认标准"></label>' +
-      '</div><p class="muted small" style="margin:10px 0 0">人员价格不会自动加价/砍价，按你填的数值保存。</p></div>' +
+      '<label class="field">加班起算（小时）<input id="ca-start" type="number" min="0" step="0.5" placeholder="例如 3"></label>' +
+      '<label class="field">加班费（元/小时）<input id="ca-rate" type="number" min="0" step="0.01" placeholder="例如 80"></label>' +
+      '</div><p id="ca-ot-preview" class="muted small" style="margin:10px 0 0">不填加班时间和费用则使用默认标准。</p>' +
+      '<p class="muted small" style="margin:6px 0 0">人员价格不会自动加价/砍价，按你填的数值保存；加班标准会保存到岗位资料卡。</p></div>' +
       '<div class="modal-foot"><span class="spacer"></span><button class="btn light" data-act="modal-close">取消</button>' +
       '<button class="btn primary" data-act="crew-add-save">保存并新增</button></div></div>');
   }
@@ -636,12 +638,16 @@
     var quote = M.num(($('#ca-quote') || {}).value);
     var bottom = M.num(($('#ca-bottom') || {}).value);
     var approved = M.num(($('#ca-approved') || {}).value);
-    var note = (($('#ca-note') || {}).value || '').trim() || ruleForCrew(name);
+    var startVal = (($('#ca-start') || {}).value === '' || ($('#ca-start') || {}).value === undefined) ? null : M.num(($('#ca-start') || {}).value);
+    var rateVal = (($('#ca-rate') || {}).value === '' || ($('#ca-rate') || {}).value === undefined) ? null : M.num(($('#ca-rate') || {}).value);
+    var note = (startVal !== null || rateVal !== null) ? overtimeText(startVal, rateVal, '小时') : ruleForCrew(name);
     var op = parseOvertime(note);
     state.catalog.push({
       id: uid('eq'), key: M.normalizeName(name), name: name, cat: '人员', unit: '人', type: 'crew',
       bottom: bottom, quote: quote, approved: approved, stock: null, note: note,
-      otStart: op ? op.start : null, otRate: op ? op.rate : null, otUnit: op ? op.unit : '小时',
+      otStart: startVal !== null ? startVal : (op ? op.start : null),
+      otRate: rateVal !== null ? rateVal : (op ? op.rate : null),
+      otUnit: '小时',
       supplier: '自定义', group: '人员', src: '自定义'
     });
     closeModal(); commit(); render();
@@ -2177,6 +2183,12 @@
     if (f) smartReadFile(f);
   });
   $('#modal-root').addEventListener('input', function (e) {
+    if (e.target.id === 'ca-start' || e.target.id === 'ca-rate') {
+      var st = (($('#ca-start') || {}).value === '' ? null : M.num(($('#ca-start') || {}).value));
+      var rt = (($('#ca-rate') || {}).value === '' ? null : M.num(($('#ca-rate') || {}).value));
+      var el = $('#ca-ot-preview');
+      if (el) el.textContent = (st !== null && rt !== null) ? overtimeText(st, rt, '小时') : (st !== null ? '加班费' + st + '小时开始算加班费（费用待填）' : (rt !== null ? '加班费按 ' + rt + ' 元/小时（起算时间待填）' : '不填加班时间和费用则使用默认标准。'));
+    }
     if (e.target.dataset.search === 'picker') {
       var chip = $('#modal-root .chip.active');
       pickerFilter(e.target.value.trim().toLowerCase(), chip ? chip.dataset.pcat : '');
