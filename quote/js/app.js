@@ -55,7 +55,7 @@
     setTimeout(function () { URL.revokeObjectURL(url); a.remove(); }, 800);
   }
   function defaultSettings() {
-    return { company: '广州市灯龙影视器材租赁有限公司', address: '广州市海珠区华洲路170号自编0栋101室之一', preparer: '赖京华', noPrefix: 'BJ', taxRate: 1, markupRate: 30, cutRate: 20, rebateRate: 5 };
+    return { company: '广州市灯龙影视器材租赁有限公司', address: '广州市海珠区华洲路170号自编0栋101室之一', preparer: '赖京华', noPrefix: 'BJ', taxRate: 1, markupRate: 30, cutRate: 20, rebateRate: 5, profitPin: '121223lai' };
   }
 
   /* ---------------- 状态 ---------------- */
@@ -66,7 +66,7 @@
       projects: [],
       project: null,
       settings: defaultSettings(),
-      ui: { tab: 'order', mode: 'order' },
+      ui: { tab: 'order', mode: 'order', profitUnlocked: false },
       meta: APP.meta || {}
     };
     s.project = emptyProject();
@@ -168,6 +168,7 @@
     document.title = (orderMode ? '下单报价' : '数据统计（内部）') + ' · 拍摄器材报价系统';
   }
   function setTab(tab, skipRender) {
+    if (tab === 'profit' && state.settings.profitPin && !state.ui.profitUnlocked) { openProfitPin(); return; }
     state.ui.tab = tab;
     if (tab === 'order') state.ui.mode = 'order';
     else if (PROFIT_TABS[tab]) state.ui.mode = 'profit';
@@ -594,6 +595,7 @@
       '<button class="btn light" data-act="sync-prices">按器材库刷新底价</button>' +
       '<button class="btn light" data-act="export-approved">导出核价单</button>' +
       '<button class="btn light" data-act="export-combined">导出报价+核价</button>' +
+      '<button class="btn light" data-act="lock-profit">🔒 锁定</button>' +
       '<span class="spacer"></span>' +
       '<button class="btn solid" data-act="go-order">去下单报价改数量 / 报价 →</button>' +
       '</div></div></section>' +
@@ -871,6 +873,34 @@
         '<p class="muted small" style="margin:0">服务启动后，链接会变成 <b>http://电脑IP:8137/m?job=项目ID</b> 的形式。</p></div>' +
         '<div class="modal-foot"><span class="spacer"></span><button class="btn light" data-act="modal-close">知道了</button></div></div>');
     });
+  }
+  function openProfitPin() {
+    openModal('<div class="modal" style="width:min(420px,100%)"><div class="modal-head"><h3>数据统计 · 访问验证</h3><button class="x-btn" data-act="modal-close">✕</button></div>' +
+      '<div class="modal-body"><p class="muted small" style="margin:0 0 10px">该页面含底价、返点和利润，请输入访问密码。</p>' +
+      '<input id="profit-pin" type="password" autocomplete="off" placeholder="访问密码" style="width:100%;padding:11px 12px;border:1px solid var(--line-2);border-radius:9px;font-size:15px">' +
+      '<div class="err" id="profit-pin-err" style="color:#b91c1c;font-size:12px;min-height:18px;margin-top:6px"></div>' +
+      '</div><div class="modal-foot"><span class="spacer"></span><button class="btn light" data-act="modal-close">取消</button>' +
+      '<button class="btn primary" data-act="profit-pin-ok">进入</button></div></div>');
+    setTimeout(function () { var el = document.getElementById('profit-pin'); if (el) el.focus(); }, 50);
+  }
+  function checkProfitPin() {
+    var el = document.getElementById('profit-pin');
+    var pin = (el && el.value) ? el.value.trim() : '';
+    if (pin === String(state.settings.profitPin || '')) {
+      state.ui.profitUnlocked = true;
+      closeModal();
+      setTab('profit');
+      toast('已验证，进入数据统计', 'ok');
+    } else {
+      var err = document.getElementById('profit-pin-err');
+      if (err) err.textContent = '密码不正确';
+      if (el) { el.value = ''; el.focus(); }
+    }
+  }
+  function lockProfit() {
+    state.ui.profitUnlocked = false;
+    setTab('order');
+    toast('已锁定数据统计', 'ok');
   }
   function openCheckinModal() {
     var base = checkinBase();
@@ -1375,6 +1405,7 @@
       '<label class="field">制表人<input data-sfield="preparer" value="' + esc(s.preparer) + '"></label>' +
       '<label class="field">报价单编号前缀<input data-sfield="noPrefix" value="' + esc(s.noPrefix) + '"></label>' +
       '<label class="field">默认税率 %<input type="number" min="0" step="0.01" data-sfield="taxRate" value="' + esc(M.round2(M.num(s.taxRate) * 100)) + '"></label>' +
+      '<label class="field">数据统计访问密码<input data-sfield="profitPin" value="' + esc(s.profitPin || '') + '" placeholder="留空则不设密码"></label>' +
       '</div></div></section>' +
       '<section class="card"><div class="card-head"><h2>默认价格比例（新项目生效）</h2><span class="sub">老项目在数据统计里单独改</span></div><div class="card-body">' +
       '<div class="form-grid" style="grid-template-columns:1fr 1fr">' +
@@ -2037,6 +2068,7 @@
       case 'ot-export': exportOvertime(); break;
       case 'checkin-link': openCheckinModal(); break;
       case 'proj-view': state.ui.tab = 'order'; state.ui.projView = el.dataset.view; render(); break;
+      case 'lock-profit': lockProfit(); break;
       case 'share-links': openShareLinks(); break;
       case 'ex-add': addExRow(); break;
       case 'ex-del': delExRow(el.dataset.id); break;
@@ -2079,6 +2111,7 @@
       case 'kits-add': kitsAddFromModal(); break;
       case 'crew-add-save': saveCrewAdd(); break;
       case 'crew-card-save': saveCrewCard(el.dataset.eid); break;
+      case 'profit-pin-ok': checkProfitPin(); break;
       case 'share-copy': (function () {
         var u = window.__shareUrls || {}, t = el.dataset.target;
         var txt = t === 'checkin' ? u.checkin : (t === 'expense' ? u.expense : ('打卡/报销：' + u.checkin + '\n报销直达：' + u.expense));
@@ -2384,6 +2417,10 @@
     if (t === 'overtime' || t === 'expenses' || t === 'stats') { state.ui.tab = 'order'; state.ui.projView = t; t = 'order'; }
     if (!HASH_TABS[t]) t = 'order';
     state.ui.tab = t;
+    if (t === 'profit' && state.settings.profitPin && !state.ui.profitUnlocked) {
+      state.ui.tab = 'order';
+      setTimeout(openProfitPin, 100);
+    }
     state.ui.mode = PROFIT_TABS[t] ? 'profit' : 'order';
     $('#storage-status').textContent = storageOK
       ? '本机存储：可用（数据只保存在这台电脑）'

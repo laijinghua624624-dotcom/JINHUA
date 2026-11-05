@@ -13,6 +13,7 @@ services:
       LANCE_ALLOWED_HOSTS: ${ALLOWED_HOSTS}
     volumes:
       - lance_data:/data
+      - ../../quote:/app/quote:ro
     expose:
       - "10000"
 
