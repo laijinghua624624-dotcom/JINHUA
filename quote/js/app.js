@@ -168,7 +168,11 @@
     document.title = (orderMode ? '下单报价' : '数据统计（内部）') + ' · 拍摄器材报价系统';
   }
   function setTab(tab, skipRender) {
-    if (tab === 'profit' && state.settings.profitPin && !state.ui.profitUnlocked) { openProfitPin(); return; }
+    if ((tab === 'profit' || tab === 'settings') && state.settings.profitPin && !state.ui.profitUnlocked) {
+      state.ui.pinTarget = tab;
+      openProfitPin();
+      return;
+    }
     state.ui.tab = tab;
     if (tab === 'order') state.ui.mode = 'order';
     else if (PROFIT_TABS[tab]) state.ui.mode = 'profit';
@@ -1121,7 +1125,7 @@
   }
   function openProfitPin() {
     openModal('<div class="modal" style="width:min(420px,100%)"><div class="modal-head"><h3>数据统计 · 访问验证</h3><button class="x-btn" data-act="modal-close">✕</button></div>' +
-      '<div class="modal-body"><p class="muted small" style="margin:0 0 10px">该页面含底价、返点和利润，请输入访问密码。</p>' +
+      '<div class="modal-body"><p class="muted small" style="margin:0 0 10px">该页面包含内部数据或系统设置，请输入访问密码。</p>' +
       '<input id="profit-pin" type="password" autocomplete="off" placeholder="访问密码" style="width:100%;padding:11px 12px;border:1px solid var(--line-2);border-radius:9px;font-size:15px">' +
       '<div class="err" id="profit-pin-err" style="color:#b91c1c;font-size:12px;min-height:18px;margin-top:6px"></div>' +
       '</div><div class="modal-foot"><span class="spacer"></span><button class="btn light" data-act="modal-close">取消</button>' +
@@ -1132,10 +1136,11 @@
     var el = document.getElementById('profit-pin');
     var pin = (el && el.value) ? el.value.trim() : '';
     if (pin === String(state.settings.profitPin || '')) {
+      var target = state.ui.pinTarget || 'profit';
       state.ui.profitUnlocked = true;
       closeModal();
-      setTab('profit');
-      toast('已验证，进入数据统计', 'ok');
+      setTab(target);
+      toast('已验证，进入' + (target === 'settings' ? '设置' : '数据统计'), 'ok');
     } else {
       var err = document.getElementById('profit-pin-err');
       if (err) err.textContent = '密码不正确';
@@ -1146,6 +1151,11 @@
     state.ui.profitUnlocked = false;
     setTab('order');
     toast('已锁定数据统计', 'ok');
+  }
+  function lockSettings() {
+    state.ui.profitUnlocked = false;
+    setTab('order');
+    toast('已锁定设置', 'ok');
   }
   function openCheckinModal() {
     var base = checkinBase();
@@ -1638,7 +1648,7 @@
   /* ---------------- 设置 ---------------- */
   function renderSettings() {
     var s = state.settings;
-    return '<div class="page"><div class="settings-grid">' +
+    return '<div class="page"><div class="toolbar" style="margin:0 0 12px"><span class="spacer"></span><button class="btn light" data-act="lock-settings">🔒 锁定设置</button></div><div class="settings-grid">' +
       '<section class="card"><div class="card-head"><h2>公司与单据信息</h2><span class="sub">导出的报价单会用这里的抬头</span></div><div class="card-body">' +
       '<div class="form-grid" style="grid-template-columns:1fr 1fr">' +
       '<label class="field span-2">承接单位<input data-sfield="company" value="' + esc(s.company) + '"></label>' +
@@ -1646,7 +1656,7 @@
       '<label class="field">制表人<input data-sfield="preparer" value="' + esc(s.preparer) + '"></label>' +
       '<label class="field">报价单编号前缀<input data-sfield="noPrefix" value="' + esc(s.noPrefix) + '"></label>' +
       '<label class="field">默认税率 %<input type="number" min="0" step="0.01" data-sfield="taxRate" value="' + esc(M.round2(M.num(s.taxRate) * 100)) + '"></label>' +
-      '<label class="field">数据统计访问密码<input data-sfield="profitPin" value="' + esc(s.profitPin || '') + '" placeholder="留空则不设密码"></label>' +
+      '<label class="field">数据统计 / 设置访问密码<input data-sfield="profitPin" value="' + esc(s.profitPin || '') + '" placeholder="留空则不设密码"></label>' +
       '</div></div></section>' +
       '<section class="card"><div class="card-head"><h2>默认价格比例（新项目生效）</h2><span class="sub">老项目在数据统计里单独改</span></div><div class="card-body">' +
       '<div class="form-grid" style="grid-template-columns:1fr 1fr">' +
@@ -2321,6 +2331,7 @@
       case 'checkin-link': openCheckinModal(); break;
       case 'proj-view': state.ui.tab = 'order'; state.ui.projView = el.dataset.view; render(); break;
       case 'lock-profit': lockProfit(); break;
+      case 'lock-settings': lockSettings(); break;
       case 'share-links': openShareLinks(); break;
       case 'ex-add': addExRow(); break;
       case 'ex-del': delExRow(el.dataset.id); break;
@@ -2672,7 +2683,8 @@
     if (t === 'overtime' || t === 'expenses' || t === 'stats') { state.ui.tab = 'order'; state.ui.projView = t; t = 'order'; }
     if (!HASH_TABS[t]) t = 'order';
     state.ui.tab = t;
-    if (t === 'profit' && state.settings.profitPin && !state.ui.profitUnlocked) {
+    if ((t === 'profit' || t === 'settings') && state.settings.profitPin && !state.ui.profitUnlocked) {
+      state.ui.pinTarget = t;
       state.ui.tab = 'order';
       setTimeout(openProfitPin, 100);
     }
