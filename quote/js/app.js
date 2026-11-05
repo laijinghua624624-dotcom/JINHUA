@@ -1267,11 +1267,6 @@
     var crewN = state.catalog.length - eqN;
 
     return '<div class="page">' +
-      '<div class="hint danger"><span class="pill danger">内部</span> ' +
-      (crewMode
-        ? '人员标准：报价/底价/核价都可手动改（互不联动）；加班费标准会同步到组合和当前项目里的同名人员。'
-        : '器材价格：改名称会同步到组合和项目里的同名器材；改价格可用「价格同步到当前项目」。底价 = 报价 ÷ 1.3（估算）。') +
-      '</div>' +
       '<div class="toolbar">' +
       '<div class="seg" style="display:flex;gap:0;border:1px solid var(--line-2);border-radius:9px;overflow:hidden">' +
       '<button class="btn sm ' + (crewMode ? 'light' : 'solid') + '" data-act="catalog-mode" data-mode="equipment" style="border-radius:0">器材价格</button>' +

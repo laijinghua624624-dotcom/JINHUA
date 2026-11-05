@@ -260,7 +260,7 @@
     merge(ws, r, 1, r, 14, '利润率（对核价）', { font: font(11, true), fill: AMBER, align: { vertical: 'middle', horizontal: 'right' } });
     cell(ws, r, 15, tot.profitRateApproved + '%', { font: font(11, true), fill: AMBER });
     ws.getRow(r).height = 26; r += 2;
-    merge(ws, r, 1, r, heads.length, '注意：本页含底价、返点和利润，属于内部资料，请勿随报价单发给公司或供应商。底价目前按历史报价÷(1+加价率) 估算，请以供应商实际底价为准（可在器材库逐项修改）。', { font: font(9.5, true, 'FF991B1B'), left: true, border: false });
+    merge(ws, r, 1, r, heads.length, '注意：本页含内部价格数据，请勿对外发送。', { font: font(9.5, true, 'FF991B1B'), left: true, border: false });
     ws.views = [{ state: 'frozen', ySplit: 5 }];
     ws.pageSetup = { orientation: 'landscape', paperSize: 9, fitToPage: true, fitToWidth: 1, fitToHeight: 0, margins: { left: 0.3, right: 0.3, top: 0.45, bottom: 0.45, header: 0.2, footer: 0.25 } };
     ws.headerFooter = { oddFooter: '&C利润测算（内部）　第 &P 页 / 共 &N 页' };
