@@ -101,7 +101,7 @@ function saveCatalog() {
 function safeSeg(v) { return String(v || '').replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 60) || 'misc'; }
 function archEntry(projectId) {
   const k = safeSeg(projectId);
-  if (!archives[k]) archives[k] = { projectId: String(projectId || ''), projectName: '', files: [] };
+  if (!archives[k]) archives[k] = { projectId: String(projectId || ''), projectName: '', files: [], archiveOnly: false };
   return { k: k, entry: archives[k] };
 }
 function lanUrls() {
@@ -233,6 +233,74 @@ const server = http.createServer((req, res) => {
     const head = ['项目', '日期', '部门', '职位', '姓名', '费用类型', '同乘人', '前往费用', '停车费', '过路费', '离开费用', '小计', '备注', '票据'];
     const lines = [head.join(',')].concat(exps.map(e => [(e.jobName || ''), e.date, e.dept, e.role, e.name, e.type === 'equipment' ? '器材运输' : '网约车', (e.passengers || '').replace(/[\r\n,]/g, ' '), e.goCost, e.parking, e.toll, e.leaveCost, (Number(e.goCost) + Number(e.parking) + Number(e.toll) + Number(e.leaveCost)).toFixed(2), (e.note || '').replace(/[\r\n,]/g, ' '), base + '/' + e.photo].map(v => '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"').join(',')));
     return send(res, 200, 'text/csv; charset=utf-8', '\ufeff' + lines.join('\r\n'), { 'Content-Disposition': 'attachment; filename="expenses.csv"' });
+  }
+  if (p === '/api/archive/projects') {
+    const list = Object.keys(archives).map(function (k) { return archives[k]; }).filter(function (x) { return x && x.archiveOnly; }).map(function (x) {
+      return {
+        projectId: x.projectId, projectName: x.projectName || '', date: x.date || '', client: x.client || '', supplier: x.supplier || '',
+        contractAmount: x.contractAmount === undefined ? '' : x.contractAmount,
+        invoiceAmount: x.invoiceAmount === undefined ? '' : x.invoiceAmount,
+        cost: x.cost === undefined ? '' : x.cost,
+        note: x.note || '', files: x.files || [], updatedAt: x.updatedAt || '', archiveOnly: true
+      };
+    });
+    return json(res, { ok: true, projects: list });
+  }
+  if (p === '/api/archive/project/save' && req.method === 'POST') {
+    return readBody(req, 256 * 1024, (err, buf) => {
+      if (err) return json(res, { ok: false }, 400);
+      let body; try { body = JSON.parse(buf.toString('utf8')); } catch (e) { return json(res, { ok: false }, 400); }
+      const projectId = String(body.projectId || '').trim();
+      if (!projectId) return json(res, { ok: false, error: '缺少项目ID' }, 400);
+      const a = archEntry(projectId);
+      a.entry.archiveOnly = true;
+      a.entry.projectName = String(body.projectName || '').slice(0, 200);
+      a.entry.date = String(body.date || '').slice(0, 40);
+      a.entry.client = String(body.client || '').slice(0, 120);
+      a.entry.supplier = String(body.supplier || '').slice(0, 120);
+      a.entry.contractAmount = body.contractAmount === '' || body.contractAmount === null || body.contractAmount === undefined ? '' : Number(body.contractAmount) || 0;
+      a.entry.invoiceAmount = body.invoiceAmount === '' || body.invoiceAmount === null || body.invoiceAmount === undefined ? '' : Number(body.invoiceAmount) || 0;
+      a.entry.cost = body.cost === '' || body.cost === null || body.cost === undefined ? '' : Number(body.cost) || 0;
+      a.entry.note = String(body.note || '').slice(0, 2000);
+      a.entry.updatedAt = new Date().toLocaleString('zh-CN', { hour12: false });
+      a.entry.files = a.entry.files || [];
+      saveArchives();
+      json(res, { ok: true, project: { projectId: a.entry.projectId, files: a.entry.files.length } });
+    });
+  }
+  if (p === '/api/archive/upload-raw' && req.method === 'POST') {
+    const projectId = String(req.headers['x-project-id'] || '').trim();
+    const projectName = String(decodeURIComponent(req.headers['x-project-name'] || '')).slice(0, 200);
+    const fileName = String(decodeURIComponent(req.headers['x-file-name'] || '')).slice(0, 180);
+    if (!projectId || !fileName) { res.writeHead(400, { 'Content-Type': 'application/json' }); return res.end(JSON.stringify({ ok: false, error: '缺少项目或文件名' })); }
+    const ext = (fileName.match(/\.[a-zA-Z0-9]{1,8}$/) || [''])[0].toLowerCase();
+    if (['.pdf', '.jpg', '.jpeg', '.png', '.webp', '.doc', '.docx', '.xls', '.xlsx', '.zip', '.csv', '.txt', '.mp4', '.mov', '.psd', '.ai'].indexOf(ext) < 0) {
+      res.writeHead(400, { 'Content-Type': 'application/json' }); return res.end(JSON.stringify({ ok: false, error: '不支持的文件类型' }));
+    }
+    const a = archEntry(projectId);
+    if (projectName) a.entry.projectName = projectName;
+    const dir = path.join(ARCH_DIR, a.k);
+    fs.mkdirSync(dir, { recursive: true });
+    const id = Date.now().toString(36) + crypto.randomBytes(3).toString('hex');
+    const stored = id + ext;
+    const target = path.join(dir, stored);
+    const tmp = target + '.part';
+    let size = 0; let aborted = false;
+    const out = fs.createWriteStream(tmp);
+    req.on('data', function (c) { size += c.length; if (size > 600 * 1024 * 1024) { aborted = true; req.destroy(); } });
+    req.on('error', function () { aborted = true; try { fs.unlinkSync(tmp); } catch (e) {} });
+    out.on('error', function () { aborted = true; try { fs.unlinkSync(tmp); } catch (e) {} });
+    out.on('finish', function () {
+      if (aborted) { try { fs.unlinkSync(tmp); } catch (e) {} res.writeHead(413, { 'Content-Type': 'application/json' }); return res.end(JSON.stringify({ ok: false, error: '上传失败或文件过大' })); }
+      fs.renameSync(tmp, target);
+      const rec = { id: id, name: fileName, stored: stored, url: '/archives/' + a.k + '/' + stored, size: size, uploadedAt: new Date().toLocaleString('zh-CN', { hour12: false }) };
+      a.entry.files = a.entry.files || []; a.entry.files.push(rec);
+      a.entry.updatedAt = new Date().toLocaleString('zh-CN', { hour12: false });
+      saveArchives();
+      json(res, { ok: true, file: rec });
+    });
+    req.pipe(out);
+    return;
   }
   if (p === '/api/archive/list') {
     const pid = u.searchParams.get('projectId') || '';
