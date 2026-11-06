@@ -66,7 +66,7 @@
       projects: [],
       project: null,
       settings: defaultSettings(),
-      ui: { tab: 'order', mode: 'order', profitUnlocked: false, catalogMajor: '' },
+      ui: { tab: 'order', mode: 'order', profitUnlocked: false, catalogMajor: '', profitView: 'project' },
       meta: APP.meta || {}
     };
     s.project = emptyProject();
@@ -915,7 +915,7 @@
   }
 
   /* ================= 界面二：利润看板（内部） ================= */
-  function renderProfit() {
+  function renderProfitProject() {
     var p = state.project, t = M.totals(p);
     return '<div class="page">' +
       '<div class="hint danger"><span class="pill danger">内部</span> 数据统计：含底价、返点、利润，<b>别给外包团队或公司看到</b>。对外报价请切到「下单报价」。</div>' +
@@ -969,6 +969,195 @@
       '<span class="t-note">底价为供应商价；核价可按实际结果手动改</span></div>' +
       '</div>';
   }
+  function bizFin(p) {
+    if (p.archiveOnly) {
+      var a = archiveOf(p);
+      var q = M.num(a.quoteAmount || a.contractAmount);
+      var c = M.num(a.contractAmount), inv = M.num(a.invoiceAmount);
+      var cost = (a.cost === '' || a.cost === null || a.cost === undefined) ? null : M.num(a.cost);
+      return { quote: q, contract: c, invoice: inv, approved: c, bottom: 0, profit: cost === null ? null : M.round2(q - cost), margin: cost === null ? null : (q > 0 ? M.round2((q - cost) / q * 100) : 0), files: (a.files || []).length, archive: true };
+    }
+    var t = M.totals(p), ar = archiveOf(p);
+    return { quote: t.quote, contract: M.num(ar.contractAmount), invoice: M.num(ar.invoiceAmount), approved: t.approved, bottom: t.bottom, profit: t.profit, margin: t.profitRateBottom, files: (ar.files || []).length, archive: false };
+  }
+  function bizRecords() {
+    var arr = state.projects.filter(function (p) { return p && (p.archiveOnly || ((p.groups || []).some(function (g) { return (g.items || []).length; }))); });
+    if (state.project && (state.project.groups || []).some(function (g) { return (g.items || []).length; }) && !arr.some(function (x) { return x.id === state.project.id; })) arr = arr.concat([state.project]);
+    return arr.map(function (p) {
+      var f = bizFin(p);
+      return { p: p, f: f, month: String(p.shootDate || '').slice(0, 7) || '未填', client: (p.client || '').trim() || '未填客户', supplier: (p.archive && p.archive.supplier) || '' };
+    });
+  }
+  function bizFiles(p) { return archiveOf(p).files || []; }
+  function bizHasDoc(p, kind) {
+    var a = archiveOf(p), names = (a.files || []).map(function (f) { return f.name || ''; }).join(' ');
+    if (kind === 'contract') return M.num(a.contractAmount) > 0 || /合同/.test(names);
+    if (kind === 'invoice') return M.num(a.invoiceAmount) > 0 || /发票/.test(names);
+    if (kind === 'payment') return /付款通知书|付款凭证|回款/.test(names);
+    return false;
+  }
+  function bizBar(v, max) {
+    var pct = max > 0 ? Math.max(2, Math.round(v / max * 100)) : 0;
+    return '<div class="biz-bar"><i style="width:' + pct + '%"></i></div>';
+  }
+  function renderBizDashboard() {
+    var recs = bizRecords();
+    var quoteSum = 0, profitKnown = 0, profitQuote = 0, contractSum = 0, invoiceSum = 0, filesSum = 0;
+    recs.forEach(function (r) {
+      quoteSum += r.f.quote; contractSum += r.f.contract; invoiceSum += r.f.invoice; filesSum += r.f.files;
+      if (r.f.profit !== null && r.f.profit !== undefined) { profitKnown += r.f.profit; profitQuote += r.f.quote; }
+    });
+    var knownMargin = profitQuote > 0 ? M.round2(profitKnown / profitQuote * 100) : 0;
+    var archiveRecs = recs.filter(function (r) { return r.p.archiveOnly; });
+    var missingContract = archiveRecs.filter(function (r) { return !bizHasDoc(r.p, 'contract'); }).length;
+    var missingInvoice = archiveRecs.filter(function (r) { return !bizHasDoc(r.p, 'invoice'); }).length;
+    var missingPayment = archiveRecs.filter(function (r) { return !bizHasDoc(r.p, 'payment'); }).length;
+    var kpi = '<div class="stat-grid">' +
+      statCard('历史项目', recs.length + ' 个', '含资料归档与报价项目', '') +
+      statCard('核价 / 报价合计', money(quoteSum), '已归档项目 + 已保存报价项目', '') +
+      statCard('已知利润合计', money(profitKnown), '只有填了成本/有报价明细的项目', 'green') +
+      statCard('已知综合利润率', knownMargin + '%', '利润 ÷ 核价（仅已知成本项目）', 'dark') +
+      statCard('合同 / 发票', money(contractSum) + ' / ' + money(invoiceSum), '资料归档金额', '') +
+      statCard('已上传单据', filesSum + ' 份', '合同 / 发票 / 报价单 / 付款凭证', '') +
+      '</div>';
+    // 月份趋势
+    var months = {};
+    recs.forEach(function (r) {
+      var k = r.month;
+      if (!months[k]) months[k] = { month: k, count: 0, quote: 0, profit: 0, known: 0 };
+      months[k].count++; months[k].quote += r.f.quote;
+      if (r.f.profit !== null && r.f.profit !== undefined) { months[k].profit += r.f.profit; months[k].known++; }
+    });
+    var monthRows = Object.keys(months).sort().reverse().slice(0, 18);
+    var maxQuote = Math.max.apply(null, monthRows.map(function (k) { return months[k].quote; }).concat([1]));
+    var monthHtml = monthRows.map(function (k) {
+      var m = months[k];
+      return '<tr><td>' + esc(m.month) + '</td><td class="num">' + m.count + '</td><td class="num">' + money(m.quote) + '</td>' +
+        '<td>' + bizBar(m.quote, maxQuote) + '</td><td class="num">' + money(m.profit) + '</td><td class="num muted">' + (m.known ? m.known + ' 个有成本' : '待补成本') + '</td></tr>';
+    }).join('');
+    // 客户
+    var clients = {};
+    recs.forEach(function (r) {
+      var k = r.client;
+      if (!clients[k]) clients[k] = { client: k, count: 0, quote: 0, profit: 0, known: 0 };
+      clients[k].count++; clients[k].quote += r.f.quote;
+      if (r.f.profit !== null && r.f.profit !== undefined) { clients[k].profit += r.f.profit; clients[k].known++; }
+    });
+    var clientRows = Object.keys(clients).map(function (k) { return clients[k]; }).sort(function (a, b) { return b.quote - a.quote; }).slice(0, 8).map(function (c) {
+      return '<tr><td>' + esc(c.client) + '</td><td class="num">' + c.count + '</td><td class="num">' + money(c.quote) + '</td><td class="num">' + (c.known ? money(c.profit) : '待补成本') + '</td></tr>';
+    }).join('');
+    // 风险：每个项目一条，按严重程度排序
+    var risks = [];
+    recs.forEach(function (r) {
+      var reasons = [], level = 0;
+      if (r.f.profit !== null && r.f.profit < 0) { reasons.push('亏损 ' + money(r.f.profit)); level = 4; }
+      else if (r.f.margin !== null && r.f.margin < 8) { reasons.push('低毛利 ' + r.f.margin + '%'); level = 3; }
+      if (r.p.archiveOnly) {
+        if (!bizHasDoc(r.p, 'contract')) { reasons.push('缺合同'); level = Math.max(level, 2); }
+        if (!bizHasDoc(r.p, 'invoice')) { reasons.push('缺发票'); level = Math.max(level, 2); }
+        if (r.f.profit === null) { reasons.push('成本未填'); level = Math.max(level, 1); }
+        if (!bizHasDoc(r.p, 'payment')) { reasons.push('缺付款凭证'); level = Math.max(level, 0); }
+      }
+      if (reasons.length) risks.push({ p: r.p, reasons: reasons, level: level });
+    });
+    risks.sort(function (a, b) { return b.level - a.level; });
+    var riskHtml = risks.slice(0, 14).map(function (r) {
+      return '<div class="biz-risk"><span class="risk-tag ' + (r.level >= 3 ? 'hot' : '') + '">' + (r.level >= 3 ? '重点' : '待补') + '</span>' +
+        '<span class="biz-risk-name">' + esc(r.p.name || '未命名') + '</span><span class="muted small">' + esc(r.reasons.join(' / ')) + '</span>' +
+        '<span class="spacer"></span><button class="btn sm light" data-act="' + (r.p.archiveOnly ? 'history-archive' : 'history-load') + '" data-pid="' + r.p.id + '">查看</button></div>';
+    }).join('') || '<p class="muted small">暂时没有明显风险。</p>';
+    // 排行：器材 / 人员
+    var eqMap = {}, crewMap = {};
+    recs.forEach(function (r) {
+      if (r.p.archiveOnly) return;
+      (r.p.groups || []).forEach(function (g) {
+        (g.items || []).forEach(function (it) {
+          var map = it.type === 'crew' ? crewMap : eqMap;
+          var k = M.normalizeName(it.name);
+          if (!map[k]) map[k] = { name: it.name, qty: 0, quote: 0, profit: 0, type: it.type };
+          map[k].qty += M.num(it.qty); map[k].quote += M.lineQuote(it, r.p); map[k].profit += M.lineProfit(it, r.p);
+        });
+      });
+    });
+    function rankRows(map, limit) {
+      return Object.keys(map).map(function (k) { return map[k]; }).sort(function (a, b) { return b.profit - a.profit; }).slice(0, limit).map(function (x) {
+        return '<tr><td>' + esc(x.name) + '</td><td class="num">' + M.round2(x.qty) + '</td><td class="num">' + money(x.quote) + '</td><td class="num profit-cell ' + (x.profit < 0 ? 'neg' : '') + '">' + money(x.profit) + '</td></tr>';
+      }).join('');
+    }
+    // 供应商
+    var sups = {};
+    recs.forEach(function (r) {
+      var a = archiveOf(r.p); var k = a.supplier || r.supplier || '未填';
+      if (!sups[k]) sups[k] = { name: k, count: 0, quote: 0, contract: 0 };
+      sups[k].count++; sups[k].quote += r.f.quote; sups[k].contract += r.f.contract;
+    });
+    var supRows = Object.keys(sups).map(function (k) { return sups[k]; }).sort(function (a, b) { return b.quote - a.quote; }).slice(0, 8).map(function (s) {
+      return '<tr><td>' + esc(s.name) + '</td><td class="num">' + s.count + '</td><td class="num">' + money(s.quote) + '</td><td class="num">' + money(s.contract) + '</td></tr>';
+    }).join('');
+    // 合同/发票
+    var docRows = archiveRecs.slice().sort(function (a, b) { return String(b.p.shootDate || '').localeCompare(String(a.p.shootDate || '')); }).slice(0, 22).map(function (r) {
+      var gap = r.f.quote - r.f.contract;
+      return '<tr><td>' + esc(r.p.shootDate || '') + '</td><td>' + esc(r.p.name || '') + '</td><td class="num">' + money(r.f.quote) + '</td>' +
+        '<td class="num">' + money(r.f.contract) + '</td><td class="num">' + money(r.f.invoice) + '</td><td class="num ' + (gap > 1 ? 'neg' : '') + '">' + money(gap) + '</td>' +
+        '<td>' + (bizHasDoc(r.p, 'contract') ? '✓' : '✗') + ' ' + (bizHasDoc(r.p, 'invoice') ? '✓' : '✗') + ' ' + (bizHasDoc(r.p, 'payment') ? '✓' : '✗') + '</td></tr>';
+    }).join('');
+    // 数据质量
+    var zeroBottom = state.catalog.filter(function (e) { return M.num(e.bottom) <= 0; }).length;
+    var zeroQuote = state.catalog.filter(function (e) { return M.num(e.quote) <= 0; }).length;
+    var dupNames = {}; state.catalog.forEach(function (e) { var k = M.normalizeName(e.name); dupNames[k] = (dupNames[k] || 0) + 1; });
+    var dupCount = Object.keys(dupNames).filter(function (k) { return dupNames[k] > 1; }).length;
+    var noCat = state.catalog.filter(function (e) { return !e.cat || e.cat === '其他配件'; }).length;
+    var noCost = archiveRecs.filter(function (r) { return r.f.profit === null; }).length;
+    var noItems = state.projects.filter(function (p) { return !p.archiveOnly && !((p.groups || []).some(function (g) { return (g.items || []).length; })); }).length;
+    // 模拟器
+    var base = M.totals(state.project).bottom;
+    var mk = M.num(state.settings.markupRate) || 30, cut = M.num(state.settings.cutRate) || 20, reb = M.num(state.settings.rebateRate) || 5;
+    var simHtml = '<div class="biz-sim"><div class="form-grid" style="grid-template-columns:repeat(3,1fr)">' +
+      '<label class="field">加价率 %<input data-sim="markup" type="number" min="0" step="0.01" value="' + esc(mk) + '"></label>' +
+      '<label class="field">核价砍价 %<input data-sim="cut" type="number" min="0" step="0.01" value="' + esc(cut) + '"></label>' +
+      '<label class="field">返点 %<input data-sim="rebate" type="number" min="0" step="0.01" value="' + esc(reb) + '"></label>' +
+      '</div><p class="muted small" style="margin:8px 0">按当前项目底价合计 ' + money(base) + ' 试算：</p>' +
+      '<div class="biz-sim-result"><span>报价 <b id="sim-quote">—</b></span><span>核价 <b id="sim-approved">—</b></span><span>返点 <b id="sim-rebate">—</b></span><span>利润 <b id="sim-profit">—</b></span></div></div>';
+    return kpi +
+      '<section class="card"><div class="card-head"><h2>按月经营趋势</h2><span class="sub">核价额 / 已知利润；成本未填的归档项目只计入核价</span></div><div class="table-wrap"><table class="grid"><thead><tr><th>月份</th><th class="num">项目数</th><th class="num">核价合计</th><th style="min-width:140px">占比</th><th class="num">已知利润</th><th>成本完整度</th></tr></thead><tbody>' + (monthHtml || '<tr><td colspan="6" class="muted" style="text-align:center;padding:20px">还没有历史项目</td></tr>') + '</tbody></table></div></section>' +
+      '<section class="card"><div class="card-head"><h2>客户事业部贡献</h2><span class="sub">按核价额排序</span></div><div class="table-wrap"><table class="grid"><thead><tr><th>客户 / 事业部</th><th class="num">项目数</th><th class="num">核价合计</th><th class="num">已知利润</th></tr></thead><tbody>' + (clientRows || '<tr><td colspan="4" class="muted">暂无数据</td></tr>') + '</tbody></table></div></section>' +
+      '<section class="card"><div class="card-head"><h2>风险预警</h2><span class="sub">亏损 / 低毛利 / 缺件 / 成本未填</span></div><div class="card-body">' + riskHtml + '</div></section>' +
+      '<div class="biz-two"><section class="card"><div class="card-head"><h2>器材利润排行</h2><span class="sub">按历史项目累计</span></div><div class="table-wrap"><table class="grid"><thead><tr><th>器材</th><th class="num">数量</th><th class="num">报价</th><th class="num">利润</th></tr></thead><tbody>' + (rankRows(eqMap, 8) || '<tr><td colspan="4" class="muted">暂无</td></tr>') + '</tbody></table></div></section>' +
+      '<section class="card"><div class="card-head"><h2>人员利润排行</h2><span class="sub">按历史项目累计</span></div><div class="table-wrap"><table class="grid"><thead><tr><th>人员</th><th class="num">数量</th><th class="num">报价</th><th class="num">利润</th></tr></thead><tbody>' + (rankRows(crewMap, 8) || '<tr><td colspan="4" class="muted">暂无</td></tr>') + '</tbody></table></div></section></div>' +
+      '<section class="card"><div class="card-head"><h2>供应商贡献</h2><span class="sub">按核价额排序</span></div><div class="table-wrap"><table class="grid"><thead><tr><th>供应商</th><th class="num">项目数</th><th class="num">核价合计</th><th class="num">合同金额</th></tr></thead><tbody>' + (supRows || '<tr><td colspan="4" class="muted">暂无</td></tr>') + '</tbody></table></div></section>' +
+      '<section class="card"><div class="card-head"><h2>报价模拟</h2><span class="sub">不改项目，试算不同加价/砍价/返点下的利润</span></div><div class="card-body">' + simHtml + '</div></section>' +
+      '<section class="card"><div class="card-head"><h2>合同 / 发票 / 付款联动</h2><span class="sub">缺合同 ' + missingContract + ' 个 · 缺发票 ' + missingInvoice + ' 个 · 缺付款凭证 ' + missingPayment + ' 个</span></div><div class="table-wrap"><table class="grid"><thead><tr><th>日期</th><th>项目</th><th class="num">核价</th><th class="num">合同</th><th class="num">发票</th><th class="num">核价-合同</th><th>合同/发票/付款</th></tr></thead><tbody>' + (docRows || '<tr><td colspan="7" class="muted">暂无资料归档</td></tr>') + '</tbody></table></div></section>' +
+      '<section class="card"><div class="card-head"><h2>数据质量</h2><span class="sub">先补高影响项，利润参考才准</span></div><div class="card-body"><div class="biz-quality">' +
+      '<div><b>' + zeroBottom + '</b><span>底价为 0 的器材/人员</span></div><div><b>' + zeroQuote + '</b><span>报价为 0 的条目</span></div>' +
+      '<div><b>' + dupCount + '</b><span>重名条目</span></div><div><b>' + noCat + '</b><span>未分类/其他配件</span></div>' +
+      '<div><b>' + noCost + '</b><span>归档项目未填成本</span></div><div><b>' + noItems + '</b><span>无明细的历史项目</span></div>' +
+      '</div><div class="toolbar" style="margin-top:12px"><button class="btn light" data-act="go-catalog">去器材库处理</button><button class="btn light" data-act="go-history">去历史项目</button></div></div></section>';
+  }
+  function updateSimulator() {
+    var base = M.totals(state.project).bottom;
+    var mk = M.num((document.querySelector('[data-sim="markup"]') || {}).value) || 0;
+    var cut = M.num((document.querySelector('[data-sim="cut"]') || {}).value) || 0;
+    var reb = M.num((document.querySelector('[data-sim="rebate"]') || {}).value) || 0;
+    var quote = M.round2(base * (1 + mk / 100));
+    var approved = M.round2(quote * (1 - cut / 100));
+    var rebate = M.round2(base * reb / 100);
+    var profit = M.round2(approved - base + rebate);
+    function set(id, v) { var el = document.getElementById(id); if (el) el.textContent = v; }
+    set('sim-quote', money(quote)); set('sim-approved', money(approved)); set('sim-rebate', money(rebate)); set('sim-profit', money(profit));
+  }
+  function renderProfit() {
+    var view = state.ui.profitView || 'project';
+    var tabs = [['project', '项目利润'], ['business', '经营总览']].map(function (x) {
+      return '<button class="chip ' + (view === x[0] ? 'active' : '') + '" data-act="profit-view" data-view="' + x[0] + '">' + x[1] + '</button>';
+    }).join('');
+    var content;
+    if (view === 'business') content = renderBizDashboard();
+    else content = renderProfitProject().replace(/^<div class="page">/, '').replace(/<\/div>$/, '');
+    var page = '<div class="page"><div class="toolbar" style="margin:0 0 12px"><span class="muted small">数据统计</span><span class="spacer"></span>' + tabs + '</div>' + content + '</div>';
+    setTimeout(function () { if (view === 'business') { var sim = document.querySelector('[data-sim]'); if (sim) updateSimulator(); } }, 0);
+    return page;
+  }
+
   function statCard(k, v, s, cls) {
     return '<div class="stat-card ' + (cls || '') + '"><div class="k">' + k + '</div><div class="v">' + v + '</div><div class="s">' + (s || '') + '</div></div>';
   }
@@ -2923,6 +3112,9 @@
       case 'checkin-link': openCheckinModal(); break;
       case 'proj-view': state.ui.tab = 'order'; state.ui.projView = el.dataset.view; render(); break;
       case 'lock-profit': lockProfit(); break;
+      case 'profit-view': state.ui.profitView = el.dataset.view || 'project'; render(); break;
+      case 'go-catalog': setTab('catalog'); break;
+      case 'go-history': setTab('history'); break;
       case 'lock-settings': lockSettings(); break;
       case 'share-links': openShareLinks(); break;
       case 'ex-add': addExRow(); break;
@@ -3271,6 +3463,9 @@
   var mainExportBtn = $('#btn-export-main');
   if (mainExportBtn) mainExportBtn.addEventListener('click', function () { exportQuote(); });
   $('#modal-root').addEventListener('click', function (e) { if (e.target.dataset && e.target.dataset.modalBackdrop !== undefined) closeModal(); });
+  document.addEventListener('input', function (e) {
+    if (e.target && e.target.dataset && e.target.dataset.sim) updateSimulator();
+  });
   document.addEventListener('keydown', function (e) {
     if (e.key === 'Escape') closeModal();
     if ((e.metaKey || e.ctrlKey) && (e.key === 's' || e.key === 'S')) { e.preventDefault(); saveProject(); }
