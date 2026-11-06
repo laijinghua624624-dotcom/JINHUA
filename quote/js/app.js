@@ -1003,8 +1003,12 @@
   function renderBizDashboard() {
     var recs = bizRecords();
     var quoteSum = 0, profitKnown = 0, profitQuote = 0, contractSum = 0, invoiceSum = 0, filesSum = 0;
+    var seenDocs = {};
     recs.forEach(function (r) {
-      quoteSum += r.f.quote; contractSum += r.f.contract; invoiceSum += r.f.invoice; filesSum += r.f.files;
+      quoteSum += r.f.quote; filesSum += r.f.files;
+      var a = archiveOf(r.p);
+      var docKey = a.contractGroupId || ('p:' + r.p.id);
+      if (!seenDocs[docKey] && (r.f.contract || r.f.invoice)) { seenDocs[docKey] = 1; contractSum += r.f.contract; invoiceSum += r.f.invoice; }
       if (r.f.profit !== null && r.f.profit !== undefined) { profitKnown += r.f.profit; profitQuote += r.f.quote; }
     });
     var knownMargin = profitQuote > 0 ? M.round2(profitKnown / profitQuote * 100) : 0;
@@ -2298,9 +2302,17 @@
     var list = state.projects.slice().sort(function (a, b) { return String(b.updatedAt || '').localeCompare(String(a.updatedAt || '')); });
     var cur = state.project, curT = M.totals(cur);
     var archList = list.filter(function (p) { return p.archiveOnly; });
+    var seenDocs = {};
     var archSum = archList.reduce(function (s, p) {
       var a = archiveOf(p);
-      s.quote += M.num(a.quoteAmount || a.contractAmount); s.contract += M.num(a.contractAmount); s.invoice += M.num(a.invoiceAmount); s.cost += M.num(a.cost); if (a.cost !== '' && a.cost !== null && a.cost !== undefined) s.profit += M.round2(M.num(a.contractAmount) - M.num(a.cost)); s.files += (a.files || []).length;
+      s.quote += M.num(a.quoteAmount || a.contractAmount);
+      var docKey = a.contractGroupId || ('p:' + p.id);
+      if (!seenDocs[docKey] && (M.num(a.contractAmount) || M.num(a.invoiceAmount))) {
+        seenDocs[docKey] = 1; s.contract += M.num(a.contractAmount); s.invoice += M.num(a.invoiceAmount);
+      }
+      s.cost += M.num(a.cost);
+      if (a.cost !== '' && a.cost !== null && a.cost !== undefined) s.profit += M.round2(M.num(a.quoteAmount || a.contractAmount) - M.num(a.cost));
+      s.files += (a.files || []).length;
       return s;
     }, { quote: 0, contract: 0, invoice: 0, cost: 0, profit: 0, files: 0 });
     var contractGroups = (function () {
