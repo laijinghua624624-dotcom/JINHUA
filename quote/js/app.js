@@ -171,8 +171,11 @@
     if (mb) { mb.style.display = orderMode ? 'none' : ''; mb.textContent = orderMode ? '数据统计 →' : '← 下单报价'; }
     $('#btn-mode').title = orderMode ? '进入内部数据统计（含底价/返点/利润）' : '返回对外下单报价界面';
     var ex = $('#btn-export-main');
-    ex.textContent = orderMode ? '导出报价单' : '导出利润测算';
-    ex.title = orderMode ? '导出给公司的报价单（不含底价/利润）' : '导出内部利润测算（含底价/返点，勿外发）';
+    if (ex) {
+      ex.style.display = orderMode ? '' : 'none';
+      ex.textContent = '导出报价单';
+      ex.title = '导出给公司的报价单（不含底价/利润）';
+    }
     $('#top-sub').textContent = orderMode ? '下单报价' : '数据统计';
     var ms = $('#mode-status'); if (ms) ms.textContent = orderMode ? '界面：下单报价' : '界面：数据统计';
     document.title = (orderMode ? '下单报价' : '数据统计（内部）') + ' · 拍摄器材报价系统';
@@ -860,6 +863,7 @@
       '<button class="btn light" data-act="sync-prices">按器材库刷新底价</button>' +
       '<button class="btn light" data-act="export-approved">导出核价单</button>' +
       '<button class="btn light" data-act="export-combined">导出报价+核价</button>' +
+      '<button class="btn light" data-act="export-profit">导出利润测算</button>' +
       '<button class="btn light" data-act="lock-profit">🔒 锁定</button>' +
       '<span class="spacer"></span>' +
       '<button class="btn solid" data-act="go-order">去下单报价改数量 / 报价 →</button>' +
@@ -2991,7 +2995,8 @@
   $('#btn-save').addEventListener('click', saveProject);
   $('#btn-new').addEventListener('click', newProject);
   $('#btn-mode').addEventListener('click', function () { setMode(state.ui.mode === 'profit' ? 'order' : 'profit'); });
-  $('#btn-export-main').addEventListener('click', function () { state.ui.mode === 'profit' ? exportProfit() : exportQuote(); });
+  var mainExportBtn = $('#btn-export-main');
+  if (mainExportBtn) mainExportBtn.addEventListener('click', function () { exportQuote(); });
   $('#modal-root').addEventListener('click', function (e) { if (e.target.dataset && e.target.dataset.modalBackdrop !== undefined) closeModal(); });
   document.addEventListener('keydown', function (e) {
     if (e.key === 'Escape') closeModal();
