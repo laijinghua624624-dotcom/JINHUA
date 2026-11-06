@@ -399,3 +399,29 @@ label.field.qk input.qty{width:54px;flex:none}
 .proj-tabs{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:0 0 12px}
 .proj-tabs .chip{background:#fff;border:1px solid var(--line-2);border-radius:99px;padding:6px 14px;font-size:13px;cursor:pointer}
 .proj-tabs .chip.active{background:var(--ink);color:#fff;border-color:var(--ink)}
+
+/* 器材库 / 人员标准 新版工作台 */
+.catalog-page .catalog-hero{display:flex;align-items:flex-end;justify-content:space-between;gap:18px;padding:22px 24px;border:1px solid var(--line);border-radius:16px;background:linear-gradient(120deg,#f7f9f5,#eef3ec);margin-bottom:14px}
+.catalog-kicker{font-size:11px;font-weight:800;letter-spacing:.14em;color:var(--muted);text-transform:uppercase}
+.catalog-hero h1{margin:5px 0 4px;font-size:27px;letter-spacing:-.02em}
+.catalog-meta{margin:0;color:var(--muted);font-size:13px}
+.catalog-hero-actions{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}
+.catalog-workbench{display:grid;gap:10px;padding:12px 14px;border:1px solid var(--line);border-radius:14px;background:#fff;margin-bottom:14px}
+.catalog-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.catalog-row-tools{border-top:1px dashed var(--line);padding-top:10px}
+.catalog-seg{display:inline-flex;border:1px solid var(--line-2);border-radius:9px;overflow:hidden;background:#fff;flex-shrink:0}
+.catalog-seg button{display:inline-flex;align-items:center;gap:6px;border:0;background:transparent;padding:8px 12px;font-size:13px;font-weight:700;color:var(--muted);cursor:pointer;white-space:nowrap}
+.catalog-seg button+button{border-left:1px solid var(--line-2)}
+.catalog-seg button.on{background:var(--ink);color:#fff}
+.catalog-seg em{font-style:normal;font-size:11px;font-weight:600;opacity:.72}
+.catalog-search{flex:1 1 220px;min-width:190px;padding:9px 12px;border:1px solid var(--line-2);border-radius:9px;font-size:14px;background:#fbfcfa}
+.catalog-select{padding:9px 10px;border:1px solid var(--line-2);border-radius:9px;background:#fbfcfa;font-size:13px;max-width:220px}
+.catalog-count{font-size:12px;color:var(--muted);white-space:nowrap}
+.catalog-list-head{align-items:center}
+@media(max-width:820px){
+  .catalog-page .catalog-hero{align-items:flex-start;flex-direction:column;padding:18px}
+  .catalog-hero h1{font-size:23px}
+  .catalog-hero-actions{width:100%;justify-content:flex-start}
+  .catalog-search{flex:1 1 100%}
+  .catalog-select{flex:1 1 45%;max-width:none}
+}

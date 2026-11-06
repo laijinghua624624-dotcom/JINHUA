@@ -1625,38 +1625,49 @@
     var eqN = state.catalog.filter(function (e) { return e.type !== 'crew'; }).length;
     var crewN = state.catalog.length - eqN;
 
-    return '<div class="page">' +
-      '<div class="toolbar">' +
-      '<div class="seg" style="display:flex;gap:0;border:1px solid var(--line-2);border-radius:9px;overflow:hidden">' +
-      '<button class="btn sm ' + (crewMode ? 'light' : 'solid') + '" data-act="catalog-mode" data-mode="equipment" style="border-radius:0">器材价格</button>' +
-      '<button class="btn sm ' + (crewMode ? 'solid' : 'light') + '" data-act="catalog-mode" data-mode="crew" style="border-radius:0">人员标准</button>' +
+    var photoN = state.catalog.filter(function (e) { return e.type !== 'crew' && majorOf(e) === '摄影器材'; }).length;
+    var lightN = state.catalog.filter(function (e) { return e.type !== 'crew' && majorOf(e) === '灯光器材'; }).length;
+    var primary = crewMode
+      ? '<button class="btn primary" data-act="crew-add">＋ 新增岗位</button>' +
+        '<button class="btn light" data-act="catalog-import">导入 JSON</button>' +
+        '<button class="btn light" data-act="catalog-export">导出 JSON</button>'
+      : '<button class="btn primary" data-act="catalog-add">＋ 新增器材</button>' +
+        '<button class="btn solid" data-act="catalog-smart-import">智能识别导入</button>' +
+        '<button class="btn light" data-act="supplier-open">供应商填报</button>';
+    var majorTabs = crewMode ? '' : '<div class="catalog-seg">' +
+      [['', '全部', eqN], ['摄影器材', '摄影器材', photoN], ['灯光器材', '灯光器材', lightN]].map(function (x) {
+        return '<button class="' + (state.ui.catalogMajor === x[0] ? 'on' : '') + '" data-act="catalog-major" data-major="' + x[0] + '">' + x[1] + '<em>' + x[2] + '</em></button>';
+      }).join('') + '</div>';
+    return '<div class="page catalog-page">' +
+      '<section class="catalog-hero">' +
+      '<div><div class="catalog-kicker">' + (crewMode ? 'CREW STANDARDS' : 'EQUIPMENT LIBRARY') + '</div>' +
+      '<h1>' + (crewMode ? '人员标准' : '器材库') + '</h1>' +
+      '<p class="catalog-meta">' + (crewMode
+        ? '共 ' + crewN + ' 个岗位 · 报价 / 底价 / 核价 + 加班费标准'
+        : '摄影器材 ' + photoN + ' 项 · 灯光器材 ' + lightN + ' 项 · 共 ' + eqN + ' 项') + '</p></div>' +
+      '<div class="catalog-hero-actions">' + primary + '</div></section>' +
+      '<section class="catalog-workbench">' +
+      '<div class="catalog-row catalog-row-main">' +
+      '<div class="catalog-seg catalog-mode">' +
+      '<button class="' + (crewMode ? '' : 'on') + '" data-act="catalog-mode" data-mode="equipment">器材价格</button>' +
+      '<button class="' + (crewMode ? 'on' : '') + '" data-act="catalog-mode" data-mode="crew">人员标准</button></div>' +
+      '<input class="catalog-search" type="search" data-search="catalog" placeholder="搜索名称 / 型号…">' +
+      majorTabs +
+      '<select class="catalog-select" data-cat-filter><option value="">全部分类</option>' + catOpts + '</select>' +
+      '<select class="catalog-select" data-sup-filter><option value="">全部供应商</option>' + supOpts + '</select>' +
+      '<select class="catalog-select" data-group-filter><option value="">全部板块</option>' + grpOpts + '</select>' +
       '</div>' +
-      '<input type="search" data-search="catalog" placeholder="搜索名称 / 型号…" style="padding:8px 12px;border:1px solid var(--line-2);border-radius:9px;min-width:220px">' +
-      '<select data-cat-filter style="padding:8px 10px;border:1px solid var(--line-2);border-radius:9px"><option value="">全部分类</option>' + catOpts + '</select>' +
-      (crewMode ? '' : '<div class="seg" style="display:flex;gap:0;border:1px solid var(--line-2);border-radius:9px;overflow:hidden">' +
-        ['', '摄影器材', '灯光器材'].map(function (m) {
-          var n = m ? state.catalog.filter(function (e) { return e.type !== 'crew' && majorOf(e) === m; }).length : eqN;
-          return '<button class="btn sm ' + (state.ui.catalogMajor === m ? 'solid' : 'light') + '" data-act="catalog-major" data-major="' + m + '" style="border-radius:0">' + (m || '全部') + ' ' + n + '</button>';
-        }).join('') + '</div>') +
-      '<select data-sup-filter style="padding:8px 10px;border:1px solid var(--line-2);border-radius:9px"><option value="">全部供应商</option>' + supOpts + '</select>' +
-      '<select data-group-filter style="padding:8px 10px;border:1px solid var(--line-2);border-radius:9px;max-width:220px"><option value="">全部板块</option>' + grpOpts + '</select>' +
-      '<span class="lib-stats"><span>共 <b>' + state.catalog.length + '</b> 项</span><span>器材 <b>' + eqN + '</b></span><span>人员 <b>' + crewN + '</b></span>' + '</span>' +
+      '<div class="catalog-row catalog-row-tools">' +
+      (crewMode ? '' : '<button class="btn sm light" data-act="auto-cat">自动识别分类</button>' +
+        '<button class="btn sm light" data-act="cat-health">数据体检</button>') +
+      '<button class="btn sm solid" data-act="sync-prices">价格同步到当前项目</button>' +
+      (crewMode ? '' : '<button class="btn sm light" data-act="catalog-import">导入 JSON</button>' +
+        '<button class="btn sm light" data-act="catalog-export">导出 JSON</button>') +
       '<span class="spacer"></span>' +
-      (crewMode
-        ? '<button class="btn solid" data-act="sync-prices">价格同步到当前项目</button>'
-        : '<button class="btn solid" data-act="sync-prices">价格同步到当前项目</button>' +
-          '<button class="btn solid" data-act="catalog-smart-import">智能识别导入</button>' +
-          '<button class="btn light" data-act="supplier-open">供应商填报</button>' +
-          '<button class="btn light" data-act="auto-cat">自动识别分类</button>' +
-          '<button class="btn light" data-act="cat-health">数据体检</button>') +
-      (crewMode
-        ? '<button class="btn light" data-act="crew-add">＋ 新增岗位</button>'
-        : '<button class="btn light" data-act="catalog-add">＋ 新增器材</button>') +
-      '<button class="btn light" data-act="catalog-import">导入 JSON</button>' +
-      '<button class="btn light" data-act="catalog-export">导出 JSON</button>' +
-      '</div>' +
-      '<section class="card"><div class="card-head"><h2>' + (crewMode ? '人员费用与加班费标准' : '器材库与三套价') + '</h2>' +
-      '<span class="sub">' + (crewMode ? '每个岗位的报价 / 底价 / 核价 + 加班费标准，改完自动同步' : '底价 = 供应商给你的价；报价 = 给公司；核价 = 公司核定') + '</span></div>' +
+      '<span class="catalog-count">' + (crewMode ? '岗位 ' + crewN : '器材 ' + eqN + ' · 人员 ' + crewN) + '</span>' +
+      '</div></section>' +
+      '<section class="card"><div class="card-head catalog-list-head"><h2>' + (crewMode ? '岗位清单' : '器材清单') + '</h2>' +
+      '<span class="sub">' + (crewMode ? '改完自动保存；点 📇 可设置加班费标准' : '底价 / 报价 / 核价可直接改；改完自动保存') + '</span></div>' +
       '<div class="table-scroll"><table class="grid"><thead><tr>' +
       (crewMode
         ? '<th style="min-width:230px">岗位名称</th><th>分类</th><th>单位</th><th class="num">报价</th><th class="num">底价</th><th class="num">核价</th><th style="min-width:330px">加班费标准（备注）</th><th></th>'
