@@ -1874,6 +1874,7 @@
       '<div class="toolbar" style="margin-top:14px;flex-wrap:wrap">' +
       '<button class="btn solid" data-act="export-all">导出全部数据（备份）</button>' +
       '<button class="btn light" data-act="import-all">导入全部数据</button>' +
+      '<button class="btn danger" data-act="clear-catalog">清空器材库（保留人员/组合/项目）</button>' +
       '<button class="btn danger" data-act="clear-projects">清空所有项目（保留器材库/组合）</button>' +
       '<button class="btn danger" data-act="clear-all">清空全部数据</button>' +
       '</div><p class="muted small" style="margin:12px 0 0">数据只存在这台电脑的浏览器里，建议每周导出一次备份。</p>' +
@@ -2582,6 +2583,7 @@
       case 'export-all': exportAll(); break;
       case 'import-all': importAll(); break;
       case 'clear-all': clearAll(); break;
+      case 'clear-catalog': clearCatalogEquipment(); break;
       case 'clear-projects': clearProjectsOnly(); break;
       case 'modal-close': closeModal(); break;
     }
@@ -2795,6 +2797,15 @@
       if (data.settings) state.settings = Object.assign(defaultSettings(), data.settings);
       commit(); render(); toast('导入完成', 'ok');
     });
+  }
+  function clearCatalogEquipment() {
+    var eqs = state.catalog.filter(function (e) { return e.type !== 'crew'; });
+    if (!eqs.length) { toast('器材库已经是空的', 'warn'); return; }
+    if (!confirm('将删除器材库里的 ' + eqs.length + ' 项器材，保留人员标准、器材组合和历史项目。\n\n确定清空？')) return;
+    state.catalog = state.catalog.filter(function (e) { return e.type === 'crew'; });
+    state.ui.catalogMajor = '';
+    commit(); render();
+    toast('已清空 ' + eqs.length + ' 项器材，组合和人员已保留', 'ok');
   }
   function clearProjectsOnly() {
     if (!confirm('删除所有项目（当前项目 + 历史项目 + 加班/报销记录）？器材库和器材组合会保留。')) return;
