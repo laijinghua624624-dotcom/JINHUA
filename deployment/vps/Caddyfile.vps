@@ -12,6 +12,7 @@
 	handle @checkin_admin {
 		basic_auth {
 			lance {$LANCE_PASSWORD_HASH}
+			laiJH {$SHARE_PASSWORD_HASH}
 		}
 		reverse_proxy checkin:8137
 	}
@@ -34,12 +35,17 @@
 	handle @private {
 		basic_auth {
 			lance {$LANCE_PASSWORD_HASH}
+			laiJH {$SHARE_PASSWORD_HASH}
 		}
 		reverse_proxy lance:10000
 	}
 
-	# 其余静态页面（工作台 UI）公开，数据由自建云账号保护
+	# 其余页面（工作台首页等）：分享出去也要登录；手机版/供应商页已在上面放行
 	handle {
+		basic_auth {
+			lance {$LANCE_PASSWORD_HASH}
+			laiJH {$SHARE_PASSWORD_HASH}
+		}
 		reverse_proxy lance:10000
 	}
 }
