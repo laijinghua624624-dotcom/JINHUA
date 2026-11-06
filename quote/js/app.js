@@ -644,6 +644,66 @@
       '<div class="modal-foot"><span class="spacer"></span><button class="btn light" data-act="modal-close">取消</button>' +
       '<button class="btn primary" data-act="crew-add-save">保存并新增</button></div></div>');
   }
+  function openCrewGroupAdd() {
+    var templates = [
+      ['摄影组', '摄影师\n摄影大助\n摄影小助\n跟机员\n焦点员\nDIT'],
+      ['灯光组', '灯光师\n灯光大助\n灯光助理\n灯光小助\n电工'],
+      ['录音组', '录音师\n录音助理\n挑杆员'],
+      ['制片组', '制片\n现场制片\n生活制片\n制片助理']
+    ];
+    openModal('<div class="modal" style="width:min(760px,100%)"><div class="modal-head"><h3>按组新增岗位</h3><button class="x-btn" data-act="modal-close">✕</button></div>' +
+      '<div class="modal-body">' +
+      '<div class="form-grid" style="grid-template-columns:1fr;gap:10px">' +
+      '<label class="field">组别<input id="cg-group" list="cg-group-list" placeholder="例如：摄影组 / 灯光组 / 录音组"><datalist id="cg-group-list"><option>摄影组</option><option>灯光组</option><option>录音组</option><option>制片组</option><option>导演组</option><option>场务组</option></datalist></label>' +
+      '<div class="toolbar" style="margin:0"><span class="muted small">常用模板：</span>' +
+      templates.map(function (t, i) { return '<button class="chip" type="button" data-act="cg-template" data-tpl="' + i + '">' + t[0] + '</button>'; }).join('') + '</div>' +
+      '<label class="field">岗位（每行一个）<textarea id="cg-roles" rows="8" placeholder="摄影师\n摄影大助\n摄影小助" style="width:100%;padding:10px 11px;border:1px solid var(--line-2);border-radius:9px;font:14px/1.6 inherit;resize:vertical"></textarea></label>' +
+      '</div>' +
+      '<div class="form-grid" style="grid-template-columns:repeat(3,1fr);margin-top:6px">' +
+      '<label class="field">统一报价（元/天）<input id="cg-quote" type="number" min="0" step="0.01" placeholder="0"></label>' +
+      '<label class="field">统一底价（元/天）<input id="cg-bottom" type="number" min="0" step="0.01" placeholder="0"></label>' +
+      '<label class="field">统一核价（元/天）<input id="cg-approved" type="number" min="0" step="0.01" placeholder="0"></label>' +
+      '<label class="field">加班起算（小时）<input id="cg-start" type="number" min="0" step="0.5" placeholder="可不填"></label>' +
+      '<label class="field">加班费（元/小时）<input id="cg-rate" type="number" min="0" step="0.01" placeholder="可不填"></label>' +
+      '</div><p class="muted small" style="margin:8px 0 0">一次生成多个岗位；价格可先统一填，之后在人员标准里逐个改。同名岗位会自动跳过。</p>' +
+      '</div><div class="modal-foot"><span class="spacer"></span><button class="btn light" data-act="modal-close">取消</button>' +
+      '<button class="btn primary" data-act="cg-save">按组添加</button></div></div>');
+    state.ui.cgTemplates = templates;
+  }
+  function fillCrewGroupTemplate(i) {
+    var t = (state.ui.cgTemplates || [])[i]; if (!t) return;
+    var g = $('#cg-group'), r = $('#cg-roles');
+    if (g) g.value = t[0];
+    if (r) r.value = t[1];
+  }
+  function saveCrewGroupAdd() {
+    var group = (($('#cg-group') || {}).value || '').trim();
+    if (!group) { toast('请先填组别', 'warn'); return; }
+    var raw = (($('#cg-roles') || {}).value || '').split(/[\n,，、]/).map(function (x) { return x.trim(); }).filter(Boolean);
+    var seen = {}, roles = [];
+    raw.forEach(function (n) { var k = normName(n); if (!seen[k]) { seen[k] = 1; roles.push(n); } });
+    if (!roles.length) { toast('请至少填一个岗位名称', 'warn'); return; }
+    var quote = M.num(($('#cg-quote') || {}).value);
+    var bottom = M.num(($('#cg-bottom') || {}).value);
+    var approved = M.num(($('#cg-approved') || {}).value);
+    var start = (($('#cg-start') || {}).value === '' || ($('#cg-start') || {}).value === undefined) ? null : M.num(($('#cg-start') || {}).value);
+    var rate = (($('#cg-rate') || {}).value === '' || ($('#cg-rate') || {}).value === undefined) ? null : M.num(($('#cg-rate') || {}).value);
+    var note = (start !== null || rate !== null) ? overtimeText(start, rate, '小时') : '';
+    var added = 0, skipped = 0;
+    roles.forEach(function (name) {
+      var key = M.normalizeName(name);
+      if (state.catalog.some(function (e) { return (e.type === 'crew' || e.type === undefined) && M.normalizeName(e.name) === key; })) { skipped++; return; }
+      state.catalog.push({
+        id: uid('eq'), key: key, name: name, cat: '人员', unit: '人', type: 'crew',
+        bottom: bottom, quote: quote, approved: approved, stock: null, note: note,
+        otStart: start, otRate: rate, otUnit: '小时',
+        supplier: '自定义', group: group, src: '自定义'
+      });
+      added++;
+    });
+    commit(); closeModal(); render();
+    toast('「' + group + '」已添加 ' + added + ' 个岗位' + (skipped ? '，跳过 ' + skipped + ' 个同名岗位' : ''), 'ok');
+  }
   function saveCrewAdd() {
     var name = ($('#ca-name') || {}).value;
     name = name ? name.trim() : '';
@@ -1826,6 +1886,7 @@
     var lightN = state.catalog.filter(function (e) { return e.type !== 'crew' && majorOf(e) === '灯光器材'; }).length;
     var primary = crewMode
       ? '<button class="btn primary" data-act="crew-add">＋ 新增岗位</button>' +
+        '<button class="btn solid" data-act="crew-group-add">按组新增</button>' +
         '<button class="btn light" data-act="catalog-import">导入 JSON</button>' +
         '<button class="btn light" data-act="catalog-export">导出 JSON</button>'
       : '<button class="btn primary" data-act="catalog-add">＋ 新增器材</button>' +
@@ -2651,7 +2712,10 @@
       case 'print-outbound': EX.printOutbound(state.project); break;
       case 'catalog-add': addCatalog(); break;
       case 'crew-add': openCrewAdd(); break;
+      case 'crew-group-add': openCrewGroupAdd(); break;
       case 'crew-add-save': saveCrewAdd(); break;
+      case 'cg-template': fillCrewGroupTemplate(Number(el.dataset.tpl)); break;
+      case 'cg-save': saveCrewGroupAdd(); break;
       case 'catalog-mode': state.ui.catalogMode = el.dataset.mode; commit(); render(); break;
       case 'catalog-major': state.ui.catalogMajor = el.dataset.major || ''; commit(); render(); break;
       case 'supplier-open': openSupplierModal(); break;
@@ -2711,6 +2775,8 @@
       case 'picker-custom': pickerCustom(); break;
       case 'kits-add': kitsAddFromModal(); break;
       case 'crew-add-save': saveCrewAdd(); break;
+      case 'cg-template': fillCrewGroupTemplate(Number(el.dataset.tpl)); break;
+      case 'cg-save': saveCrewGroupAdd(); break;
       case 'crew-card-save': saveCrewCard(el.dataset.eid); break;
       case 'profit-pin-ok': checkProfitPin(); break;
       case 'smart-import-confirm': smartConfirmImport(); break;
