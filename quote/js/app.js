@@ -87,11 +87,13 @@
           if (saved.projects) s.projects = saved.projects;
           if (saved.project) { s.project = saved.project; ensureIds(s.project); }
           if (saved.settings) s.settings = Object.assign(defaultSettings(), saved.settings);
+          if (saved.meta) s.meta = Object.assign({}, s.meta, saved.meta);
         }
       } catch (e) { /* ignore */ }
     }
     return s;
   })();
+  state.meta._catalogHash = JSON.stringify(state.catalog);
 
   function ensureProjectRates(p) {
     if (p.markupRate === undefined || p.markupRate === null) p.markupRate = M.num(state ? state.settings.markupRate : 30) / 100;
@@ -134,7 +136,14 @@
     saveTimer = setTimeout(function () {
       if (!storageOK) { setDraftStatus('未启用自动保存'); return; }
       try {
-        localStorage.setItem(KEY, JSON.stringify({ catalog: state.catalog, kits: state.kits, projects: state.projects, project: state.project, settings: state.settings }));
+        var fp = JSON.stringify(state.catalog);
+        if (state.meta._catalogHash !== fp) {
+          state.meta._catalogHash = fp;
+          var d = new Date();
+          state.meta.catalogUpdatedAt = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0') + ' ' + String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+        }
+        var meta = Object.assign({}, state.meta); delete meta._catalogHash;
+        localStorage.setItem(KEY, JSON.stringify({ catalog: state.catalog, kits: state.kits, projects: state.projects, project: state.project, settings: state.settings, meta: meta }));
         setDraftStatus('草稿已自动保存 ' + nowTime());
       } catch (e) { setDraftStatus('自动保存失败：' + (e && e.name || '存储空间不足')); }
     }, 200);
@@ -1725,7 +1734,7 @@
       '<h1>' + (crewMode ? '人员标准' : '器材库') + '</h1>' +
       '<p class="catalog-meta">' + (crewMode
         ? '共 ' + crewN + ' 个岗位 · 报价 / 底价 / 核价 + 加班费标准'
-        : '摄影器材 ' + photoN + ' 项 · 灯光器材 ' + lightN + ' 项 · 共 ' + eqN + ' 项') + '</p></div>' +
+        : '摄影器材 ' + photoN + ' 项 · 灯光器材 ' + lightN + ' 项 · 共 ' + eqN + ' 项') + ' · 最后更新 ' + esc(state.meta.catalogUpdatedAt || state.meta.generatedAt || '—') + '</p></div>' +
       '<div class="catalog-hero-actions">' + primary + '</div></section>' +
       '<section class="catalog-workbench">' +
       '<div class="catalog-row catalog-row-main">' +
@@ -1755,7 +1764,7 @@
         : '<th style="min-width:250px">器材名称（含型号）</th><th>分类</th><th>类型</th><th>单位</th><th class="num">底价</th><th class="num">报价</th><th class="num">核价</th><th class="num">库存</th><th style="min-width:160px">备注</th><th></th>') +
       '</tr></thead><tbody>' + (rows || '<tr><td colspan="10" class="muted" style="text-align:center;padding:24px">没有数据</td></tr>') + '</tbody></table></div></section>' +
       '<div class="totals-bar"><div class="t-item"><span class="t-label">器材库来源</span><span class="t-val" style="font-size:13px">' + esc(state.meta.source || '') + '</span></div>' +
-      '<span class="spacer"></span><span class="t-note">共 ' + state.catalog.length + ' 项 · 改价/改名自动保存并同步</span></div>' +
+      '<span class="spacer"></span><span class="t-note">共 ' + state.catalog.length + ' 项 · 更新于 ' + esc(state.meta.catalogUpdatedAt || state.meta.generatedAt || '—') + ' · 改价/改名自动保存</span></div>' +
       '</div>';
   }
   function crewRowHtml(e) {
