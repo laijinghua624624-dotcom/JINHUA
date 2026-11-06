@@ -1357,6 +1357,8 @@
     if (!p.archive || typeof p.archive !== 'object') p.archive = { contractAmount: '', invoiceAmount: '', cost: '', note: '', files: [] };
     var a = p.archive;
     if (a.quoteAmount === undefined) a.quoteAmount = '';
+    if (a.contractGroup === undefined) a.contractGroup = '';
+    if (a.contractGroupId === undefined) a.contractGroupId = '';
     if (a.invoiceAmount === undefined) a.invoiceAmount = '';
     if (a.cost === undefined) a.cost = '';
     if (!Array.isArray(a.files)) a.files = [];
@@ -2112,6 +2114,19 @@
       s.quote += M.num(a.quoteAmount || a.contractAmount); s.contract += M.num(a.contractAmount); s.invoice += M.num(a.invoiceAmount); s.cost += M.num(a.cost); if (a.cost !== '' && a.cost !== null && a.cost !== undefined) s.profit += M.round2(M.num(a.contractAmount) - M.num(a.cost)); s.files += (a.files || []).length;
       return s;
     }, { quote: 0, contract: 0, invoice: 0, cost: 0, profit: 0, files: 0 });
+    var contractGroups = (function () {
+      var map = {};
+      archList.forEach(function (p) {
+        var a = archiveOf(p);
+        if (!a.contractGroup) return;
+        var k = a.contractGroupId || a.contractGroup;
+        if (!map[k]) map[k] = { label: a.contractGroup, projects: [], quote: 0, contract: 0 };
+        map[k].projects.push(p);
+        map[k].quote += M.num(a.quoteAmount || a.contractAmount);
+        map[k].contract += M.num(a.contractAmount);
+      });
+      return Object.keys(map).map(function (k) { return map[k]; }).sort(function (a, b) { return b.projects.length - a.projects.length; });
+    })();
     var items = list.map(function (p) {
       var t = M.totals(p);
       if (p.archiveOnly) {
@@ -2119,7 +2134,8 @@
         var profit = archiveProfit(p);
         return '<div class="history-item"><div><div class="h-title">' + esc(p.name || '未命名资料归档') + ' <span class="archive-badge">资料归档</span></div>' +
           '<div class="h-meta">' + esc(p.shootDate || '') + (p.client ? ' · ' + esc(p.client) : '') + ' · ' + esc(a.files.length) + ' 份资料 · 更新于 ' + esc(p.updatedAt || '') + '</div>' +
-          '<div class="h-archive">核价 ' + money(a.quoteAmount || a.contractAmount) + ' · 合同 ' + money(a.contractAmount) + ' · 发票 ' + money(a.invoiceAmount) + (profit === null ? ' · 利润待补成本' : ' · 成本 ' + money(a.cost) + ' · 利润 ' + money(profit)) + '</div></div>' +
+          '<div class="h-archive">核价 ' + money(a.quoteAmount || a.contractAmount) + ' · 合同 ' + money(a.contractAmount) + ' · 发票 ' + money(a.invoiceAmount) + (profit === null ? ' · 利润待补成本' : ' · 成本 ' + money(a.cost) + ' · 利润 ' + money(profit)) + '</div>' +
+          (a.contractGroup ? '<div class="contract-group">📄 同一合同：' + esc(a.contractGroup) + '</div>' : '') + '</div>' +
           '<div class="h-money"><div class="q">' + (profit === null ? '利润待补' : '利润 ' + money(profit)) + '</div><div class="c">核价 ' + money(a.quoteAmount || a.contractAmount) + ' · 合同 ' + money(a.contractAmount) + ' · 发票 ' + money(a.invoiceAmount) + '</div></div>' +
           '<div class="toolbar"><button class="btn sm light" data-act="history-archive" data-pid="' + p.id + '">📁 资料 / 金额</button>' +
           '<button class="btn sm danger" data-act="history-del" data-pid="' + p.id + '">删除</button></div></div>';
@@ -2141,6 +2157,11 @@
       '<span class="muted small">已归档 ' + archList.length + ' 个 · 核价 ' + money(archSum.quote) + ' · 合同 ' + money(archSum.contract) + ' · 发票 ' + money(archSum.invoice) + '</span></div>' +
       '<div class="kv"><span class="k">资料归档合计利润（已填成本的）</span><span class="v" style="font-size:20px;color:#276749">' + money(archSum.profit) + '</span></div>' +
       '<div class="kv"><span class="k">已上传单据</span><span class="v">' + archSum.files + ' 份</span></div>' +
+      (contractGroups.length ? '<div class="contract-groups"><div class="cg-title">同一张合同的项目（' + contractGroups.length + ' 张合同）</div>' +
+        contractGroups.map(function (g) {
+          return '<div class="cg-row"><div class="cg-label">📄 ' + esc(g.label) + '</div><div class="cg-meta">' + g.projects.length + ' 个项目 · 核价合计 ' + money(g.quote) + '</div><div class="cg-projects">' +
+            g.projects.slice().sort(function (a, b) { return String(a.shootDate || '').localeCompare(String(b.shootDate || '')); }).map(function (p) { return esc(p.shootDate || '') + ' ' + esc(p.name || ''); }).join('　|　') + '</div></div>';
+        }).join('') + '</div>' : '') +
       '</div></section>' +
       '<section class="card"><div class="card-head"><h2>当前编辑中的项目</h2><span class="sub">还没存到历史里？点保存</span></div>' +
       '<div class="card-body"><div class="history-item" style="border:0;padding:0"><div><div class="h-title">' + esc(cur.name || '未命名项目') + '</div>' +
@@ -2172,6 +2193,8 @@
         if (rec.contractAmount !== undefined) a.contractAmount = rec.contractAmount === '' ? '' : M.num(rec.contractAmount);
         if (rec.invoiceAmount !== undefined) a.invoiceAmount = rec.invoiceAmount === '' ? '' : M.num(rec.invoiceAmount);
         if (rec.cost !== undefined) a.cost = rec.cost === '' ? '' : M.num(rec.cost);
+        if (rec.contractGroup !== undefined) a.contractGroup = rec.contractGroup || '';
+        if (rec.contractGroupId !== undefined) a.contractGroupId = rec.contractGroupId || '';
         if (rec.note) a.note = rec.note;
         if (Array.isArray(rec.files)) a.files = rec.files;
         changed = true;

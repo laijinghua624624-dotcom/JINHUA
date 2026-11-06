@@ -242,6 +242,7 @@ const server = http.createServer((req, res) => {
         contractAmount: x.contractAmount === undefined ? '' : x.contractAmount,
         invoiceAmount: x.invoiceAmount === undefined ? '' : x.invoiceAmount,
         cost: x.cost === undefined ? '' : x.cost,
+        contractGroup: x.contractGroup || '', contractGroupId: x.contractGroupId || '',
         note: x.note || '', files: x.files || [], updatedAt: x.updatedAt || '', archiveOnly: true
       };
     });
@@ -263,6 +264,8 @@ const server = http.createServer((req, res) => {
       a.entry.contractAmount = body.contractAmount === '' || body.contractAmount === null || body.contractAmount === undefined ? '' : Number(body.contractAmount) || 0;
       a.entry.invoiceAmount = body.invoiceAmount === '' || body.invoiceAmount === null || body.invoiceAmount === undefined ? '' : Number(body.invoiceAmount) || 0;
       a.entry.cost = body.cost === '' || body.cost === null || body.cost === undefined ? '' : Number(body.cost) || 0;
+      if (body.contractGroup !== undefined) a.entry.contractGroup = String(body.contractGroup || '').slice(0, 200);
+      if (body.contractGroupId !== undefined) a.entry.contractGroupId = String(body.contractGroupId || '').slice(0, 80);
       a.entry.note = String(body.note || '').slice(0, 2000);
       a.entry.updatedAt = new Date().toLocaleString('zh-CN', { hour12: false });
       a.entry.files = a.entry.files || [];

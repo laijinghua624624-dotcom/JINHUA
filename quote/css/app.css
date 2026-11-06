@@ -443,3 +443,12 @@ label.field.qk input.qty{width:54px;flex:none}
 
 /* 资料归档 */
 .archive-badge{display:inline-block;margin-left:6px;padding:1px 7px;border-radius:99px;background:#eef4ff;color:#315d9c;font-size:11px;font-weight:700;vertical-align:2px}
+
+/* 同一合同分组 */
+.contract-group{margin-top:5px;font-size:12px;color:#315d9c;font-weight:700}
+.contract-groups{margin-top:12px;border-top:1px dashed var(--line);padding-top:10px}
+.cg-title{font-size:12px;font-weight:800;color:var(--muted);margin-bottom:6px}
+.cg-row{padding:8px 10px;border:1px solid var(--line);border-radius:9px;background:#fbfcfa;margin:6px 0}
+.cg-label{font-weight:700;font-size:13px}
+.cg-meta{font-size:12px;color:var(--muted);margin-top:2px}
+.cg-projects{font-size:12px;color:#4b5563;margin-top:5px;line-height:1.6}
