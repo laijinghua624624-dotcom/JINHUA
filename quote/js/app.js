@@ -2297,9 +2297,54 @@
       '<div class="proj-tabs">' + tabs + '<span class="muted small" style="margin-left:8px">拍完后在这里结算</span></div>' +
       inner + '</div>';
   }
+  function projectDateKey(p) {
+    var m = String(p.shootDate || '').match(/\d{4}[-/.]\d{1,2}[-/.]\d{1,2}/);
+    return m ? m[0].replace(/[./]/g, '-') : '';
+  }
+  function historySearchText(p) {
+    var a = archiveOf(p);
+    var parts = [p.name || '', p.shootDate || '', p.client || '', a.contractGroup || '', a.supplier || '', a.note || ''];
+    if (p.archiveOnly) {
+      parts.push('资料归档 合同 发票 付款');
+      parts.push(String(M.num(a.quoteAmount || a.contractAmount)), money(a.quoteAmount || a.contractAmount));
+      parts.push(String(M.num(a.contractAmount)), money(a.contractAmount));
+      parts.push(String(M.num(a.invoiceAmount)), money(a.invoiceAmount));
+    } else {
+      var t = M.totals(p);
+      parts.push('报价 核价 底价 利润');
+      parts.push(String(t.quote), money(t.quote), String(t.approved), money(t.approved), String(t.bottom), money(t.bottom), String(t.profit), money(t.profit));
+    }
+    (a.files || []).forEach(function (f) { if (f && f.name) parts.push(f.name); });
+    return parts.join(' ').toLowerCase();
+  }
+  function applyHistorySearch(q) {
+    q = String(q || '').trim().toLowerCase();
+    $$('.contract-folder').forEach(function (folder) {
+      var groupMatch = !q || String(folder.dataset.hsearch || '').indexOf(q) >= 0;
+      var children = Array.prototype.slice.call(folder.querySelectorAll('.archive-child'));
+      var shown = 0;
+      children.forEach(function (ch) {
+        var hit = !q || groupMatch || String(ch.dataset.hsearch || '').indexOf(q) >= 0;
+        ch.style.display = hit ? '' : 'none';
+        if (hit) shown++;
+      });
+      folder.style.display = (!q || groupMatch || shown) ? '' : 'none';
+      if (q && groupMatch) children.forEach(function (ch) { ch.style.display = ''; });
+    });
+    $$('.history-item[data-hsearch]').forEach(function (el) {
+      el.style.display = (!q || String(el.dataset.hsearch || '').indexOf(q) >= 0) ? '' : 'none';
+    });
+  }
+
   function renderHistory() {
     if (state.ui.settleId) return renderSettlement();
-    var list = state.projects.slice().sort(function (a, b) { return String(b.updatedAt || '').localeCompare(String(a.updatedAt || '')); });
+    var list = state.projects.slice().sort(function (a, b) {
+      var ka = projectDateKey(a), kb = projectDateKey(b);
+      if (ka && kb && ka !== kb) return kb.localeCompare(ka);
+      if (ka && !kb) return -1;
+      if (!ka && kb) return 1;
+      return String(b.updatedAt || '').localeCompare(String(a.updatedAt || ''));
+    });
     var cur = state.project, curT = M.totals(cur);
     var archList = list.filter(function (p) { return p.archiveOnly; });
     var seenDocs = {};
@@ -2326,18 +2371,24 @@
         map[k].quote += M.num(a.quoteAmount || a.contractAmount);
         map[k].contract = Math.max(map[k].contract, M.num(a.contractAmount));
       });
-      return Object.keys(map).map(function (k) { return map[k]; }).sort(function (a, b) { return b.projects.length - a.projects.length; });
+      return Object.keys(map).map(function (k) { return map[k]; }).sort(function (a, b) {
+        var da = a.projects.map(projectDateKey).sort().pop() || '';
+        var db = b.projects.map(projectDateKey).sort().pop() || '';
+        return db.localeCompare(da);
+      });
     })();
     var groupedIds = {};
     contractGroups.forEach(function (g) { g.projects.forEach(function (p) { groupedIds[p.id] = 1; }); });
     var groupFolders = contractGroups.map(function (g) {
-      var rows = g.projects.slice().sort(function (a, b) { return String(a.shootDate || '').localeCompare(String(b.shootDate || '')); }).map(function (p) {
+      var sorted = g.projects.slice().sort(function (a, b) { return (projectDateKey(b) || '').localeCompare(projectDateKey(a) || ''); });
+      var rows = sorted.map(function (p) {
         var a = archiveOf(p); var profit = archiveProfit(p);
-        return '<div class="archive-child"><div class="ac-main"><div class="ac-title">' + esc(p.shootDate || '') + ' · ' + esc(p.name || '未命名') + '</div>' +
+        return '<div class="archive-child" data-hsearch="' + esc(historySearchText(p)) + '"><div class="ac-main"><div class="ac-title">' + esc(p.shootDate || '') + ' · ' + esc(p.name || '未命名') + '</div>' +
           '<div class="ac-meta">核价 ' + money(a.quoteAmount || a.contractAmount) + ' · 合同 ' + money(a.contractAmount) + ' · 发票 ' + money(a.invoiceAmount) + ' · ' + esc((a.files || []).length) + ' 份资料</div></div>' +
           '<div class="ac-actions"><button class="btn sm light" data-act="history-archive" data-pid="' + p.id + '">📁 资料 / 金额</button></div></div>';
       }).join('');
-      return '<details class="contract-folder"><summary><span class="cf-title">📄 ' + esc(g.label) + '</span><span class="cf-meta">' + g.projects.length + ' 个项目 · 核价合计 ' + money(g.quote) + ' · 合同 ' + money(g.contract) + '</span></summary><div class="cf-body">' + rows + '</div></details>';
+      var groupText = (g.label + ' ' + sorted.map(historySearchText).join(' ')).toLowerCase();
+      return '<details class="contract-folder" data-hsearch="' + esc(groupText) + '"><summary><span class="cf-title">📄 ' + esc(g.label) + '</span><span class="cf-meta">' + g.projects.length + ' 个项目 · 核价合计 ' + money(g.quote) + ' · 合同 ' + money(g.contract) + '</span></summary><div class="cf-body">' + rows + '</div></details>';
     }).join('');
     var items = list.map(function (p) {
       var t = M.totals(p);
@@ -2345,7 +2396,7 @@
         var a = archiveOf(p);
         if (groupedIds[p.id]) return '';
         var profit = archiveProfit(p);
-        return '<div class="history-item"><div><div class="h-title">' + esc(p.name || '未命名资料归档') + ' <span class="archive-badge">资料归档</span></div>' +
+        return '<div class="history-item" data-hsearch="' + esc(historySearchText(p)) + '"><div><div class="h-title">' + esc(p.name || '未命名资料归档') + ' <span class="archive-badge">资料归档</span></div>' +
           '<div class="h-meta">' + esc(p.shootDate || '') + (p.client ? ' · ' + esc(p.client) : '') + ' · ' + esc(a.files.length) + ' 份资料 · 更新于 ' + esc(p.updatedAt || '') + '</div>' +
           '<div class="h-archive">核价 ' + money(a.quoteAmount || a.contractAmount) + ' · 合同 ' + money(a.contractAmount) + ' · 发票 ' + money(a.invoiceAmount) + (profit === null ? ' · 利润待补成本' : ' · 成本 ' + money(a.cost) + ' · 利润 ' + money(profit)) + '</div>' +
           (a.contractGroup ? '<div class="contract-group">📄 同一合同：' + esc(a.contractGroup) + '</div>' : '') + '</div>' +
@@ -2353,7 +2404,7 @@
           '<div class="toolbar"><button class="btn sm light" data-act="history-archive" data-pid="' + p.id + '">📁 资料 / 金额</button>' +
           '<button class="btn sm danger" data-act="history-del" data-pid="' + p.id + '">删除</button></div></div>';
       }
-      return '<div class="history-item"><div><div class="h-title">' + esc(p.name || '未命名项目') + '</div>' +
+      return '<div class="history-item" data-hsearch="' + esc(historySearchText(p)) + '"><div><div class="h-title">' + esc(p.name || '未命名项目') + '</div>' +
         '<div class="h-meta">' + esc(p.shootDate || '') + ' · ' + (p.groups || []).length + ' 个机位组 · 保存于 ' + esc(p.updatedAt || '') + '</div>' +
         (function () { var a = archiveOf(p); return (a.contractAmount || a.files.length) ? '<div class="h-archive">📁 合同额 ' + money(a.contractAmount) + (a.files.length ? ' · 发票/合同 ' + a.files.length + ' 份' : '') + (M.num(a.cost) ? ' · 成本 ' + money(a.cost) + ' · 利润 ' + money(archiveProfit(p)) : '') + '</div>' : ''; })() + '</div>' +
         '<div class="h-money"><div class="q">核价 ' + money(t.approved) + '</div><div class="c">报价 ' + money(t.quote) + ' · 底价 ' + money(t.bottom) + ' · 利润 ' + money(t.profit) + '（' + t.profitRateBottom + '%）</div></div>' +
@@ -2365,6 +2416,7 @@
     }).join('');
     if (!items) items = '<div class="empty"><div class="big">🗂</div><p>还没有保存过项目。在「下单报价」里点右上角「保存」；也可以点上方「新建资料归档」把过往合同/发票收进来。</p></div>';
     return '<div class="page">' +
+      '<div class="toolbar history-searchbar" style="margin:0 0 12px"><input class="history-search" type="search" data-search="history" placeholder="搜索项目 / 客户 / 合同 / 金额，例如 156041"><span class="muted small">按项目日期新→旧排序</span></div>' +
       '<section class="card"><div class="card-head"><h2>资料归档 · 利润参考</h2><span class="sub">把过往项目的合同、发票、成本整理进来，长期对比利润</span></div>' +
       '<div class="card-body"><div class="toolbar" style="margin:0 0 10px"><button class="btn solid" data-act="archive-new">＋ 新建资料归档</button><span class="spacer"></span>' +
       '<span class="muted small">已归档 ' + archList.length + ' 个 · 核价 ' + money(archSum.quote) + ' · 合同 ' + money(archSum.contract) + ' · 发票 ' + money(archSum.invoice) + '</span></div>' +
@@ -2904,6 +2956,7 @@
     }
     if (t.dataset.efield) { onCatalogField(t); return; }
     if (t.dataset.search === 'catalog') { applyCatalogFilter(); return; }
+    if (t.dataset.search === 'history') { applyHistorySearch(t.value); return; }
     if (t.dataset.search === 'picker') { var chip = $('#modal-root .chip.active'); pickerFilter(t.value.trim().toLowerCase(), chip ? chip.dataset.pcat : ''); return; }
     if (t.dataset.sfield) {
       var k = t.dataset.sfield;
