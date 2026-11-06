@@ -1356,6 +1356,7 @@
   function archiveOf(p) {
     if (!p.archive || typeof p.archive !== 'object') p.archive = { contractAmount: '', invoiceAmount: '', cost: '', note: '', files: [] };
     var a = p.archive;
+    if (a.quoteAmount === undefined) a.quoteAmount = '';
     if (a.invoiceAmount === undefined) a.invoiceAmount = '';
     if (a.cost === undefined) a.cost = '';
     if (!Array.isArray(a.files)) a.files = [];
@@ -1382,10 +1383,10 @@
   function archiveProfit(p) {
     var a = archiveOf(p);
     if (a.cost === '' || a.cost === null || a.cost === undefined) return null;
-    return M.round2(M.num(a.contractAmount) - M.num(a.cost));
+    return M.round2(M.num(a.quoteAmount || a.contractAmount) - M.num(a.cost));
   }
   function updateArchiveProfit() {
-    var c = M.num(($('#arc-amount') || {}).value);
+    var c = M.num((($('#arc-quote') || {}).value) || (($('#arc-amount') || {}).value));
     var costRaw = ($('#arc-cost') || {}).value;
     var el = $('#arc-profit'); if (!el) return;
     el.value = (costRaw === '' || costRaw === undefined || costRaw === null) ? '' : M.round2(c - M.num(costRaw));
@@ -1410,11 +1411,12 @@
         '<label class="field">拍摄日期<input id="arc-date" type="date" value="' + esc(p.shootDate || '') + '"></label>' +
         '<label class="field">客户 / 品牌<input id="arc-client" value="' + esc(p.client || '') + '" placeholder="例如：雪大 / 辛选"></label>' +
         '</div>' : '') +
-      '<div class="form-grid" style="grid-template-columns:repeat(4,1fr);margin-top:' + (p.archiveOnly ? '2px' : '0') + '">' +
-      '<label class="field">合同金额（元）<input id="arc-amount" type="number" min="0" step="0.01" value="' + esc(a.contractAmount === '' ? '' : a.contractAmount) + '" placeholder="例如 25000"></label>' +
+      '<div class="form-grid" style="grid-template-columns:repeat(5,1fr);margin-top:' + (p.archiveOnly ? '2px' : '0') + '">' +
+      '<label class="field">核价 / 最终报价（元）<input id="arc-quote" type="number" min="0" step="0.01" value="' + esc(a.quoteAmount === '' || a.quoteAmount === undefined ? '' : a.quoteAmount) + '" placeholder="报价单金额"></label>' +
+      '<label class="field">合同金额（元）<input id="arc-amount" type="number" min="0" step="0.01" value="' + esc(a.contractAmount === '' ? '' : a.contractAmount) + '" placeholder="合同金额"></label>' +
       '<label class="field">发票金额（元）<input id="arc-invoice" type="number" min="0" step="0.01" value="' + esc(a.invoiceAmount === '' || a.invoiceAmount === undefined ? '' : a.invoiceAmount) + '" placeholder="开票金额"></label>' +
       '<label class="field">项目成本（元）<input id="arc-cost" type="number" min="0" step="0.01" value="' + esc(a.cost === '' || a.cost === undefined ? '' : a.cost) + '" placeholder="后可补"></label>' +
-      '<label class="field">利润（自动）<input id="arc-profit" type="number" readonly value="' + esc(a.cost === '' || a.cost === undefined ? '' : M.round2(M.num(a.contractAmount) - M.num(a.cost))) + '" style="background:#f3f6f3" placeholder="填成本后自动算"></label>' +
+      '<label class="field">利润（自动）<input id="arc-profit" type="number" readonly value="' + esc(a.cost === '' || a.cost === undefined ? '' : M.round2(M.num(a.quoteAmount || a.contractAmount) - M.num(a.cost))) + '" style="background:#f3f6f3" placeholder="填成本后自动算"></label>' +
       '</div>' +
       '<label class="field" style="margin-top:10px">归档备注<input id="arc-note" value="' + esc(a.note || '') + '" placeholder="例如：合同编号 / 已开票 / 结算情况"></label>' +
       '<div class="toolbar" style="margin:14px 0 4px"><button class="btn solid" data-act="archive-upload">上传发票 / 合同</button>' +
@@ -1469,18 +1471,19 @@
       p.shootDate = (($('#arc-date') || {}).value || '');
       p.client = ((($('#arc-client') || {}).value || '').trim());
     }
+    a.quoteAmount = M.num(($('#arc-quote') || {}).value);
     a.contractAmount = M.num(($('#arc-amount') || {}).value);
     a.invoiceAmount = M.num(($('#arc-invoice') || {}).value);
     var costVal = ($('#arc-cost') || {}).value;
     a.cost = (costVal === '' || costVal === undefined || costVal === null) ? '' : M.num(costVal);
-    a.profit = a.cost === '' ? null : M.round2(a.contractAmount - a.cost);
+    a.profit = a.cost === '' ? null : M.round2(M.num(a.quoteAmount || a.contractAmount) - a.cost);
     a.note = (($('#arc-note') || {}).value || '').trim();
     p.updatedAt = new Date().toISOString().slice(0, 16).replace('T', ' ');
     commit(); closeModal(); render();
     if (p.archiveOnly) {
       fetch(checkinBase() + '/api/archive/project/save', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ projectId: p.id, projectName: p.name, date: p.shootDate, client: p.client, contractAmount: a.contractAmount, invoiceAmount: a.invoiceAmount, cost: a.cost, note: a.note })
+        body: JSON.stringify({ projectId: p.id, projectName: p.name, date: p.shootDate, client: p.client, quoteAmount: a.quoteAmount, contractAmount: a.contractAmount, invoiceAmount: a.invoiceAmount, cost: a.cost, note: a.note })
       }).catch(function () {});
     }
     toast('归档已保存：' + p.name, 'ok');
@@ -2106,9 +2109,9 @@
     var archList = list.filter(function (p) { return p.archiveOnly; });
     var archSum = archList.reduce(function (s, p) {
       var a = archiveOf(p);
-      s.contract += M.num(a.contractAmount); s.invoice += M.num(a.invoiceAmount); s.cost += M.num(a.cost); if (a.cost !== '' && a.cost !== null && a.cost !== undefined) s.profit += M.round2(M.num(a.contractAmount) - M.num(a.cost)); s.files += (a.files || []).length;
+      s.quote += M.num(a.quoteAmount || a.contractAmount); s.contract += M.num(a.contractAmount); s.invoice += M.num(a.invoiceAmount); s.cost += M.num(a.cost); if (a.cost !== '' && a.cost !== null && a.cost !== undefined) s.profit += M.round2(M.num(a.contractAmount) - M.num(a.cost)); s.files += (a.files || []).length;
       return s;
-    }, { contract: 0, invoice: 0, cost: 0, profit: 0, files: 0 });
+    }, { quote: 0, contract: 0, invoice: 0, cost: 0, profit: 0, files: 0 });
     var items = list.map(function (p) {
       var t = M.totals(p);
       if (p.archiveOnly) {
@@ -2116,8 +2119,8 @@
         var profit = archiveProfit(p);
         return '<div class="history-item"><div><div class="h-title">' + esc(p.name || '未命名资料归档') + ' <span class="archive-badge">资料归档</span></div>' +
           '<div class="h-meta">' + esc(p.shootDate || '') + (p.client ? ' · ' + esc(p.client) : '') + ' · ' + esc(a.files.length) + ' 份资料 · 更新于 ' + esc(p.updatedAt || '') + '</div>' +
-          '<div class="h-archive">合同额 ' + money(a.contractAmount) + ' · 发票 ' + money(a.invoiceAmount) + (profit === null ? ' · 利润待补成本' : ' · 成本 ' + money(a.cost) + ' · 利润 ' + money(profit)) + '</div></div>' +
-          '<div class="h-money"><div class="q">' + (profit === null ? '利润待补' : '利润 ' + money(profit)) + '</div><div class="c">合同额 ' + money(a.contractAmount) + ' · 发票 ' + money(a.invoiceAmount) + '</div></div>' +
+          '<div class="h-archive">核价 ' + money(a.quoteAmount || a.contractAmount) + ' · 合同 ' + money(a.contractAmount) + ' · 发票 ' + money(a.invoiceAmount) + (profit === null ? ' · 利润待补成本' : ' · 成本 ' + money(a.cost) + ' · 利润 ' + money(profit)) + '</div></div>' +
+          '<div class="h-money"><div class="q">' + (profit === null ? '利润待补' : '利润 ' + money(profit)) + '</div><div class="c">核价 ' + money(a.quoteAmount || a.contractAmount) + ' · 合同 ' + money(a.contractAmount) + ' · 发票 ' + money(a.invoiceAmount) + '</div></div>' +
           '<div class="toolbar"><button class="btn sm light" data-act="history-archive" data-pid="' + p.id + '">📁 资料 / 金额</button>' +
           '<button class="btn sm danger" data-act="history-del" data-pid="' + p.id + '">删除</button></div></div>';
       }
@@ -2135,7 +2138,7 @@
     return '<div class="page">' +
       '<section class="card"><div class="card-head"><h2>资料归档 · 利润参考</h2><span class="sub">把过往项目的合同、发票、成本整理进来，长期对比利润</span></div>' +
       '<div class="card-body"><div class="toolbar" style="margin:0 0 10px"><button class="btn solid" data-act="archive-new">＋ 新建资料归档</button><span class="spacer"></span>' +
-      '<span class="muted small">已归档 ' + archList.length + ' 个 · 合同额 ' + money(archSum.contract) + ' · 发票 ' + money(archSum.invoice) + '</span></div>' +
+      '<span class="muted small">已归档 ' + archList.length + ' 个 · 核价 ' + money(archSum.quote) + ' · 合同 ' + money(archSum.contract) + ' · 发票 ' + money(archSum.invoice) + '</span></div>' +
       '<div class="kv"><span class="k">资料归档合计利润（已填成本的）</span><span class="v" style="font-size:20px;color:#276749">' + money(archSum.profit) + '</span></div>' +
       '<div class="kv"><span class="k">已上传单据</span><span class="v">' + archSum.files + ' 份</span></div>' +
       '</div></section>' +
@@ -2165,6 +2168,7 @@
         if (rec.date) p.shootDate = rec.date;
         if (rec.client) p.client = rec.client;
         var a = archiveOf(p);
+        if (rec.quoteAmount !== undefined) a.quoteAmount = rec.quoteAmount === '' ? '' : M.num(rec.quoteAmount);
         if (rec.contractAmount !== undefined) a.contractAmount = rec.contractAmount === '' ? '' : M.num(rec.contractAmount);
         if (rec.invoiceAmount !== undefined) a.invoiceAmount = rec.invoiceAmount === '' ? '' : M.num(rec.invoiceAmount);
         if (rec.cost !== undefined) a.cost = rec.cost === '' ? '' : M.num(rec.cost);

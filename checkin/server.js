@@ -238,6 +238,7 @@ const server = http.createServer((req, res) => {
     const list = Object.keys(archives).map(function (k) { return archives[k]; }).filter(function (x) { return x && x.archiveOnly; }).map(function (x) {
       return {
         projectId: x.projectId, projectName: x.projectName || '', date: x.date || '', client: x.client || '', supplier: x.supplier || '',
+        quoteAmount: x.quoteAmount === undefined ? '' : x.quoteAmount,
         contractAmount: x.contractAmount === undefined ? '' : x.contractAmount,
         invoiceAmount: x.invoiceAmount === undefined ? '' : x.invoiceAmount,
         cost: x.cost === undefined ? '' : x.cost,
@@ -258,6 +259,7 @@ const server = http.createServer((req, res) => {
       a.entry.date = String(body.date || '').slice(0, 40);
       a.entry.client = String(body.client || '').slice(0, 120);
       a.entry.supplier = String(body.supplier || '').slice(0, 120);
+      a.entry.quoteAmount = body.quoteAmount === '' || body.quoteAmount === null || body.quoteAmount === undefined ? '' : Number(body.quoteAmount) || 0;
       a.entry.contractAmount = body.contractAmount === '' || body.contractAmount === null || body.contractAmount === undefined ? '' : Number(body.contractAmount) || 0;
       a.entry.invoiceAmount = body.invoiceAmount === '' || body.invoiceAmount === null || body.invoiceAmount === undefined ? '' : Number(body.invoiceAmount) || 0;
       a.entry.cost = body.cost === '' || body.cost === null || body.cost === undefined ? '' : Number(body.cost) || 0;
