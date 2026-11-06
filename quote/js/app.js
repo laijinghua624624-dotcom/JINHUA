@@ -2123,7 +2123,7 @@
         if (!map[k]) map[k] = { label: a.contractGroup, projects: [], quote: 0, contract: 0 };
         map[k].projects.push(p);
         map[k].quote += M.num(a.quoteAmount || a.contractAmount);
-        map[k].contract += M.num(a.contractAmount);
+        map[k].contract = Math.max(map[k].contract, M.num(a.contractAmount));
       });
       return Object.keys(map).map(function (k) { return map[k]; }).sort(function (a, b) { return b.projects.length - a.projects.length; });
     })();
@@ -2136,7 +2136,7 @@
           '<div class="ac-meta">核价 ' + money(a.quoteAmount || a.contractAmount) + ' · 合同 ' + money(a.contractAmount) + ' · 发票 ' + money(a.invoiceAmount) + ' · ' + esc((a.files || []).length) + ' 份资料</div></div>' +
           '<div class="ac-actions"><button class="btn sm light" data-act="history-archive" data-pid="' + p.id + '">📁 资料 / 金额</button></div></div>';
       }).join('');
-      return '<details class="contract-folder" open><summary><span class="cf-title">📄 ' + esc(g.label) + '</span><span class="cf-meta">' + g.projects.length + ' 个项目 · 核价合计 ' + money(g.quote) + '</span></summary><div class="cf-body">' + rows + '</div></details>';
+      return '<details class="contract-folder"><summary><span class="cf-title">📄 ' + esc(g.label) + '</span><span class="cf-meta">' + g.projects.length + ' 个项目 · 核价合计 ' + money(g.quote) + ' · 合同 ' + money(g.contract) + '</span></summary><div class="cf-body">' + rows + '</div></details>';
     }).join('');
     var items = list.map(function (p) {
       var t = M.totals(p);
