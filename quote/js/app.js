@@ -644,65 +644,81 @@
       '<div class="modal-foot"><span class="spacer"></span><button class="btn light" data-act="modal-close">取消</button>' +
       '<button class="btn primary" data-act="crew-add-save">保存并新增</button></div></div>');
   }
+  function cgMemberRowHtml() {
+    return '<div class="cg-member-row" data-member style="display:grid;grid-template-columns:1fr 88px 34px;gap:8px;margin:6px 0">' +
+      '<input data-cm-name placeholder="岗位，例如 摄影师" style="padding:9px 10px;border:1px solid var(--line-2);border-radius:9px">' +
+      '<input data-cm-qty type="number" min="1" step="1" value="1" title="人数" style="padding:9px 10px;border:1px solid var(--line-2);border-radius:9px">' +
+      '<button class="btn sm danger" type="button" data-act="cg-del-member" title="删除">✕</button></div>';
+  }
   function openCrewGroupAdd() {
-    var templates = [
-      ['摄影组', '摄影师\n摄影大助\n摄影小助\n跟机员\n焦点员\nDIT'],
-      ['灯光组', '灯光师\n灯光大助\n灯光助理\n灯光小助\n电工'],
-      ['录音组', '录音师\n录音助理\n挑杆员'],
-      ['制片组', '制片\n现场制片\n生活制片\n制片助理']
-    ];
-    openModal('<div class="modal" style="width:min(760px,100%)"><div class="modal-head"><h3>按组新增岗位</h3><button class="x-btn" data-act="modal-close">✕</button></div>' +
+    openModal('<div class="modal" style="width:min(820px,100%)"><div class="modal-head"><h3>按组新增岗位</h3><button class="x-btn" data-act="modal-close">✕</button></div>' +
       '<div class="modal-body">' +
-      '<div class="form-grid" style="grid-template-columns:1fr;gap:10px">' +
-      '<label class="field">组别<input id="cg-group" list="cg-group-list" placeholder="例如：摄影组 / 灯光组 / 录音组"><datalist id="cg-group-list"><option>摄影组</option><option>灯光组</option><option>录音组</option><option>制片组</option><option>导演组</option><option>场务组</option></datalist></label>' +
-      '<div class="toolbar" style="margin:0"><span class="muted small">常用模板：</span>' +
-      templates.map(function (t, i) { return '<button class="chip" type="button" data-act="cg-template" data-tpl="' + i + '">' + t[0] + '</button>'; }).join('') + '</div>' +
-      '<label class="field">岗位（每行一个）<textarea id="cg-roles" rows="8" placeholder="摄影师\n摄影大助\n摄影小助" style="width:100%;padding:10px 11px;border:1px solid var(--line-2);border-radius:9px;font:14px/1.6 inherit;resize:vertical"></textarea></label>' +
+      '<label class="field">组名<input id="cg-name" placeholder="例如：45尺电动摇臂组"></label>' +
+      '<div style="margin-top:12px"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px"><b style="font-size:13px">人员组成</b><span class="muted small">岗位 + 人数，可增删</span></div>' +
+      '<div id="cg-members">' + cgMemberRowHtml() + '</div>' +
+      '<button class="btn sm light" type="button" data-act="cg-add-member">＋ 添加人员</button></div>' +
+      '<div class="form-grid" style="grid-template-columns:repeat(3,1fr);margin-top:12px">' +
+      '<label class="field">整组报价（元/天）<input id="cg-quote" type="number" min="0" step="0.01" placeholder="0"></label>' +
+      '<label class="field">整组底价（元/天）<input id="cg-bottom" type="number" min="0" step="0.01" placeholder="0"></label>' +
+      '<label class="field">整组核价（元/天）<input id="cg-approved" type="number" min="0" step="0.01" placeholder="0"></label>' +
+      '<label class="field">加班起算（小时）<input id="cg-start" type="number" min="0" step="0.5" placeholder="例如 14"></label>' +
+      '<label class="field">加班费（元/小时）<input id="cg-rate" type="number" min="0" step="0.01" placeholder="例如 2000"></label>' +
       '</div>' +
-      '<div class="form-grid" style="grid-template-columns:repeat(3,1fr);margin-top:6px">' +
-      '<label class="field">统一报价（元/天）<input id="cg-quote" type="number" min="0" step="0.01" placeholder="0"></label>' +
-      '<label class="field">统一底价（元/天）<input id="cg-bottom" type="number" min="0" step="0.01" placeholder="0"></label>' +
-      '<label class="field">统一核价（元/天）<input id="cg-approved" type="number" min="0" step="0.01" placeholder="0"></label>' +
-      '<label class="field">加班起算（小时）<input id="cg-start" type="number" min="0" step="0.5" placeholder="可不填"></label>' +
-      '<label class="field">加班费（元/小时）<input id="cg-rate" type="number" min="0" step="0.01" placeholder="可不填"></label>' +
-      '</div><p class="muted small" style="margin:8px 0 0">一次生成多个岗位；价格可先统一填，之后在人员标准里逐个改。同名岗位会自动跳过。</p>' +
+      '<p id="cg-preview" class="muted small" style="margin:10px 0 0">填好人员组成后会显示整组说明。</p>' +
       '</div><div class="modal-foot"><span class="spacer"></span><button class="btn light" data-act="modal-close">取消</button>' +
       '<button class="btn primary" data-act="cg-save">按组添加</button></div></div>');
-    state.ui.cgTemplates = templates;
   }
-  function fillCrewGroupTemplate(i) {
-    var t = (state.ui.cgTemplates || [])[i]; if (!t) return;
-    var g = $('#cg-group'), r = $('#cg-roles');
-    if (g) g.value = t[0];
-    if (r) r.value = t[1];
+  function cgCollectMembers() {
+    return $$('#cg-members [data-member]').map(function (row) {
+      var name = (row.querySelector('[data-cm-name]') || {}).value || '';
+      var qty = M.int((row.querySelector('[data-cm-qty]') || {}).value, 1);
+      return { name: name.trim(), qty: Math.max(1, qty) };
+    }).filter(function (m) { return m.name; });
+  }
+  function cgPreviewText() {
+    var members = cgCollectMembers();
+    if (!members.length) return '填好人员组成后会显示整组说明。';
+    var text = '含 ' + members.map(function (m) { return m.name + (m.qty > 1 ? m.qty + '人' : '1人'); }).join('、');
+    var start = (($('#cg-start') || {}).value === '' || ($('#cg-start') || {}).value === undefined) ? null : M.num(($('#cg-start') || {}).value);
+    var rate = (($('#cg-rate') || {}).value === '' || ($('#cg-rate') || {}).value === undefined) ? null : M.num(($('#cg-rate') || {}).value);
+    if (start !== null || rate !== null) text += '；' + overtimeText(start, rate, '小时');
+    return text;
+  }
+  function cgUpdatePreview() { var el = $('#cg-preview'); if (el) el.textContent = cgPreviewText(); }
+  function cgAddMember() {
+    var box = $('#cg-members'); if (!box) return;
+    var wrap = document.createElement('div'); wrap.innerHTML = cgMemberRowHtml();
+    box.appendChild(wrap.firstChild); cgUpdatePreview();
+  }
+  function cgDelMember(btn) {
+    var row = btn.closest('[data-member]'); if (!row) return;
+    var rows = $$('#cg-members [data-member]');
+    if (rows.length <= 1) { toast('至少保留一个岗位', 'warn'); return; }
+    row.remove(); cgUpdatePreview();
   }
   function saveCrewGroupAdd() {
-    var group = (($('#cg-group') || {}).value || '').trim();
-    if (!group) { toast('请先填组别', 'warn'); return; }
-    var raw = (($('#cg-roles') || {}).value || '').split(/[\n,，、]/).map(function (x) { return x.trim(); }).filter(Boolean);
-    var seen = {}, roles = [];
-    raw.forEach(function (n) { var k = normName(n); if (!seen[k]) { seen[k] = 1; roles.push(n); } });
-    if (!roles.length) { toast('请至少填一个岗位名称', 'warn'); return; }
+    var name = (($('#cg-name') || {}).value || '').trim();
+    if (!name) { toast('请先填组名', 'warn'); return; }
+    var members = cgCollectMembers();
+    if (!members.length) { toast('请至少填一个岗位和人数', 'warn'); return; }
     var quote = M.num(($('#cg-quote') || {}).value);
     var bottom = M.num(($('#cg-bottom') || {}).value);
     var approved = M.num(($('#cg-approved') || {}).value);
     var start = (($('#cg-start') || {}).value === '' || ($('#cg-start') || {}).value === undefined) ? null : M.num(($('#cg-start') || {}).value);
     var rate = (($('#cg-rate') || {}).value === '' || ($('#cg-rate') || {}).value === undefined) ? null : M.num(($('#cg-rate') || {}).value);
-    var note = (start !== null || rate !== null) ? overtimeText(start, rate, '小时') : '';
-    var added = 0, skipped = 0;
-    roles.forEach(function (name) {
-      var key = M.normalizeName(name);
-      if (state.catalog.some(function (e) { return (e.type === 'crew' || e.type === undefined) && M.normalizeName(e.name) === key; })) { skipped++; return; }
-      state.catalog.push({
-        id: uid('eq'), key: key, name: name, cat: '人员', unit: '人', type: 'crew',
-        bottom: bottom, quote: quote, approved: approved, stock: null, note: note,
-        otStart: start, otRate: rate, otUnit: '小时',
-        supplier: '自定义', group: group, src: '自定义'
-      });
-      added++;
+    var key = M.normalizeName(name);
+    if (state.catalog.some(function (e) { return M.normalizeName(e.name) === key; })) { toast('已有同名组或岗位「' + name + '」', 'warn'); return; }
+    var membersText = members.map(function (m) { return m.name + (m.qty > 1 ? m.qty + '人' : '1人'); }).join('、');
+    var note = '含 ' + membersText + ((start !== null || rate !== null) ? '；' + overtimeText(start, rate, '小时') : '');
+    state.catalog.push({
+      id: uid('eq'), key: key, name: name, cat: '人员', unit: '组', type: 'crew',
+      crewGroup: true, crewMembers: members,
+      bottom: bottom, quote: quote, approved: approved, stock: null, note: note,
+      otStart: start, otRate: rate, otUnit: '小时',
+      supplier: '自定义', group: '人员组', src: '自定义'
     });
     commit(); closeModal(); render();
-    toast('「' + group + '」已添加 ' + added + ' 个岗位' + (skipped ? '，跳过 ' + skipped + ' 个同名岗位' : ''), 'ok');
+    toast('已按组添加「' + name + '」：整组 ' + members.length + ' 类岗位', 'ok');
   }
   function saveCrewAdd() {
     var name = ($('#ca-name') || {}).value;
@@ -2052,6 +2068,7 @@
       '<button class="btn solid" data-act="export-all">导出全部数据（备份）</button>' +
       '<button class="btn light" data-act="import-all">导入全部数据</button>' +
       '<button class="btn danger" data-act="clear-catalog">清空器材库（保留人员/组合/项目）</button>' +
+      '<button class="btn danger" data-act="clear-crew">清空人员标准（保留器材）</button>' +
       '<button class="btn danger" data-act="clear-projects">清空所有项目（保留器材库/组合）</button>' +
       '<button class="btn danger" data-act="clear-all">清空全部数据</button>' +
       '</div><p class="muted small" style="margin:12px 0 0">数据只存在这台电脑的浏览器里，建议每周导出一次备份。</p>' +
@@ -2559,6 +2576,7 @@
     if (f) smartReadFile(f);
   });
   $('#modal-root').addEventListener('input', function (e) {
+    if (e.target.closest('#cg-members') || e.target.id === 'cg-start' || e.target.id === 'cg-rate') cgUpdatePreview();
     if (e.target.id === 'sup-link-name') {
       state.ui.supplierName = e.target.value;
       var linkEl = $('#sup-link'); if (linkEl) linkEl.value = supplierLink();
@@ -2714,7 +2732,8 @@
       case 'crew-add': openCrewAdd(); break;
       case 'crew-group-add': openCrewGroupAdd(); break;
       case 'crew-add-save': saveCrewAdd(); break;
-      case 'cg-template': fillCrewGroupTemplate(Number(el.dataset.tpl)); break;
+      case 'cg-add-member': cgAddMember(); break;
+      case 'cg-del-member': cgDelMember(el); break;
       case 'cg-save': saveCrewGroupAdd(); break;
       case 'catalog-mode': state.ui.catalogMode = el.dataset.mode; commit(); render(); break;
       case 'catalog-major': state.ui.catalogMajor = el.dataset.major || ''; commit(); render(); break;
@@ -2764,6 +2783,7 @@
       case 'import-all': importAll(); break;
       case 'clear-all': clearAll(); break;
       case 'clear-catalog': clearCatalogEquipment(); break;
+      case 'clear-crew': clearCatalogCrew(); break;
       case 'clear-projects': clearProjectsOnly(); break;
       case 'modal-close': closeModal(); break;
     }
@@ -2775,7 +2795,8 @@
       case 'picker-custom': pickerCustom(); break;
       case 'kits-add': kitsAddFromModal(); break;
       case 'crew-add-save': saveCrewAdd(); break;
-      case 'cg-template': fillCrewGroupTemplate(Number(el.dataset.tpl)); break;
+      case 'cg-add-member': cgAddMember(); break;
+      case 'cg-del-member': cgDelMember(el); break;
       case 'cg-save': saveCrewGroupAdd(); break;
       case 'crew-card-save': saveCrewCard(el.dataset.eid); break;
       case 'profit-pin-ok': checkProfitPin(); break;
@@ -2988,6 +3009,14 @@
     state.ui.catalogMajor = '';
     commit(); render();
     toast('已清空 ' + eqs.length + ' 项器材，组合和人员已保留', 'ok');
+  }
+  function clearCatalogCrew() {
+    var crews = state.catalog.filter(function (e) { return e.type === 'crew'; });
+    if (!crews.length) { toast('人员标准已经是空的', 'warn'); return; }
+    if (!confirm('将删除人员标准里的 ' + crews.length + ' 个岗位/组，保留器材库、组合和历史项目。\n\n确定清空？')) return;
+    state.catalog = state.catalog.filter(function (e) { return e.type !== 'crew'; });
+    commit(); render();
+    toast('已清空 ' + crews.length + ' 个岗位/组', 'ok');
   }
   function clearProjectsOnly() {
     if (!confirm('删除所有项目（当前项目 + 历史项目 + 加班/报销记录）？器材库和器材组合会保留。')) return;
