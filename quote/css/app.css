@@ -437,3 +437,6 @@ label.field.qk input.qty{width:54px;flex:none}
 .cloud-sync.synced{background:#e7f5ec;color:#276749}
 .cloud-sync.syncing{background:#fff4d6;color:#8a5a00}
 .cloud-sync.offline,.cloud-sync.conflict{background:#fdecec;color:#b42318}
+
+/* 人员标准：单人/组别分区 */
+.list-count{display:inline-block;margin-left:4px;padding:1px 7px;border-radius:99px;background:#eef2ee;color:var(--muted);font-size:12px;font-weight:700;vertical-align:2px}

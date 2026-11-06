@@ -1900,6 +1900,14 @@
 
     var photoN = state.catalog.filter(function (e) { return e.type !== 'crew' && majorOf(e) === '摄影器材'; }).length;
     var lightN = state.catalog.filter(function (e) { return e.type !== 'crew' && majorOf(e) === '灯光器材'; }).length;
+    var singleRows = '', groupRows = '', singleN = 0, groupN = 0;
+    if (crewMode) {
+      var singles = list.filter(function (e) { return !e.crewGroup; });
+      var groups = list.filter(function (e) { return e.crewGroup; });
+      singleN = singles.length; groupN = groups.length;
+      singleRows = singles.map(crewRowHtml).join('');
+      groupRows = groups.map(crewGroupRowHtml).join('');
+    }
     var primary = crewMode
       ? '<button class="btn primary" data-act="crew-add">＋ 新增岗位</button>' +
         '<button class="btn solid" data-act="crew-group-add">按组新增</button>' +
@@ -1917,7 +1925,7 @@
       '<div><div class="catalog-kicker">' + (crewMode ? 'CREW STANDARDS' : 'EQUIPMENT LIBRARY') + '</div>' +
       '<h1>' + (crewMode ? '人员标准' : '器材库') + '</h1>' +
       '<p class="catalog-meta">' + (crewMode
-        ? '共 ' + crewN + ' 个岗位 · 报价 / 底价 / 核价 + 加班费标准'
+        ? '单人岗位 ' + singleN + ' 个 · 人员组 ' + groupN + ' 组 · 报价 / 底价 / 核价 + 加班费'
         : '摄影器材 ' + photoN + ' 项 · 灯光器材 ' + lightN + ' 项 · 共 ' + eqN + ' 项') + ' · 最后更新 ' + esc(state.meta.catalogUpdatedAt || state.meta.generatedAt || '—') + ' ' + cloudBadgeHtml() + '</p></div>' +
       '<div class="catalog-hero-actions">' + primary + '</div></section>' +
       '<section class="catalog-workbench">' +
@@ -1938,15 +1946,21 @@
       (crewMode ? '' : '<button class="btn sm light" data-act="catalog-import">导入 JSON</button>' +
         '<button class="btn sm light" data-act="catalog-export">导出 JSON</button>') +
       '<span class="spacer"></span>' +
-      '<span class="catalog-count">' + (crewMode ? '岗位 ' + crewN : '器材 ' + eqN + ' · 人员 ' + crewN) + '</span>' +
+      '<span class="catalog-count">' + (crewMode ? '单人 ' + singleN + ' · 组 ' + groupN : '器材 ' + eqN + ' · 人员 ' + crewN) + '</span>' +
       '</div></section>' +
-      '<section class="card"><div class="card-head catalog-list-head"><h2>' + (crewMode ? '岗位清单' : '器材清单') + '</h2>' +
-      '<span class="sub">' + (crewMode ? '改完自动保存；点 📇 可设置加班费标准' : '底价 / 报价 / 核价可直接改；改完自动保存') + '</span></div>' +
-      '<div class="table-scroll"><table class="grid"><thead><tr>' +
       (crewMode
-        ? '<th style="min-width:230px">岗位名称</th><th>分类</th><th>单位</th><th class="num">报价</th><th class="num">底价</th><th class="num">核价</th><th style="min-width:330px">加班费标准（备注）</th><th></th>'
-        : '<th style="min-width:250px">器材名称（含型号）</th><th>分类</th><th>类型</th><th>单位</th><th class="num">底价</th><th class="num">报价</th><th class="num">核价</th><th class="num">库存</th><th style="min-width:160px">备注</th><th></th>') +
-      '</tr></thead><tbody>' + (rows || '<tr><td colspan="10" class="muted" style="text-align:center;padding:24px">没有数据</td></tr>') + '</tbody></table></div></section>' +
+        ? '<section class="card"><div class="card-head catalog-list-head"><h2>单人岗位 <span class="list-count">' + singleN + '</span></h2>' +
+          '<span class="sub">按人计价的独立岗位；改完自动保存</span></div>' +
+          '<div class="table-scroll"><table class="grid"><thead><tr><th style="min-width:230px">岗位名称</th><th>分类</th><th>单位</th><th class="num">报价</th><th class="num">底价</th><th class="num">核价</th><th style="min-width:330px">加班费标准（备注）</th><th></th></tr></thead>' +
+          '<tbody>' + (singleRows || '<tr><td colspan="8" class="muted" style="text-align:center;padding:22px">还没有单人岗位，点右上角「新增岗位」。</td></tr>') + '</tbody></table></div></section>' +
+          '<section class="card"><div class="card-head catalog-list-head"><h2>人员组 <span class="list-count">' + groupN + '</span></h2>' +
+          '<span class="sub">整组计价：一组人一个总价，按组数结算</span></div>' +
+          '<div class="table-scroll"><table class="grid"><thead><tr><th style="min-width:220px">组名</th><th style="min-width:240px">人员组成</th><th>单位</th><th class="num">整组报价</th><th class="num">整组底价</th><th class="num">整组核价</th><th style="min-width:330px">加班费标准</th><th></th></tr></thead>' +
+          '<tbody>' + (groupRows || '<tr><td colspan="8" class="muted" style="text-align:center;padding:22px">还没有人员组，点右上角「按组新增」。</td></tr>') + '</tbody></table></div></section>'
+        : '<section class="card"><div class="card-head catalog-list-head"><h2>器材清单</h2>' +
+          '<span class="sub">底价 / 报价 / 核价可直接改；改完自动保存</span></div>' +
+          '<div class="table-scroll"><table class="grid"><thead><tr><th style="min-width:250px">器材名称（含型号）</th><th>分类</th><th>类型</th><th>单位</th><th class="num">底价</th><th class="num">报价</th><th class="num">核价</th><th class="num">库存</th><th style="min-width:160px">备注</th><th></th></tr></thead>' +
+          '<tbody>' + (rows || '<tr><td colspan="10" class="muted" style="text-align:center;padding:24px">没有数据</td></tr>') + '</tbody></table></div></section>') +
       '<div class="totals-bar"><div class="t-item"><span class="t-label">器材库来源</span><span class="t-val" style="font-size:13px">' + esc(state.meta.source || '') + '</span></div>' +
       '<span class="spacer"></span><span class="t-note">共 ' + state.catalog.length + ' 项 · 更新于 ' + esc(state.meta.catalogUpdatedAt || state.meta.generatedAt || '—') + ' · 改价/改名自动保存</span></div>' +
       '</div>';
@@ -1962,6 +1976,20 @@
       '<td><input class="note" data-efield="note" value="' + esc(e.note || '') + '" placeholder="例如：加班费14小时开始算加班费，加班费为300/小时"></td>' +
       '<td style="text-align:center;white-space:nowrap">' +
       '<button class="btn sm light" data-act="crew-card" data-eid="' + e.id + '" title="岗位资料卡（加班费标准）">📇</button> ' +
+      '<button class="btn sm ' + (isLock(e) ? 'solid' : 'light') + '" data-act="catalog-lock" data-eid="' + e.id + '" title="锁定/解锁价格">' + (isLock(e) ? '🔒' : '🔓') + '</button> ' +
+      '<button class="del" data-act="catalog-del" data-eid="' + e.id + '">✕</button></td></tr>';
+  }
+  function crewGroupRowHtml(e) {
+    var members = (e.crewMembers || []).map(function (m) { return m.name + (m.qty > 1 ? ' ×' + m.qty : ' ×1'); }).join('、');
+    return '<tr data-eid="' + e.id + '" data-name="' + esc(e.name) + '" data-cat="' + esc(e.cat || '') + '" data-type="crew" data-sup="' + esc(supOf(e)) + '" data-group="' + esc(grpOf(e)) + '">' +
+      '<td><input class="name-edit" data-efield="name" value="' + esc(e.name) + '"><div class="grp-tag">' + esc(grpOf(e) || '人员组') + '</div></td>' +
+      '<td class="muted small">' + esc(members || e.note || '—') + '</td>' +
+      '<td><input class="input-plain" style="width:42px" data-efield="unit" value="' + esc(e.unit || '组') + '"></td>' +
+      '<td class="num"><input class="price" type="number" min="0" step="0.01" data-efield="quote" value="' + esc(e.quote) + '"' + (isLock(e) ? ' disabled' : '') + '></td>' +
+      '<td class="num"><input class="price" type="number" min="0" step="0.01" data-efield="bottom" value="' + esc(e.bottom) + '"' + (isLock(e) ? ' disabled' : '') + '></td>' +
+      '<td class="num"><input class="price" type="number" min="0" step="0.01" data-efield="approved" value="' + esc(e.approved) + '"' + (isLock(e) ? ' disabled' : '') + '></td>' +
+      '<td><input class="note" data-efield="note" value="' + esc(e.note || '') + '" placeholder="加班费标准"></td>' +
+      '<td style="text-align:center;white-space:nowrap">' +
       '<button class="btn sm ' + (isLock(e) ? 'solid' : 'light') + '" data-act="catalog-lock" data-eid="' + e.id + '" title="锁定/解锁价格">' + (isLock(e) ? '🔒' : '🔓') + '</button> ' +
       '<button class="del" data-act="catalog-del" data-eid="' + e.id + '">✕</button></td></tr>';
   }
