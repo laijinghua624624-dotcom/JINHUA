@@ -452,3 +452,19 @@ label.field.qk input.qty{width:54px;flex:none}
 .cg-label{font-weight:700;font-size:13px}
 .cg-meta{font-size:12px;color:var(--muted);margin-top:2px}
 .cg-projects{font-size:12px;color:#4b5563;margin-top:5px;line-height:1.6}
+
+/* 合同文件夹 */
+.contract-folder{border:1px solid var(--line);border-radius:12px;background:#fbfcfa;margin:8px 0;overflow:hidden}
+.contract-folder>summary{display:flex;align-items:center;gap:10px;padding:12px 14px;cursor:pointer;list-style:none;background:#f4f7f3}
+.contract-folder>summary::-webkit-details-marker{display:none}
+.contract-folder>summary:before{content:'▸';color:var(--muted);font-size:12px}
+.contract-folder[open]>summary:before{content:'▾'}
+.cf-title{font-weight:800;font-size:14px;flex:1;min-width:0}
+.cf-meta{font-size:12px;color:var(--muted);white-space:nowrap}
+.cf-body{padding:6px 14px 12px;border-top:1px dashed var(--line)}
+.archive-child{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:9px 0;border-bottom:1px dashed var(--line)}
+.archive-child:last-child{border-bottom:0}
+.ac-title{font-weight:700;font-size:13px}
+.ac-meta{font-size:12px;color:var(--muted);margin-top:2px}
+.ac-actions{flex-shrink:0}
+@media(max-width:720px){.contract-folder>summary{flex-wrap:wrap}.cf-meta{white-space:normal}.archive-child{align-items:flex-start;flex-direction:column;gap:6px}.ac-actions{width:100%}.ac-actions .btn{width:100%}}

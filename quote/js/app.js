@@ -2127,10 +2127,22 @@
       });
       return Object.keys(map).map(function (k) { return map[k]; }).sort(function (a, b) { return b.projects.length - a.projects.length; });
     })();
+    var groupedIds = {};
+    contractGroups.forEach(function (g) { g.projects.forEach(function (p) { groupedIds[p.id] = 1; }); });
+    var groupFolders = contractGroups.map(function (g) {
+      var rows = g.projects.slice().sort(function (a, b) { return String(a.shootDate || '').localeCompare(String(b.shootDate || '')); }).map(function (p) {
+        var a = archiveOf(p); var profit = archiveProfit(p);
+        return '<div class="archive-child"><div class="ac-main"><div class="ac-title">' + esc(p.shootDate || '') + ' · ' + esc(p.name || '未命名') + '</div>' +
+          '<div class="ac-meta">核价 ' + money(a.quoteAmount || a.contractAmount) + ' · 合同 ' + money(a.contractAmount) + ' · 发票 ' + money(a.invoiceAmount) + ' · ' + esc((a.files || []).length) + ' 份资料</div></div>' +
+          '<div class="ac-actions"><button class="btn sm light" data-act="history-archive" data-pid="' + p.id + '">📁 资料 / 金额</button></div></div>';
+      }).join('');
+      return '<details class="contract-folder" open><summary><span class="cf-title">📄 ' + esc(g.label) + '</span><span class="cf-meta">' + g.projects.length + ' 个项目 · 核价合计 ' + money(g.quote) + '</span></summary><div class="cf-body">' + rows + '</div></details>';
+    }).join('');
     var items = list.map(function (p) {
       var t = M.totals(p);
       if (p.archiveOnly) {
         var a = archiveOf(p);
+        if (groupedIds[p.id]) return '';
         var profit = archiveProfit(p);
         return '<div class="history-item"><div><div class="h-title">' + esc(p.name || '未命名资料归档') + ' <span class="archive-badge">资料归档</span></div>' +
           '<div class="h-meta">' + esc(p.shootDate || '') + (p.client ? ' · ' + esc(p.client) : '') + ' · ' + esc(a.files.length) + ' 份资料 · 更新于 ' + esc(p.updatedAt || '') + '</div>' +
@@ -2157,18 +2169,16 @@
       '<span class="muted small">已归档 ' + archList.length + ' 个 · 核价 ' + money(archSum.quote) + ' · 合同 ' + money(archSum.contract) + ' · 发票 ' + money(archSum.invoice) + '</span></div>' +
       '<div class="kv"><span class="k">资料归档合计利润（已填成本的）</span><span class="v" style="font-size:20px;color:#276749">' + money(archSum.profit) + '</span></div>' +
       '<div class="kv"><span class="k">已上传单据</span><span class="v">' + archSum.files + ' 份</span></div>' +
-      (contractGroups.length ? '<div class="contract-groups"><div class="cg-title">同一张合同的项目（' + contractGroups.length + ' 张合同）</div>' +
-        contractGroups.map(function (g) {
-          return '<div class="cg-row"><div class="cg-label">📄 ' + esc(g.label) + '</div><div class="cg-meta">' + g.projects.length + ' 个项目 · 核价合计 ' + money(g.quote) + '</div><div class="cg-projects">' +
-            g.projects.slice().sort(function (a, b) { return String(a.shootDate || '').localeCompare(String(b.shootDate || '')); }).map(function (p) { return esc(p.shootDate || '') + ' ' + esc(p.name || ''); }).join('　|　') + '</div></div>';
-        }).join('') + '</div>' : '') +
+      (contractGroups.length ? '<p class="muted small" style="margin:10px 0 0">已自动识别 <b>' + contractGroups.length + '</b> 张共用合同，共 ' + Object.keys(groupedIds).length + ' 个项目，已按合同分组放在下方。</p>' : '') +
       '</div></section>' +
       '<section class="card"><div class="card-head"><h2>当前编辑中的项目</h2><span class="sub">还没存到历史里？点保存</span></div>' +
       '<div class="card-body"><div class="history-item" style="border:0;padding:0"><div><div class="h-title">' + esc(cur.name || '未命名项目') + '</div>' +
       '<div class="h-meta">' + esc(cur.shootDate || '') + ' · ' + cur.groups.length + ' 个机位组 · ' + M.sumQty(cur) + ' 件</div></div>' +
       '<div class="h-money"><div class="q">核价 ' + money(curT.approved) + '</div><div class="c">报价 ' + money(curT.quote) + ' · 底价 ' + money(curT.bottom) + ' · 利润 ' + money(curT.profit) + '（' + curT.profitRateBottom + '%）</div></div>' +
       '<div class="toolbar"><button class="btn sm solid" data-act="save">保存到历史</button></div></div></div></section>' +
-      '<section class="card"><div class="card-head"><h2>历史项目（' + list.length + '）</h2><span class="sub">点载入继续编辑；资料归档只能看资料和金额</span></div>' +
+      (contractGroups.length ? '<section class="card"><div class="card-head"><h2>同一合同分组（' + contractGroups.length + ' 张合同）</h2><span class="sub">一张合同一个组，展开查看其中的项目；项目金额和文件仍各自独立</span></div>' +
+        '<div class="card-body">' + groupFolders + '</div></section>' : '') +
+      '<section class="card"><div class="card-head"><h2>项目列表（' + list.length + '）</h2><span class="sub">未共用合同的项目；共用合同的项目已归到上方分组</span></div>' +
       '<div class="card-body"><div class="history-list">' + items + '</div></div></section>' +
       '</div>';
   }
