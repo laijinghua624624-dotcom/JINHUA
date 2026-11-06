@@ -58,12 +58,16 @@ function oldRunOCR(file, cb) {
 const SUBS_FILE = path.join(DATA, 'submissions.json');
 const EXP_FILE = path.join(DATA, 'expenses.json');
 const SUP_FILE = path.join(DATA, 'suppliers.json');
+const ARCH_DIR = path.join(DATA, 'archives');
+const ARCH_META = path.join(DATA, 'archives.json');
 
 fs.mkdirSync(PHOTOS, { recursive: true });
-let subs = [], exps = [], sups = [];
+fs.mkdirSync(ARCH_DIR, { recursive: true });
+let subs = [], exps = [], sups = [], archives = {};
 try { subs = JSON.parse(fs.readFileSync(SUBS_FILE, 'utf8')); } catch (e) { subs = []; }
 try { exps = JSON.parse(fs.readFileSync(EXP_FILE, 'utf8')); } catch (e) { exps = []; }
 try { sups = JSON.parse(fs.readFileSync(SUP_FILE, 'utf8')); } catch (e) { sups = []; }
+try { archives = JSON.parse(fs.readFileSync(ARCH_META, 'utf8')); } catch (e) { archives = {}; }
 function saveSubs() {
   const tmp = SUBS_FILE + '.tmp';
   fs.writeFileSync(tmp, JSON.stringify(subs, null, 1));
@@ -78,6 +82,17 @@ function saveSups() {
   const tmp = SUP_FILE + '.tmp';
   fs.writeFileSync(tmp, JSON.stringify(sups, null, 1));
   fs.renameSync(tmp, SUP_FILE);
+}
+function saveArchives() {
+  const tmp = ARCH_META + '.tmp';
+  fs.writeFileSync(tmp, JSON.stringify(archives, null, 1));
+  fs.renameSync(tmp, ARCH_META);
+}
+function safeSeg(v) { return String(v || '').replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 60) || 'misc'; }
+function archEntry(projectId) {
+  const k = safeSeg(projectId);
+  if (!archives[k]) archives[k] = { projectId: String(projectId || ''), projectName: '', files: [] };
+  return { k: k, entry: archives[k] };
 }
 function lanUrls() {
   const out = [];
@@ -148,6 +163,13 @@ const server = http.createServer((req, res) => {
   if (p === '/admin') return staticFile(res, PUB, 'admin.html');
   if (p === '/style.css' || p === '/form.js' || p === '/expense.js' || p === '/admin.js' || p === '/supplier.js' || p === '/supplier.css') return staticFile(res, PUB, p.slice(1));
   if (p.startsWith('/photos/')) return staticFile(res, PHOTOS, p.slice('/photos/'.length));
+  if (p.startsWith('/archives/')) {
+    const rel = p.slice('/archives/'.length);
+    const parts = rel.split('/');
+    if (parts.length !== 2) return send(res, 404, 'text/plain; charset=utf-8', 'not found');
+    const base = path.join(ARCH_DIR, safeSeg(parts[0]));
+    return staticFile(res, base, parts[1]);
+  }
   if (p === '/api/meta') {
     const urls = lanUrls();
     return json(res, { project: CONFIG.project, depts: CONFIG.depts, port: PORT, lanUrls: urls, formUrl: urls[0] + '/m', expenseUrl: urls[0] + '/expense', adminUrl: urls[0] + '/admin', count: subs.length, expenseCount: exps.length });
@@ -201,6 +223,59 @@ const server = http.createServer((req, res) => {
     const head = ['项目', '日期', '部门', '职位', '姓名', '费用类型', '同乘人', '前往费用', '停车费', '过路费', '离开费用', '小计', '备注', '票据'];
     const lines = [head.join(',')].concat(exps.map(e => [(e.jobName || ''), e.date, e.dept, e.role, e.name, e.type === 'equipment' ? '器材运输' : '网约车', (e.passengers || '').replace(/[\r\n,]/g, ' '), e.goCost, e.parking, e.toll, e.leaveCost, (Number(e.goCost) + Number(e.parking) + Number(e.toll) + Number(e.leaveCost)).toFixed(2), (e.note || '').replace(/[\r\n,]/g, ' '), base + '/' + e.photo].map(v => '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"').join(',')));
     return send(res, 200, 'text/csv; charset=utf-8', '\ufeff' + lines.join('\r\n'), { 'Content-Disposition': 'attachment; filename="expenses.csv"' });
+  }
+  if (p === '/api/archive/list') {
+    const pid = u.searchParams.get('projectId') || '';
+    const a = archEntry(pid);
+    return json(res, { ok: true, projectId: pid, files: a.entry.files || [] });
+  }
+  if (p === '/api/archive/upload' && req.method === 'POST') {
+    return readBody(req, 32 * 1024 * 1024, (err, buf) => {
+      if (err) return json(res, { ok: false, error: '文件太大（单份不超过 20MB）' }, 413);
+      let body; try { body = JSON.parse(buf.toString('utf8')); } catch (e) { return json(res, { ok: false, error: '数据格式错误' }, 400); }
+      const projectId = String(body.projectId || '').trim();
+      const projectName = String(body.projectName || '').trim().slice(0, 120);
+      const fileName = String(body.fileName || '').trim().slice(0, 180);
+      const dataUrl = String(body.data || '');
+      if (!projectId) return json(res, { ok: false, error: '缺少项目' }, 400);
+      if (!fileName) return json(res, { ok: false, error: '缺少文件名' }, 400);
+      if (!/^data:[^;]+;base64,/.test(dataUrl)) return json(res, { ok: false, error: '文件格式错误' }, 400);
+      const ext = (fileName.match(/\.[a-zA-Z0-9]{1,8}$/) || [''])[0].toLowerCase();
+      if (['.pdf', '.jpg', '.jpeg', '.png', '.webp', '.doc', '.docx', '.xls', '.xlsx', '.zip'].indexOf(ext) < 0) return json(res, { ok: false, error: '只支持 PDF / 图片 / Word / Excel / ZIP' }, 400);
+      const img = Buffer.from(dataUrl.split(',')[1], 'base64');
+      if (img.length > 20 * 1024 * 1024) return json(res, { ok: false, error: '文件太大（单份不超过 20MB）' }, 413);
+      const a = archEntry(projectId);
+      const dir = path.join(ARCH_DIR, a.k);
+      fs.mkdirSync(dir, { recursive: true });
+      const id = Date.now().toString(36) + crypto.randomBytes(2).toString('hex');
+      const stored = id + ext;
+      fs.writeFileSync(path.join(dir, stored), img);
+      const rec = {
+        id: id, name: fileName, stored: stored,
+        url: '/archives/' + a.k + '/' + stored,
+        size: img.length,
+        uploadedAt: new Date().toLocaleString('zh-CN', { hour12: false })
+      };
+      if (projectName) a.entry.projectName = projectName;
+      a.entry.files = a.entry.files || [];
+      a.entry.files.push(rec);
+      saveArchives();
+      json(res, { ok: true, file: rec });
+    });
+  }
+  if (p === '/api/archive/delete' && req.method === 'POST') {
+    return readBody(req, 64 * 1024, (err, buf) => {
+      if (err) return json(res, { ok: false }, 400);
+      let body; try { body = JSON.parse(buf.toString('utf8')); } catch (e) { return json(res, { ok: false }, 400); }
+      const a = archEntry(String(body.projectId || ''));
+      const file = (a.entry.files || []).filter(function (x) { return x.id === body.fileId; })[0];
+      if (file) {
+        try { fs.unlinkSync(path.join(ARCH_DIR, a.k, file.stored)); } catch (e) {}
+        a.entry.files = a.entry.files.filter(function (x) { return x.id !== body.fileId; });
+        saveArchives();
+      }
+      json(res, { ok: true });
+    });
   }
   if (p === '/api/supplier/submissions') {
     return json(res, sups.slice().reverse());

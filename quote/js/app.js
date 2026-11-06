@@ -1263,6 +1263,87 @@
     }).catch(function () { toast('删除失败', 'err'); });
   }
 
+  function archiveOf(p) {
+    if (!p.archive || typeof p.archive !== 'object') p.archive = { contractAmount: '', note: '', files: [] };
+    if (!Array.isArray(p.archive.files)) p.archive.files = [];
+    return p.archive;
+  }
+  function archiveSize(n) {
+    n = Number(n) || 0;
+    if (n >= 1024 * 1024) return (n / 1024 / 1024).toFixed(1) + ' MB';
+    if (n >= 1024) return Math.round(n / 1024) + ' KB';
+    return n + ' B';
+  }
+  function renderArchiveFiles() {
+    var box = $('#archive-files'); if (!box) return;
+    var p = state.projects.filter(function (x) { return x.id === state.ui.archivePid; })[0];
+    var files = p ? archiveOf(p).files : [];
+    if (!files.length) { box.innerHTML = '<p class="muted small" style="margin:8px 0">还没有上传发票或合同。</p>'; return; }
+    box.innerHTML = files.map(function (f) {
+      return '<div class="archive-file"><div><div class="af-name">📎 ' + esc(f.name) + '</div>' +
+        '<div class="muted small">' + archiveSize(f.size) + ' · ' + esc(f.uploadedAt || '') + '</div></div>' +
+        '<div class="toolbar"><a class="btn sm light" href="' + esc(checkinBase() + f.url) + '" target="_blank" rel="noopener">打开</a>' +
+        '<button class="btn sm danger" data-act="archive-del" data-id="' + esc(f.id) + '">删除</button></div></div>';
+    }).join('');
+  }
+  function openArchive(pid) {
+    var p = state.projects.filter(function (x) { return x.id === pid; })[0]; if (!p) return;
+    state.ui.archivePid = pid;
+    var a = archiveOf(p);
+    openModal('<div class="modal" style="width:min(760px,100%)"><div class="modal-head"><h3>项目归档 · ' + esc(p.name || '未命名项目') + '</h3><button class="x-btn" data-act="modal-close">✕</button></div>' +
+      '<div class="modal-body">' +
+      '<div class="form-grid" style="grid-template-columns:1fr 1fr">' +
+      '<label class="field">合同金额（元）<input id="arc-amount" type="number" min="0" step="0.01" value="' + esc(a.contractAmount === '' ? '' : a.contractAmount) + '" placeholder="例如 25000"></label>' +
+      '<label class="field">归档备注<input id="arc-note" value="' + esc(a.note || '') + '" placeholder="例如：已开票 / 合同编号"></label>' +
+      '</div>' +
+      '<div class="toolbar" style="margin:12px 0 4px"><button class="btn solid" data-act="archive-upload">上传发票 / 合同</button>' +
+      '<input id="archive-file" type="file" accept=".pdf,.jpg,.jpeg,.png,.webp,.doc,.docx,.xls,.xlsx,.zip" style="display:none">' +
+      '<span class="muted small">支持 PDF / 图片 / Word / Excel / ZIP，单份不超过 20MB</span></div>' +
+      '<div id="archive-files"></div>' +
+      '</div><div class="modal-foot"><span class="spacer"></span><button class="btn light" data-act="modal-close">取消</button>' +
+      '<button class="btn primary" data-act="archive-save">保存归档</button></div></div>');
+    renderArchiveFiles();
+    fetch(checkinBase() + '/api/archive/list?projectId=' + encodeURIComponent(pid), { cache: 'no-store' }).then(function (r) { return r.json(); }).then(function (j) {
+      if (j && Array.isArray(j.files)) { a.files = j.files; renderArchiveFiles(); }
+    }).catch(function () {});
+  }
+  function uploadArchiveFile(file) {
+    var p = state.projects.filter(function (x) { return x.id === state.ui.archivePid; })[0]; if (!p) return;
+    if (!file) return;
+    if (file.size > 20 * 1024 * 1024) { toast('文件超过 20MB，请压缩后再传', 'err'); return; }
+    var reader = new FileReader();
+    reader.onload = function () {
+      toast('正在上传「' + file.name + '」…', 'ok');
+      fetch(checkinBase() + '/api/archive/upload', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ projectId: p.id, projectName: p.name, fileName: file.name, data: reader.result })
+      }).then(function (r) { return r.json(); }).then(function (j) {
+        if (!j.ok) throw new Error(j.error || '上传失败');
+        archiveOf(p).files.push(j.file);
+        commit(); renderArchiveFiles(); render();
+        toast('已上传「' + file.name + '」', 'ok');
+      }).catch(function (e) { toast(e.message || '上传失败，检查上传服务', 'err'); });
+    };
+    reader.onerror = function () { toast('文件读取失败', 'err'); };
+    reader.readAsDataURL(file);
+  }
+  function saveArchive() {
+    var p = state.projects.filter(function (x) { return x.id === state.ui.archivePid; })[0]; if (!p) return;
+    var a = archiveOf(p);
+    a.contractAmount = M.num(($('#arc-amount') || {}).value);
+    a.note = (($('#arc-note') || {}).value || '').trim();
+    commit(); closeModal(); render();
+    toast('归档已保存：' + p.name, 'ok');
+  }
+  function delArchiveFile(fileId) {
+    var p = state.projects.filter(function (x) { return x.id === state.ui.archivePid; })[0]; if (!p) return;
+    if (!confirm('删除这份文件？')) return;
+    fetch(checkinBase() + '/api/archive/delete', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ projectId: p.id, fileId: fileId }) }).then(function () {
+      var a = archiveOf(p); a.files = a.files.filter(function (f) { return f.id !== fileId; });
+      commit(); renderArchiveFiles(); render(); toast('已删除');
+    }).catch(function () { toast('删除失败', 'err'); });
+  }
+
   function openCheckinModal() {
     var base = checkinBase();
     fetch(base + '/api/meta').then(function (r) { return r.json(); }).then(function (m) {
@@ -1744,9 +1825,11 @@
     var items = list.map(function (p) {
       var t = M.totals(p);
       return '<div class="history-item"><div><div class="h-title">' + esc(p.name || '未命名项目') + '</div>' +
-        '<div class="h-meta">' + esc(p.shootDate || '') + ' · ' + (p.groups || []).length + ' 个机位组 · 保存于 ' + esc(p.updatedAt || '') + '</div></div>' +
+        '<div class="h-meta">' + esc(p.shootDate || '') + ' · ' + (p.groups || []).length + ' 个机位组 · 保存于 ' + esc(p.updatedAt || '') + '</div>' +
+        (function () { var a = archiveOf(p); return (a.contractAmount || a.files.length) ? '<div class="h-archive">📁 合同额 ' + money(a.contractAmount) + (a.files.length ? ' · 发票/合同 ' + a.files.length + ' 份' : '') + '</div>' : ''; })() + '</div>' +
         '<div class="h-money"><div class="q">核价 ' + money(t.approved) + '</div><div class="c">报价 ' + money(t.quote) + ' · 底价 ' + money(t.bottom) + ' · 利润 ' + money(t.profit) + '（' + t.profitRateBottom + '%）</div></div>' +
-        '<div class="toolbar"><button class="btn sm solid" data-act="history-settle" data-pid="' + p.id + '">结算</button>' +
+        '<div class="toolbar"><button class="btn sm light" data-act="history-archive" data-pid="' + p.id + '">📁 归档</button>' +
+        '<button class="btn sm solid" data-act="history-settle" data-pid="' + p.id + '">结算</button>' +
         '<button class="btn sm light" data-act="history-load" data-pid="' + p.id + '">载入</button>' +
         '<button class="btn sm light" data-act="history-dup" data-pid="' + p.id + '">复制</button>' +
         '<button class="btn sm danger" data-act="history-del" data-pid="' + p.id + '">删除</button></div></div>';
@@ -2285,6 +2368,7 @@
     var t = e.target;
     if (t.dataset.kitPick) updateKitPickCount();
     if (t.id === 'smart-file' && t.files && t.files[0]) { smartReadFile(t.files[0]); t.value = ''; }
+    if (t.id === 'archive-file' && t.files && t.files[0]) { uploadArchiveFile(t.files[0]); t.value = ''; }
     if (t.id === 'smart-price-mode' && smartImport) { smartImport.mode = t.value; smartRenderPreview(); }
   });
   $('#modal-root').addEventListener('dragover', function (e) {
@@ -2488,6 +2572,7 @@
         state.catalog = json.map(function (e) { e.id = e.id || uid('eq'); return e; });
         commit(); render(); toast('已导入 ' + state.catalog.length + ' 项器材', 'ok');
       }); break;
+      case 'history-archive': openArchive(el.dataset.pid); break;
       case 'history-settle': state.ui.settleId = el.dataset.pid; state.ui.settleView = 'overtime'; state.ui.tab = 'history'; render(); break;
       case 'settle-view': state.ui.settleView = el.dataset.view; render(); break;
       case 'settle-back': state.ui.settleId = null; state.ui.settleView = null; render(); break;
@@ -2515,6 +2600,9 @@
       case 'supplier-open-link': window.open(supplierLink(), '_blank', 'noopener'); break;
       case 'supplier-refresh': supplierFetchSubs(); break;
       case 'supplier-import': supplierImport(el.dataset.id); break;
+      case 'archive-upload': { var af = $('#archive-file'); if (af) af.click(); break; }
+      case 'archive-save': saveArchive(); break;
+      case 'archive-del': delArchiveFile(el.dataset.id); break;
       case 'supplier-del-sub': supplierDelete(el.dataset.id); break;
       case 'share-copy': (function () {
         var u = window.__shareUrls || {}, t = el.dataset.target;
@@ -2586,7 +2674,8 @@
       markupRate: M.num((state && state.settings ? state.settings.markupRate : 30)) / 100,
       cutRate: M.num((state && state.settings ? state.settings.cutRate : 20)) / 100,
       rebateRate: M.num((state && state.settings ? state.settings.rebateRate : 5)) / 100,
-      remark: '', groups: [{ id: uid('g'), name: '机位组 1', items: [] }], outbound: {}
+      remark: '', groups: [{ id: uid('g'), name: '机位组 1', items: [] }], outbound: {},
+      archive: { contractAmount: '', note: '', files: [] }
     });
   }
   function newProject() {
