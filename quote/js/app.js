@@ -1376,19 +1376,46 @@
         '<button class="btn sm danger" data-act="archive-del" data-id="' + esc(f.id) + '">删除</button></div></div>';
     }).join('');
   }
+  function archiveProfit(p) {
+    var a = archiveOf(p);
+    return M.round2(M.num(a.contractAmount) - M.num(a.cost));
+  }
+  function updateArchiveProfit() {
+    var c = M.num(($('#arc-amount') || {}).value);
+    var cost = M.num(($('#arc-cost') || {}).value);
+    var el = $('#arc-profit'); if (el) el.value = M.round2(c - cost);
+  }
+  function newArchiveProject() {
+    var p = {
+      id: uid('p'), no: '', name: '新建资料归档', client: '', location: '', shootDate: today(), days: 1,
+      groups: [], outbound: {}, archiveOnly: true,
+      archive: { contractAmount: '', cost: '', profit: 0, note: '', files: [] },
+      updatedAt: new Date().toISOString().slice(0, 16).replace('T', ' ')
+    };
+    state.projects.push(p); commit(); render(); openArchive(p.id);
+  }
   function openArchive(pid) {
     var p = state.projects.filter(function (x) { return x.id === pid; })[0]; if (!p) return;
     state.ui.archivePid = pid;
     var a = archiveOf(p);
-    openModal('<div class="modal" style="width:min(760px,100%)"><div class="modal-head"><h3>项目归档 · ' + esc(p.name || '未命名项目') + '</h3><button class="x-btn" data-act="modal-close">✕</button></div>' +
+    openModal('<div class="modal" style="width:min(780px,100%)"><div class="modal-head"><h3>' + (p.archiveOnly ? '资料归档' : '项目归档') + ' · ' + esc(p.name || '未命名项目') + '</h3><button class="x-btn" data-act="modal-close">✕</button></div>' +
       '<div class="modal-body">' +
-      '<div class="form-grid" style="grid-template-columns:1fr 1fr">' +
+      (p.archiveOnly ? '<div class="form-grid" style="grid-template-columns:1.4fr 1fr 1fr">' +
+        '<label class="field">项目名称<input id="arc-name" value="' + esc(p.name === '新建资料归档' ? '' : (p.name || '')) + '" placeholder="例如：雪大双十一阵仗预热视频拍"></label>' +
+        '<label class="field">拍摄日期<input id="arc-date" type="date" value="' + esc(p.shootDate || '') + '"></label>' +
+        '<label class="field">客户 / 品牌<input id="arc-client" value="' + esc(p.client || '') + '" placeholder="例如：雪大 / 辛选"></label>' +
+        '</div>' : '') +
+      '<div class="form-grid" style="grid-template-columns:repeat(3,1fr);margin-top:' + (p.archiveOnly ? '2px' : '0') + '">' +
       '<label class="field">合同金额（元）<input id="arc-amount" type="number" min="0" step="0.01" value="' + esc(a.contractAmount === '' ? '' : a.contractAmount) + '" placeholder="例如 25000"></label>' +
-      '<label class="field">归档备注<input id="arc-note" value="' + esc(a.note || '') + '" placeholder="例如：已开票 / 合同编号"></label>' +
+      '<label class="field">项目成本（元）<input id="arc-cost" type="number" min="0" step="0.01" value="' + esc(a.cost === '' || a.cost === undefined ? '' : a.cost) + '" placeholder="人工/器材等成本"></label>' +
+      '<label class="field">利润（自动）<input id="arc-profit" type="number" readonly value="' + esc(M.round2(M.num(a.contractAmount) - M.num(a.cost))) + '" style="background:#f3f6f3"></label>' +
       '</div>' +
-      '<div class="toolbar" style="margin:12px 0 4px"><button class="btn solid" data-act="archive-upload">上传发票 / 合同</button>' +
-      '<input id="archive-file" type="file" accept=".pdf,.jpg,.jpeg,.png,.webp,.doc,.docx,.xls,.xlsx,.zip" style="display:none">' +
-      '<span class="muted small">支持 PDF / 图片 / Word / Excel / ZIP，单份不超过 20MB</span></div>' +
+      '<label class="field" style="margin-top:10px">归档备注<input id="arc-note" value="' + esc(a.note || '') + '" placeholder="例如：合同编号 / 已开票 / 结算情况"></label>' +
+      '<div class="toolbar" style="margin:14px 0 4px"><button class="btn solid" data-act="archive-upload">上传发票 / 合同</button>' +
+      '<button class="btn light" data-act="archive-upload-folder">上传整个文件夹</button>' +
+      '<input id="archive-file" type="file" multiple accept=".pdf,.jpg,.jpeg,.png,.webp,.doc,.docx,.xls,.xlsx,.zip" style="display:none">' +
+      '<input id="archive-folder" type="file" webkitdirectory multiple style="display:none">' +
+      '<span class="muted small">支持 PDF / 图片 / Word / Excel / ZIP，单份不超过 20MB；也可直接选整个项目文件夹</span></div>' +
       '<div id="archive-files"></div>' +
       '</div><div class="modal-foot"><span class="spacer"></span><button class="btn light" data-act="modal-close">取消</button>' +
       '<button class="btn primary" data-act="archive-save">保存归档</button></div></div>');
@@ -1397,13 +1424,12 @@
       if (j && Array.isArray(j.files)) { a.files = j.files; renderArchiveFiles(); }
     }).catch(function () {});
   }
-  function uploadArchiveFile(file) {
-    var p = state.projects.filter(function (x) { return x.id === state.ui.archivePid; })[0]; if (!p) return;
-    if (!file) return;
-    if (file.size > 20 * 1024 * 1024) { toast('文件超过 20MB，请压缩后再传', 'err'); return; }
+  function uploadArchiveFile(file, done) {
+    var p = state.projects.filter(function (x) { return x.id === state.ui.archivePid; })[0];
+    if (!p || !file) { if (done) done(); return; }
+    if (file.size > 20 * 1024 * 1024) { toast('「' + file.name + '」超过 20MB，已跳过', 'warn'); if (done) done(); return; }
     var reader = new FileReader();
     reader.onload = function () {
-      toast('正在上传「' + file.name + '」…', 'ok');
       fetch(checkinBase() + '/api/archive/upload', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ projectId: p.id, projectName: p.name, fileName: file.name, data: reader.result })
@@ -1411,17 +1437,37 @@
         if (!j.ok) throw new Error(j.error || '上传失败');
         archiveOf(p).files.push(j.file);
         commit(); renderArchiveFiles(); render();
-        toast('已上传「' + file.name + '」', 'ok');
-      }).catch(function (e) { toast(e.message || '上传失败，检查上传服务', 'err'); });
+        if (done) done();
+      }).catch(function (e) { toast('「' + file.name + '」上传失败：' + (e.message || ''), 'err'); if (done) done(); });
     };
-    reader.onerror = function () { toast('文件读取失败', 'err'); };
+    reader.onerror = function () { toast('「' + file.name + '」读取失败', 'err'); if (done) done(); };
     reader.readAsDataURL(file);
+  }
+  function uploadArchiveFiles(files) {
+    var arr = Array.prototype.slice.call(files || []).filter(function (f) { return f && f.size; });
+    if (!arr.length) return;
+    var i = 0;
+    toast('正在上传 ' + arr.length + ' 个文件…', 'ok');
+    function step() {
+      if (i >= arr.length) { toast('上传完成，共 ' + arr.length + ' 个文件', 'ok'); return; }
+      var f = arr[i++];
+      uploadArchiveFile(f, step);
+    }
+    step();
   }
   function saveArchive() {
     var p = state.projects.filter(function (x) { return x.id === state.ui.archivePid; })[0]; if (!p) return;
     var a = archiveOf(p);
+    if (p.archiveOnly) {
+      p.name = ((($('#arc-name') || {}).value || '').trim()) || '未命名资料归档';
+      p.shootDate = (($('#arc-date') || {}).value || '');
+      p.client = ((($('#arc-client') || {}).value || '').trim());
+    }
     a.contractAmount = M.num(($('#arc-amount') || {}).value);
+    a.cost = M.num(($('#arc-cost') || {}).value);
+    a.profit = M.round2(a.contractAmount - a.cost);
     a.note = (($('#arc-note') || {}).value || '').trim();
+    p.updatedAt = new Date().toISOString().slice(0, 16).replace('T', ' ');
     commit(); closeModal(); render();
     toast('归档已保存：' + p.name, 'ok');
   }
@@ -2043,11 +2089,27 @@
     if (state.ui.settleId) return renderSettlement();
     var list = state.projects.slice().sort(function (a, b) { return String(b.updatedAt || '').localeCompare(String(a.updatedAt || '')); });
     var cur = state.project, curT = M.totals(cur);
+    var archList = list.filter(function (p) { return p.archiveOnly; });
+    var archSum = archList.reduce(function (s, p) {
+      var a = archiveOf(p);
+      s.contract += M.num(a.contractAmount); s.cost += M.num(a.cost); s.profit += M.round2(M.num(a.contractAmount) - M.num(a.cost)); s.files += (a.files || []).length;
+      return s;
+    }, { contract: 0, cost: 0, profit: 0, files: 0 });
     var items = list.map(function (p) {
       var t = M.totals(p);
+      if (p.archiveOnly) {
+        var a = archiveOf(p);
+        var profit = archiveProfit(p);
+        return '<div class="history-item"><div><div class="h-title">' + esc(p.name || '未命名资料归档') + ' <span class="archive-badge">资料归档</span></div>' +
+          '<div class="h-meta">' + esc(p.shootDate || '') + (p.client ? ' · ' + esc(p.client) : '') + ' · ' + esc(a.files.length) + ' 份资料 · 更新于 ' + esc(p.updatedAt || '') + '</div>' +
+          '<div class="h-archive">合同额 ' + money(a.contractAmount) + ' · 成本 ' + money(a.cost) + ' · 利润 ' + money(profit) + '</div></div>' +
+          '<div class="h-money"><div class="q">利润 ' + money(profit) + '</div><div class="c">合同额 ' + money(a.contractAmount) + ' · 成本 ' + money(a.cost) + '</div></div>' +
+          '<div class="toolbar"><button class="btn sm light" data-act="history-archive" data-pid="' + p.id + '">📁 资料 / 金额</button>' +
+          '<button class="btn sm danger" data-act="history-del" data-pid="' + p.id + '">删除</button></div></div>';
+      }
       return '<div class="history-item"><div><div class="h-title">' + esc(p.name || '未命名项目') + '</div>' +
         '<div class="h-meta">' + esc(p.shootDate || '') + ' · ' + (p.groups || []).length + ' 个机位组 · 保存于 ' + esc(p.updatedAt || '') + '</div>' +
-        (function () { var a = archiveOf(p); return (a.contractAmount || a.files.length) ? '<div class="h-archive">📁 合同额 ' + money(a.contractAmount) + (a.files.length ? ' · 发票/合同 ' + a.files.length + ' 份' : '') + '</div>' : ''; })() + '</div>' +
+        (function () { var a = archiveOf(p); return (a.contractAmount || a.files.length) ? '<div class="h-archive">📁 合同额 ' + money(a.contractAmount) + (a.files.length ? ' · 发票/合同 ' + a.files.length + ' 份' : '') + (M.num(a.cost) ? ' · 成本 ' + money(a.cost) + ' · 利润 ' + money(archiveProfit(p)) : '') + '</div>' : ''; })() + '</div>' +
         '<div class="h-money"><div class="q">核价 ' + money(t.approved) + '</div><div class="c">报价 ' + money(t.quote) + ' · 底价 ' + money(t.bottom) + ' · 利润 ' + money(t.profit) + '（' + t.profitRateBottom + '%）</div></div>' +
         '<div class="toolbar"><button class="btn sm light" data-act="history-archive" data-pid="' + p.id + '">📁 归档</button>' +
         '<button class="btn sm solid" data-act="history-settle" data-pid="' + p.id + '">结算</button>' +
@@ -2055,14 +2117,20 @@
         '<button class="btn sm light" data-act="history-dup" data-pid="' + p.id + '">复制</button>' +
         '<button class="btn sm danger" data-act="history-del" data-pid="' + p.id + '">删除</button></div></div>';
     }).join('');
-    if (!items) items = '<div class="empty"><div class="big">🗂</div><p>还没有保存过项目。在「下单报价」里点右上角「保存」即可存到这里。</p></div>';
+    if (!items) items = '<div class="empty"><div class="big">🗂</div><p>还没有保存过项目。在「下单报价」里点右上角「保存」；也可以点上方「新建资料归档」把过往合同/发票收进来。</p></div>';
     return '<div class="page">' +
+      '<section class="card"><div class="card-head"><h2>资料归档 · 利润参考</h2><span class="sub">把过往项目的合同、发票、成本整理进来，长期对比利润</span></div>' +
+      '<div class="card-body"><div class="toolbar" style="margin:0 0 10px"><button class="btn solid" data-act="archive-new">＋ 新建资料归档</button><span class="spacer"></span>' +
+      '<span class="muted small">已归档 ' + archList.length + ' 个 · 合同额 ' + money(archSum.contract) + ' · 成本 ' + money(archSum.cost) + '</span></div>' +
+      '<div class="kv"><span class="k">资料归档合计利润</span><span class="v" style="font-size:20px;color:#276749">' + money(archSum.profit) + '</span></div>' +
+      '<div class="kv"><span class="k">已上传单据</span><span class="v">' + archSum.files + ' 份</span></div>' +
+      '</div></section>' +
       '<section class="card"><div class="card-head"><h2>当前编辑中的项目</h2><span class="sub">还没存到历史里？点保存</span></div>' +
       '<div class="card-body"><div class="history-item" style="border:0;padding:0"><div><div class="h-title">' + esc(cur.name || '未命名项目') + '</div>' +
       '<div class="h-meta">' + esc(cur.shootDate || '') + ' · ' + cur.groups.length + ' 个机位组 · ' + M.sumQty(cur) + ' 件</div></div>' +
       '<div class="h-money"><div class="q">核价 ' + money(curT.approved) + '</div><div class="c">报价 ' + money(curT.quote) + ' · 底价 ' + money(curT.bottom) + ' · 利润 ' + money(curT.profit) + '（' + curT.profitRateBottom + '%）</div></div>' +
       '<div class="toolbar"><button class="btn sm solid" data-act="save">保存到历史</button></div></div></div></section>' +
-      '<section class="card"><div class="card-head"><h2>历史项目（' + list.length + '）</h2><span class="sub">点载入继续编辑，复制可做新一版</span></div>' +
+      '<section class="card"><div class="card-head"><h2>历史项目（' + list.length + '）</h2><span class="sub">点载入继续编辑；资料归档只能看资料和金额</span></div>' +
       '<div class="card-body"><div class="history-list">' + items + '</div></div></section>' +
       '</div>';
   }
@@ -2591,7 +2659,8 @@
     var t = e.target;
     if (t.dataset.kitPick) updateKitPickCount();
     if (t.id === 'smart-file' && t.files && t.files[0]) { smartReadFile(t.files[0]); t.value = ''; }
-    if (t.id === 'archive-file' && t.files && t.files[0]) { uploadArchiveFile(t.files[0]); t.value = ''; }
+    if (t.id === 'archive-file' && t.files && t.files.length) { uploadArchiveFiles(t.files); t.value = ''; }
+    if (t.id === 'archive-folder' && t.files && t.files.length) { uploadArchiveFiles(t.files); t.value = ''; }
     if (t.id === 'smart-price-mode' && smartImport) { smartImport.mode = t.value; smartRenderPreview(); }
   });
   $('#modal-root').addEventListener('dragover', function (e) {
@@ -2605,6 +2674,7 @@
   });
   $('#modal-root').addEventListener('input', function (e) {
     if (e.target.closest('#cg-members') || e.target.id === 'cg-start' || e.target.id === 'cg-rate') cgUpdatePreview();
+    if (e.target.id === 'arc-amount' || e.target.id === 'arc-cost') updateArchiveProfit();
     if (e.target.id === 'sup-link-name') {
       state.ui.supplierName = e.target.value;
       var linkEl = $('#sup-link'); if (linkEl) linkEl.value = supplierLink();
@@ -2801,6 +2871,7 @@
         commit(); render(); toast('已导入 ' + state.catalog.length + ' 项器材', 'ok');
       }); break;
       case 'history-archive': openArchive(el.dataset.pid); break;
+      case 'archive-new': newArchiveProject(); break;
       case 'history-settle': state.ui.settleId = el.dataset.pid; state.ui.settleView = 'overtime'; state.ui.tab = 'history'; render(); break;
       case 'settle-view': state.ui.settleView = el.dataset.view; render(); break;
       case 'settle-back': state.ui.settleId = null; state.ui.settleView = null; render(); break;
@@ -2834,6 +2905,7 @@
       case 'supplier-refresh': supplierFetchSubs(); break;
       case 'supplier-import': supplierImport(el.dataset.id); break;
       case 'archive-upload': { var af = $('#archive-file'); if (af) af.click(); break; }
+      case 'archive-upload-folder': { var afd = $('#archive-folder'); if (afd) afd.click(); break; }
       case 'archive-save': saveArchive(); break;
       case 'archive-del': delArchiveFile(el.dataset.id); break;
       case 'supplier-del-sub': supplierDelete(el.dataset.id); break;

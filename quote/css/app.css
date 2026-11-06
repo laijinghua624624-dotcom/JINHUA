@@ -440,3 +440,6 @@ label.field.qk input.qty{width:54px;flex:none}
 
 /* 人员标准：单人/组别分区 */
 .list-count{display:inline-block;margin-left:4px;padding:1px 7px;border-radius:99px;background:#eef2ee;color:var(--muted);font-size:12px;font-weight:700;vertical-align:2px}
+
+/* 资料归档 */
+.archive-badge{display:inline-block;margin-left:6px;padding:1px 7px;border-radius:99px;background:#eef4ff;color:#315d9c;font-size:11px;font-weight:700;vertical-align:2px}
