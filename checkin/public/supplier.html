@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
+<title>供应商器材填报</title>
+<link rel="stylesheet" href="/supplier.css">
+</head>
+<body>
+<div class="sup-wrap">
+  <header class="sup-head">
+    <div class="sup-badge">器材入库填报</div>
+    <h1>供应商器材填报</h1>
+    <p class="sup-sub" id="sup-intro">请填写你方可供器材的名称、型号和底价，提交后由赖先生审核入库。</p>
+    <label class="sup-supplier"><span>供应商名称</span><input id="sup-name" placeholder="例如：XX影视器材" autocomplete="organization"></label>
+  </header>
+
+  <div id="sup-rows"></div>
+
+  <div class="sup-tools">
+    <button type="button" id="sup-add" class="sup-btn light">＋ 再加一项器材</button>
+  </div>
+
+  <div class="sup-submitbar">
+    <div class="sup-count" id="sup-count">已填 1 项</div>
+    <button type="button" id="sup-submit" class="sup-btn primary">提交给赖先生</button>
+  </div>
+  <p class="sup-tip">底价请填真实供货价；提交后仍可再填一批。</p>
+</div>
+
+<div class="sup-success" id="sup-success" hidden>
+  <div class="sup-success-card">
+    <div class="sup-success-icon">✓</div>
+    <h2>已提交</h2>
+    <p id="sup-success-text"></p>
+    <button type="button" id="sup-again" class="sup-btn primary">再填一批</button>
+  </div>
+</div>
+
+<script src="/supplier.js"></script>
+</body>
+</html>

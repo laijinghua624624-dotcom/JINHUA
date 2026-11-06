@@ -2,13 +2,13 @@
 	encode gzip
 
 	# 手机打卡 / 报销上传：公开，靠项目专属链接隔离（现场群直接用，不弹密码）
-	@checkin_public path /m /form /expense /style.css /form.js /expense.js /photos/* /api/meta /api/submit /api/expense/submit
+	@checkin_public path /m /form /expense /supplier /supplier.js /supplier.css /style.css /form.js /expense.js /photos/* /api/meta /api/submit /api/expense/submit /api/supplier/submit
 	handle @checkin_public {
 		reverse_proxy checkin:8137
 	}
 
 	# 打卡后台 / 导出：要密码
-	@checkin_admin path /admin /admin.js /api/submissions /api/expenses /api/expense/* /api/expenses/* /api/submission/* /api/export.csv
+	@checkin_admin path /admin /admin.js /api/submissions /api/expenses /api/expense/* /api/expenses/* /api/submission/* /api/export.csv /api/supplier/submissions /api/supplier/delete /api/supplier/imported
 	handle @checkin_admin {
 		basic_auth {
 			lance {$LANCE_PASSWORD_HASH}

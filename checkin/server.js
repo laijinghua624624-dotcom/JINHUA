@@ -57,11 +57,13 @@ function oldRunOCR(file, cb) {
 }
 const SUBS_FILE = path.join(DATA, 'submissions.json');
 const EXP_FILE = path.join(DATA, 'expenses.json');
+const SUP_FILE = path.join(DATA, 'suppliers.json');
 
 fs.mkdirSync(PHOTOS, { recursive: true });
-let subs = [], exps = [];
+let subs = [], exps = [], sups = [];
 try { subs = JSON.parse(fs.readFileSync(SUBS_FILE, 'utf8')); } catch (e) { subs = []; }
 try { exps = JSON.parse(fs.readFileSync(EXP_FILE, 'utf8')); } catch (e) { exps = []; }
+try { sups = JSON.parse(fs.readFileSync(SUP_FILE, 'utf8')); } catch (e) { sups = []; }
 function saveSubs() {
   const tmp = SUBS_FILE + '.tmp';
   fs.writeFileSync(tmp, JSON.stringify(subs, null, 1));
@@ -72,11 +74,12 @@ function saveExps() {
   fs.writeFileSync(tmp, JSON.stringify(exps, null, 1));
   fs.renameSync(tmp, EXP_FILE);
 }
-// 云端部署时由 Caddy 反向代理进来，公网基址必须显式配置；
-// 否则生成的“分享链接”会变成容器内网 IP，手机打不开。
-const PUBLIC_BASE_URL = String(process.env.PUBLIC_BASE_URL || '').replace(/\/+$/, '');
+function saveSups() {
+  const tmp = SUP_FILE + '.tmp';
+  fs.writeFileSync(tmp, JSON.stringify(sups, null, 1));
+  fs.renameSync(tmp, SUP_FILE);
+}
 function lanUrls() {
-  if (PUBLIC_BASE_URL) return [PUBLIC_BASE_URL];
   const out = [];
   const ifs = os.networkInterfaces();
   Object.keys(ifs).forEach(k => {
@@ -117,8 +120,9 @@ function readBody(req, limit, cb) {
 const ADMIN_USER = process.env.ADMIN_USER || '';
 const ADMIN_PASS = process.env.ADMIN_PASS || '';
 function isPublicPath(p) {
-  return (p === '/' && !APP_DIR) || p === '/m' || p === '/form' || p === '/expense' || p === '/style.css' || p === '/form.js' || p === '/expense.js' ||
-    p.startsWith('/photos/') || p === '/api/meta' || p === '/api/submit' || p === '/api/expense/submit';
+  return (p === '/' && !APP_DIR) || p === '/m' || p === '/form' || p === '/expense' || p === '/supplier' ||
+    p === '/style.css' || p === '/form.js' || p === '/expense.js' || p === '/supplier.js' || p === '/supplier.css' ||
+    p.startsWith('/photos/') || p === '/api/meta' || p === '/api/submit' || p === '/api/expense/submit' || p === '/api/supplier/submit';
 }
 function authOK(req) {
   if (!ADMIN_USER || !ADMIN_PASS) return true;
@@ -140,8 +144,9 @@ const server = http.createServer((req, res) => {
   if (p === '/' && APP_DIR) return staticFile(res, APP_DIR, 'index.html');
   if (p === '/') return staticFile(res, PUB, 'form.html');
   if (p === '/expense') return staticFile(res, PUB, 'expense.html');
+  if (p === '/supplier') return staticFile(res, PUB, 'supplier.html');
   if (p === '/admin') return staticFile(res, PUB, 'admin.html');
-  if (p === '/style.css' || p === '/form.js' || p === '/expense.js' || p === '/admin.js') return staticFile(res, PUB, p.slice(1));
+  if (p === '/style.css' || p === '/form.js' || p === '/expense.js' || p === '/admin.js' || p === '/supplier.js' || p === '/supplier.css') return staticFile(res, PUB, p.slice(1));
   if (p.startsWith('/photos/')) return staticFile(res, PHOTOS, p.slice('/photos/'.length));
   if (p === '/api/meta') {
     const urls = lanUrls();
@@ -196,6 +201,58 @@ const server = http.createServer((req, res) => {
     const head = ['项目', '日期', '部门', '职位', '姓名', '费用类型', '同乘人', '前往费用', '停车费', '过路费', '离开费用', '小计', '备注', '票据'];
     const lines = [head.join(',')].concat(exps.map(e => [(e.jobName || ''), e.date, e.dept, e.role, e.name, e.type === 'equipment' ? '器材运输' : '网约车', (e.passengers || '').replace(/[\r\n,]/g, ' '), e.goCost, e.parking, e.toll, e.leaveCost, (Number(e.goCost) + Number(e.parking) + Number(e.toll) + Number(e.leaveCost)).toFixed(2), (e.note || '').replace(/[\r\n,]/g, ' '), base + '/' + e.photo].map(v => '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"').join(',')));
     return send(res, 200, 'text/csv; charset=utf-8', '\ufeff' + lines.join('\r\n'), { 'Content-Disposition': 'attachment; filename="expenses.csv"' });
+  }
+  if (p === '/api/supplier/submissions') {
+    return json(res, sups.slice().reverse());
+  }
+  if (p === '/api/supplier/delete' && req.method === 'POST') {
+    return readBody(req, 64 * 1024, (err, buf) => {
+      if (err) return json(res, { ok: false }, 400);
+      let body; try { body = JSON.parse(buf.toString('utf8')); } catch (e) { return json(res, { ok: false }, 400); }
+      const ids = body.ids || (body.id ? [body.id] : []);
+      sups = sups.filter(function (x) { return ids.indexOf(x.id) < 0; });
+      saveSups(); json(res, { ok: true });
+    });
+  }
+  if (p === '/api/supplier/imported' && req.method === 'POST') {
+    return readBody(req, 64 * 1024, (err, buf) => {
+      if (err) return json(res, { ok: false }, 400);
+      let body; try { body = JSON.parse(buf.toString('utf8')); } catch (e) { return json(res, { ok: false }, 400); }
+      const ids = body.ids || (body.id ? [body.id] : []);
+      sups.forEach(function (x) { if (ids.indexOf(x.id) >= 0) x.imported = true; });
+      saveSups(); json(res, { ok: true });
+    });
+  }
+  if (p === '/api/supplier/submit' && req.method === 'POST') {
+    return readBody(req, 1024 * 1024, (err, buf) => {
+      if (err) return json(res, { ok: false, error: '内容太大' }, 413);
+      let body; try { body = JSON.parse(buf.toString('utf8')); } catch (e) { return json(res, { ok: false, error: '数据格式错误' }, 400); }
+      const supplier = String(body.supplier || '').trim().slice(0, 80) || '未命名供应商';
+      const sid = String(body.sid || '').trim().slice(0, 60);
+      const rows = Array.isArray(body.rows) ? body.rows.slice(0, 100) : [];
+      const clean = rows.map(function (r) {
+        return {
+          major: r.major === '灯光器材' ? '灯光器材' : '摄影器材',
+          name: String(r.name || '').trim().slice(0, 120),
+          model: String(r.model || '').trim().slice(0, 80),
+          unit: String(r.unit || '个').trim().slice(0, 10) || '个',
+          bottom: Number(r.bottom) || 0,
+          stock: r.stock === '' || r.stock === null || r.stock === undefined ? null : Number(r.stock) || 0,
+          note: String(r.note || '').trim().slice(0, 200)
+        };
+      }).filter(function (r) { return r.name; });
+      if (!clean.length) return json(res, { ok: false, error: '请至少填写一项器材' }, 400);
+      if (clean.some(function (r) { return !(r.bottom > 0); })) return json(res, { ok: false, error: '每项器材都要填底价' }, 400);
+      const now = new Date();
+      const rec = {
+        id: now.getTime().toString(36) + crypto.randomBytes(2).toString('hex'),
+        sid: sid, supplier: supplier, rows: clean,
+        submittedAt: now.toLocaleString('zh-CN', { hour12: false }),
+        imported: false
+      };
+      sups.push(rec); saveSups();
+      json(res, { ok: true, record: rec });
+    });
   }
   if (p === '/api/expense/submit' && req.method === 'POST') {
     return readBody(req, 15 * 1024 * 1024, (err, buf) => {

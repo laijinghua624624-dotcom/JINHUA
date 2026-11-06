@@ -66,7 +66,7 @@
       projects: [],
       project: null,
       settings: defaultSettings(),
-      ui: { tab: 'order', mode: 'order', profitUnlocked: false },
+      ui: { tab: 'order', mode: 'order', profitUnlocked: false, catalogMajor: '' },
       meta: APP.meta || {}
     };
     s.project = emptyProject();
@@ -1174,6 +1174,95 @@
     setTab('order');
     toast('已锁定设置', 'ok');
   }
+  function supplierLink() {
+    var name = (($('#sup-link-name') || {}).value || state.ui.supplierName || '').trim();
+    return checkinBase() + '/supplier?sid=' + encodeURIComponent(state.ui.supplierSid) + '&supplier=' + encodeURIComponent(name);
+  }
+  function openSupplierModal() {
+    if (!state.ui.supplierSid) state.ui.supplierSid = 'sup_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+    if (state.ui.supplierName === undefined) state.ui.supplierName = '';
+    openModal('<div class="modal" style="width:min(980px,100%)"><div class="modal-head"><h3>供应商填报</h3><button class="x-btn" data-act="modal-close">✕</button></div>' +
+      '<div class="modal-body">' +
+      '<div class="form-grid" style="grid-template-columns:1fr 1.6fr;gap:10px">' +
+      '<label class="field">供应商名称<input id="sup-link-name" value="' + esc(state.ui.supplierName || '') + '" placeholder="例如：XX影视器材"></label>' +
+      '<label class="field">填报链接（发给供应商）<input id="sup-link" readonly value="' + esc(supplierLink()) + '"></label>' +
+      '</div>' +
+      '<div class="toolbar" style="margin:10px 0 14px"><button class="btn solid" data-act="supplier-copy">复制链接</button>' +
+      '<button class="btn light" data-act="supplier-open-link">打开填报页</button>' +
+      '<button class="btn light" data-act="supplier-refresh">刷新提交</button>' +
+      '<span class="spacer"></span><span class="muted small">供应商提交的底价会在这里等待你审核入库</span></div>' +
+      '<div id="sup-subs"><p class="muted small">正在读取…</p></div>' +
+      '</div><div class="modal-foot"><span class="spacer"></span><button class="btn light" data-act="modal-close">关闭</button></div></div>');
+    supplierFetchSubs();
+  }
+  function supplierFetchSubs() {
+    var box = $('#sup-subs'); if (!box) return;
+    box.innerHTML = '<p class="muted small">正在读取提交…</p>';
+    fetch(checkinBase() + '/api/supplier/submissions', { cache: 'no-store' }).then(function (r) { return r.json(); }).then(function (list) {
+      state.ui.supplierSubs = Array.isArray(list) ? list : [];
+      supplierRenderSubs();
+    }).catch(function () {
+      if ($('#sup-subs')) box.innerHTML = '<p class="muted small">上传服务未连接（本地需启动 checkin 服务 8137）。</p>';
+    });
+  }
+  function supplierRenderSubs() {
+    var box = $('#sup-subs'); if (!box) return;
+    var list = state.ui.supplierSubs || [];
+    if (!list.length) { box.innerHTML = '<div class="empty"><div class="big">📭</div><p>还没有供应商提交。把上面的链接发给他们填写即可。</p></div>'; return; }
+    box.innerHTML = list.map(function (rec) {
+      var rows = (rec.rows || []).map(function (r) {
+        return '<tr><td>' + esc(r.name) + (r.model ? '<div class="muted small">' + esc(r.model) + '</div>' : '') + '</td>' +
+          '<td>' + esc(r.major || '') + '</td><td class="center">' + esc(r.unit || '') + '</td>' +
+          '<td class="num">' + money(r.bottom) + '</td><td class="center">' + (r.stock === null || r.stock === undefined ? '—' : r.stock) + '</td>' +
+          '<td class="muted small">' + esc(r.note || '') + '</td></tr>';
+      }).join('');
+      return '<div class="card" style="margin:0 0 12px;border:1px solid var(--line);border-radius:12px"><div class="card-head" style="padding:12px 14px">' +
+        '<h3 style="font-size:15px">' + esc(rec.supplier || '供应商') + ' <span class="muted small" style="font-weight:400">' + esc(rec.submittedAt || '') + '</span></h3>' +
+        '<span class="spacer"></span>' + (rec.imported ? '<span class="pill" style="background:#e7f5ec;color:#276749">已入库</span>' : '<button class="btn sm solid" data-act="supplier-import" data-id="' + rec.id + '">导入器材库</button>') +
+        '<button class="btn sm danger" data-act="supplier-del-sub" data-id="' + rec.id + '">删除</button></div>' +
+        '<div class="table-wrap"><table class="grid"><thead><tr><th>器材</th><th>大类</th><th>单位</th><th class="num">底价</th><th>库存</th><th>备注</th></tr></thead><tbody>' + rows + '</tbody></table></div></div>';
+    }).join('');
+  }
+  function supplierImport(id) {
+    var rec = (state.ui.supplierSubs || []).filter(function (x) { return x.id === id; })[0];
+    if (!rec) return;
+    var rate = M.num(state.settings.markupRate) || 30, cut = M.num(state.settings.cutRate) || 20;
+    var added = 0, updated = 0;
+    (rec.rows || []).forEach(function (r) {
+      var key = M.normalizeName(r.name);
+      var old = state.catalog.filter(function (x) { return M.normalizeName(x.name) === key && x.type !== 'crew'; })[0];
+      var quote = M.round2(M.num(r.bottom) * (1 + rate / 100));
+      var approved = M.round2(quote * (1 - cut / 100));
+      if (old) {
+        old.bottom = M.num(r.bottom); old.quote = quote; old.approved = approved;
+        if (r.stock !== null && r.stock !== undefined) old.stock = r.stock;
+        updated++; return;
+      }
+      var cat = M.classifyName(r.name, 'equipment');
+      var major = majorOf({ cat: cat });
+      if (r.major && major !== r.major) cat = r.major;
+      state.catalog.push({
+        id: uid('eq'), key: key, name: r.name, cat: cat, unit: r.unit || '个', type: 'equipment',
+        bottom: M.num(r.bottom), quote: quote, approved: approved,
+        stock: r.stock === null || r.stock === undefined ? null : r.stock,
+        note: [r.model ? '型号 ' + r.model : '', r.note || ''].filter(Boolean).join('；'),
+        supplier: rec.supplier || '供应商填报', group: '供应商填报', src: '供应商填报'
+      });
+      added++;
+    });
+    rec.imported = true;
+    commit(); render(); supplierRenderSubs();
+    toast('已入库：新增 ' + added + ' 项 · 更新 ' + updated + ' 项', 'ok');
+    fetch(checkinBase() + '/api/supplier/imported', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: rec.id }) }).catch(function () {});
+  }
+  function supplierDelete(id) {
+    if (!confirm('删除这条供应商提交？')) return;
+    fetch(checkinBase() + '/api/supplier/delete', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: id }) }).then(function () {
+      state.ui.supplierSubs = (state.ui.supplierSubs || []).filter(function (x) { return x.id !== id; });
+      supplierRenderSubs(); toast('已删除');
+    }).catch(function () { toast('删除失败', 'err'); });
+  }
+
   function openCheckinModal() {
     var base = checkinBase();
     fetch(base + '/api/meta').then(function (r) { return r.json(); }).then(function (m) {
@@ -1530,7 +1619,8 @@
     var grpOpts = Object.keys(grps).sort().map(function (x) {
       return '<option value="' + esc(x) + '">' + esc(x) + '（' + grps[x] + '）</option>';
     }).join('');
-    var list = state.catalog.filter(function (e) { return crewMode ? e.type === 'crew' : true; });
+    var list = state.catalog.filter(function (e) { return crewMode ? e.type === 'crew' : e.type !== 'crew'; });
+    if (!crewMode && state.ui.catalogMajor) list = list.filter(function (e) { return majorOf(e) === state.ui.catalogMajor; });
     var rows = list.map(crewMode ? crewRowHtml : catRowHtml).join('');
     var eqN = state.catalog.filter(function (e) { return e.type !== 'crew'; }).length;
     var crewN = state.catalog.length - eqN;
@@ -1543,7 +1633,11 @@
       '</div>' +
       '<input type="search" data-search="catalog" placeholder="搜索名称 / 型号…" style="padding:8px 12px;border:1px solid var(--line-2);border-radius:9px;min-width:220px">' +
       '<select data-cat-filter style="padding:8px 10px;border:1px solid var(--line-2);border-radius:9px"><option value="">全部分类</option>' + catOpts + '</select>' +
-      (crewMode ? '' : '<select data-major-filter style="padding:8px 10px;border:1px solid var(--line-2);border-radius:9px"><option value="">全部大类</option><option value="摄影器材">摄影器材</option><option value="灯光器材">灯光器材</option><option value="其他">其他</option></select>') +
+      (crewMode ? '' : '<div class="seg" style="display:flex;gap:0;border:1px solid var(--line-2);border-radius:9px;overflow:hidden">' +
+        ['', '摄影器材', '灯光器材'].map(function (m) {
+          var n = m ? state.catalog.filter(function (e) { return e.type !== 'crew' && majorOf(e) === m; }).length : eqN;
+          return '<button class="btn sm ' + (state.ui.catalogMajor === m ? 'solid' : 'light') + '" data-act="catalog-major" data-major="' + m + '" style="border-radius:0">' + (m || '全部') + ' ' + n + '</button>';
+        }).join('') + '</div>') +
       '<select data-sup-filter style="padding:8px 10px;border:1px solid var(--line-2);border-radius:9px"><option value="">全部供应商</option>' + supOpts + '</select>' +
       '<select data-group-filter style="padding:8px 10px;border:1px solid var(--line-2);border-radius:9px;max-width:220px"><option value="">全部板块</option>' + grpOpts + '</select>' +
       '<span class="lib-stats"><span>共 <b>' + state.catalog.length + '</b> 项</span><span>器材 <b>' + eqN + '</b></span><span>人员 <b>' + crewN + '</b></span>' + '</span>' +
@@ -1552,6 +1646,7 @@
         ? '<button class="btn solid" data-act="sync-prices">价格同步到当前项目</button>'
         : '<button class="btn solid" data-act="sync-prices">价格同步到当前项目</button>' +
           '<button class="btn solid" data-act="catalog-smart-import">智能识别导入</button>' +
+          '<button class="btn light" data-act="supplier-open">供应商填报</button>' +
           '<button class="btn light" data-act="auto-cat">自动识别分类</button>' +
           '<button class="btn light" data-act="cat-health">数据体检</button>') +
       (crewMode
@@ -2191,6 +2286,10 @@
     if (f) smartReadFile(f);
   });
   $('#modal-root').addEventListener('input', function (e) {
+    if (e.target.id === 'sup-link-name') {
+      state.ui.supplierName = e.target.value;
+      var linkEl = $('#sup-link'); if (linkEl) linkEl.value = supplierLink();
+    }
     if (e.target.id === 'ca-start' || e.target.id === 'ca-rate') {
       var st = (($('#ca-start') || {}).value === '' ? null : M.num(($('#ca-start') || {}).value));
       var rt = (($('#ca-rate') || {}).value === '' ? null : M.num(($('#ca-rate') || {}).value));
@@ -2342,6 +2441,8 @@
       case 'crew-add': openCrewAdd(); break;
       case 'crew-add-save': saveCrewAdd(); break;
       case 'catalog-mode': state.ui.catalogMode = el.dataset.mode; commit(); render(); break;
+      case 'catalog-major': state.ui.catalogMajor = el.dataset.major || ''; commit(); render(); break;
+      case 'supplier-open': openSupplierModal(); break;
       case 'auto-cat': autoCategorize(false); break;
       case 'cat-health': openCatalogHealth(); break;
       case 'ot-add': addOtRow(); break;
@@ -2399,6 +2500,11 @@
       case 'crew-card-save': saveCrewCard(el.dataset.eid); break;
       case 'profit-pin-ok': checkProfitPin(); break;
       case 'smart-import-confirm': smartConfirmImport(); break;
+      case 'supplier-copy': copyText(supplierLink(), function (ok) { toast(ok ? '已复制填报链接' : '复制失败，请手动选中复制', ok ? 'ok' : 'err'); }); break;
+      case 'supplier-open-link': window.open(supplierLink(), '_blank', 'noopener'); break;
+      case 'supplier-refresh': supplierFetchSubs(); break;
+      case 'supplier-import': supplierImport(el.dataset.id); break;
+      case 'supplier-del-sub': supplierDelete(el.dataset.id); break;
       case 'share-copy': (function () {
         var u = window.__shareUrls || {}, t = el.dataset.target;
         var txt = t === 'checkin' ? u.checkin : (t === 'expense' ? u.expense : ('打卡/报销：' + u.checkin + '\n报销直达：' + u.expense));
