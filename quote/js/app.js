@@ -144,6 +144,7 @@
         }
         var meta = Object.assign({}, state.meta); delete meta._catalogHash;
         localStorage.setItem(KEY, JSON.stringify({ catalog: state.catalog, kits: state.kits, projects: state.projects, project: state.project, settings: state.settings, meta: meta }));
+        if (catalogCloud.ready && fp !== catalogCloud.syncedFp) scheduleCatalogPush();
         setDraftStatus('草稿已自动保存 ' + nowTime());
       } catch (e) { setDraftStatus('自动保存失败：' + (e && e.name || '存储空间不足')); }
     }, 200);
@@ -1697,6 +1698,108 @@
   }
 
   /* ---------------- 器材库（内部） ---------------- */
+  var catalogCloud = { ready: false, version: 0, syncedFp: '', status: 'local', pushTimer: null, pushing: false, pollTimer: null };
+
+  function catalogCloudLabel() {
+    return { local: '☁ 本地', syncing: '☁ 同步中…', synced: '☁ 云端已同步', offline: '☁ 离线（本地）', conflict: '☁ 有冲突' }[catalogCloud.status] || '☁ 本地';
+  }
+  function cloudBadgeHtml() {
+    return '<span id="catalog-sync" class="cloud-sync ' + catalogCloud.status + '">' + catalogCloudLabel() + '</span>';
+  }
+  function updateCloudBadgeDom() {
+    var el = $('#catalog-sync');
+    if (el) { el.className = 'cloud-sync ' + catalogCloud.status; el.textContent = catalogCloudLabel(); }
+  }
+  function setCloudStatus(s) {
+    catalogCloud.status = s;
+    updateCloudBadgeDom();
+  }
+  function catalogCloudAdopt(data) {
+    if (!data || !Array.isArray(data.items)) return;
+    catalogCloud.ready = true;
+    catalogCloud.version = Number(data.version) || 0;
+    catalogCloud.syncedFp = JSON.stringify(data.items);
+    state.catalog = data.items;
+    if (data.updatedAt) state.meta.catalogUpdatedAt = data.updatedAt;
+    commit();
+    setCloudStatus('synced');
+    if (state.ui.tab === 'catalog') render(); else updateCloudBadgeDom();
+  }
+  function scheduleCatalogPush(delay) {
+    if (!catalogCloud.ready) return;
+    clearTimeout(catalogCloud.pushTimer);
+    catalogCloud.pushTimer = setTimeout(function () { catalogCloudPush(); }, delay === undefined ? 800 : delay);
+  }
+  function catalogCloudPush() {
+    if (!catalogCloud.ready || catalogCloud.pushing) return;
+    var sentItems = state.catalog;
+    var sentFp = JSON.stringify(sentItems);
+    if (sentFp === catalogCloud.syncedFp) { setCloudStatus('synced'); return; }
+    catalogCloud.pushing = true;
+    setCloudStatus('syncing');
+    fetch(checkinBase() + '/api/catalog/save', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ baseVersion: catalogCloud.version, items: sentItems })
+    }).then(function (r) { return r.json().then(function (j) { return { status: r.status, data: j }; }); }).then(function (res) {
+      catalogCloud.pushing = false;
+      if (res.status === 409 || (res.data && res.data.conflict)) {
+        catalogCloudAdopt(res.data);
+        toast('云端器材库刚被其他人更新，已刷新为最新版本；你刚才的修改可能没保存，请重新改一次', 'warn');
+        return;
+      }
+      if (!res.data || !res.data.ok) throw new Error((res.data && res.data.error) || '云端保存失败');
+      catalogCloud.version = Number(res.data.version) || catalogCloud.version + 1;
+      catalogCloud.syncedFp = sentFp;
+      if (res.data.updatedAt) state.meta.catalogUpdatedAt = res.data.updatedAt;
+      setCloudStatus('synced');
+      if (typeof catalogCloudUpdated === 'function') catalogCloudUpdated();
+      commit();
+      if (JSON.stringify(state.catalog) !== catalogCloud.syncedFp) scheduleCatalogPush(150);
+    }).catch(function () {
+      catalogCloud.pushing = false;
+      setCloudStatus('offline');
+    });
+  }
+  function catalogCloudPoll() {
+    if (!catalogCloud.ready || catalogCloud.pushing) return;
+    if (document.querySelector('#modal-root .modal-backdrop')) return;
+    if (JSON.stringify(state.catalog) !== catalogCloud.syncedFp) return;
+    fetch(checkinBase() + '/api/catalog', { cache: 'no-store' }).then(function (r) { return r.json(); }).then(function (j) {
+      if (!j || !j.ok) throw new Error('bad');
+      if (Number(j.version) > catalogCloud.version && Array.isArray(j.items)) {
+        catalogCloudAdopt(j);
+        toast('器材库已同步云端最新版本', 'ok');
+      } else {
+        if (j.updatedAt) state.meta.catalogUpdatedAt = j.updatedAt;
+        setCloudStatus('synced');
+      }
+    }).catch(function () { setCloudStatus('offline'); });
+  }
+  function initCatalogCloud() {
+    fetch(checkinBase() + '/api/catalog', { cache: 'no-store' }).then(function (r) { return r.json(); }).then(function (j) {
+      if (!j || !j.ok) throw new Error('bad');
+      catalogCloud.ready = true;
+      if (Number(j.version) > 0) {
+        catalogCloudAdopt(j);
+      } else {
+        catalogCloud.version = 0;
+        if (state.catalog.length) {
+          catalogCloud.syncedFp = '';
+          setCloudStatus('syncing');
+          scheduleCatalogPush(150);
+        } else {
+          catalogCloud.syncedFp = JSON.stringify([]);
+          setCloudStatus('synced');
+        }
+      }
+      if (!catalogCloud.pollTimer) catalogCloud.pollTimer = setInterval(catalogCloudPoll, 15000);
+    }).catch(function () {
+      catalogCloud.ready = true;
+      setCloudStatus('offline');
+      if (!catalogCloud.pollTimer) catalogCloud.pollTimer = setInterval(catalogCloudPoll, 30000);
+    });
+  }
+
   function renderCatalog() {
     var crewMode = state.ui.catalogMode === 'crew';
     var cats = {}; state.catalog.forEach(function (e) { cats[e.cat || '其他'] = 1; });
@@ -1734,7 +1837,7 @@
       '<h1>' + (crewMode ? '人员标准' : '器材库') + '</h1>' +
       '<p class="catalog-meta">' + (crewMode
         ? '共 ' + crewN + ' 个岗位 · 报价 / 底价 / 核价 + 加班费标准'
-        : '摄影器材 ' + photoN + ' 项 · 灯光器材 ' + lightN + ' 项 · 共 ' + eqN + ' 项') + ' · 最后更新 ' + esc(state.meta.catalogUpdatedAt || state.meta.generatedAt || '—') + '</p></div>' +
+        : '摄影器材 ' + photoN + ' 项 · 灯光器材 ' + lightN + ' 项 · 共 ' + eqN + ' 项') + ' · 最后更新 ' + esc(state.meta.catalogUpdatedAt || state.meta.generatedAt || '—') + ' ' + cloudBadgeHtml() + '</p></div>' +
       '<div class="catalog-hero-actions">' + primary + '</div></section>' +
       '<section class="catalog-workbench">' +
       '<div class="catalog-row catalog-row-main">' +
@@ -2947,6 +3050,7 @@
       Object.keys(supCount).map(function (k) { return srcLabel(k) + ' ' + supCount[k]; }).join(' / ');
     setDraftStatus(storageOK ? '就绪' : '');
     render();
+    initCatalogCloud();
   }
   window.addEventListener('hashchange', function () {
     var t = location.hash.replace('#', '');

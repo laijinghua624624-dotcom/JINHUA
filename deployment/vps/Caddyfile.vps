@@ -8,7 +8,7 @@
 	}
 
 	# 打卡后台 / 导出：要密码
-	@checkin_admin path /admin /admin.js /api/submissions /api/expenses /api/expense/* /api/expenses/* /api/submission/* /api/export.csv /api/supplier/submissions /api/supplier/delete /api/supplier/imported /archives/* /api/archive/*
+	@checkin_admin path /admin /admin.js /api/submissions /api/expenses /api/expense/* /api/expenses/* /api/submission/* /api/export.csv /api/supplier/submissions /api/supplier/delete /api/supplier/imported /archives/* /api/archive/* /api/catalog /api/catalog/*
 	handle @checkin_admin {
 		basic_auth {
 			lance {$LANCE_PASSWORD_HASH}

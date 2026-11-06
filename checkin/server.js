@@ -60,14 +60,19 @@ const EXP_FILE = path.join(DATA, 'expenses.json');
 const SUP_FILE = path.join(DATA, 'suppliers.json');
 const ARCH_DIR = path.join(DATA, 'archives');
 const ARCH_META = path.join(DATA, 'archives.json');
+const CATALOG_FILE = path.join(DATA, 'catalog.json');
 
 fs.mkdirSync(PHOTOS, { recursive: true });
 fs.mkdirSync(ARCH_DIR, { recursive: true });
-let subs = [], exps = [], sups = [], archives = {};
+let subs = [], exps = [], sups = [], archives = {}, catalogDoc = { version: 0, updatedAt: '', items: [] };
 try { subs = JSON.parse(fs.readFileSync(SUBS_FILE, 'utf8')); } catch (e) { subs = []; }
 try { exps = JSON.parse(fs.readFileSync(EXP_FILE, 'utf8')); } catch (e) { exps = []; }
 try { sups = JSON.parse(fs.readFileSync(SUP_FILE, 'utf8')); } catch (e) { sups = []; }
 try { archives = JSON.parse(fs.readFileSync(ARCH_META, 'utf8')); } catch (e) { archives = {}; }
+try {
+  var cd = JSON.parse(fs.readFileSync(CATALOG_FILE, 'utf8'));
+  if (cd && Array.isArray(cd.items)) catalogDoc = { version: Number(cd.version) || 0, updatedAt: String(cd.updatedAt || ''), items: cd.items };
+} catch (e) { catalogDoc = { version: 0, updatedAt: '', items: [] }; }
 function saveSubs() {
   const tmp = SUBS_FILE + '.tmp';
   fs.writeFileSync(tmp, JSON.stringify(subs, null, 1));
@@ -87,6 +92,11 @@ function saveArchives() {
   const tmp = ARCH_META + '.tmp';
   fs.writeFileSync(tmp, JSON.stringify(archives, null, 1));
   fs.renameSync(tmp, ARCH_META);
+}
+function saveCatalog() {
+  const tmp = CATALOG_FILE + '.tmp';
+  fs.writeFileSync(tmp, JSON.stringify(catalogDoc));
+  fs.renameSync(tmp, CATALOG_FILE);
 }
 function safeSeg(v) { return String(v || '').replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 60) || 'misc'; }
 function archEntry(projectId) {
@@ -275,6 +285,30 @@ const server = http.createServer((req, res) => {
         saveArchives();
       }
       json(res, { ok: true });
+    });
+  }
+  if (p === '/api/catalog') {
+    return json(res, { ok: true, version: catalogDoc.version, updatedAt: catalogDoc.updatedAt, items: catalogDoc.items || [] });
+  }
+  if (p === '/api/catalog/save' && req.method === 'POST') {
+    return readBody(req, 8 * 1024 * 1024, (err, buf) => {
+      if (err) return json(res, { ok: false, error: '器材库数据太大' }, 413);
+      let body; try { body = JSON.parse(buf.toString('utf8')); } catch (e) { return json(res, { ok: false, error: '数据格式错误' }, 400); }
+      const items = Array.isArray(body.items) ? body.items : null;
+      if (!items) return json(res, { ok: false, error: '缺少器材列表' }, 400);
+      if (items.length > 5000) return json(res, { ok: false, error: '器材数量超出上限' }, 400);
+      const base = Number(body.baseVersion) || 0;
+      if (base !== catalogDoc.version) {
+        return json(res, { ok: false, conflict: true, version: catalogDoc.version, updatedAt: catalogDoc.updatedAt, items: catalogDoc.items || [] }, 409);
+      }
+      const now = new Date();
+      catalogDoc = {
+        version: catalogDoc.version + 1,
+        updatedAt: now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0') + '-' + String(now.getDate()).padStart(2, '0') + ' ' + String(now.getHours()).padStart(2, '0') + ':' + String(now.getMinutes()).padStart(2, '0'),
+        items: items
+      };
+      saveCatalog();
+      json(res, { ok: true, version: catalogDoc.version, updatedAt: catalogDoc.updatedAt });
     });
   }
   if (p === '/api/supplier/submissions') {

@@ -431,3 +431,9 @@ label.field.qk input.qty{width:54px;flex:none}
 .archive-file{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:11px 12px;border:1px solid var(--line);border-radius:10px;background:#fbfcfa;margin:8px 0}
 .archive-file .af-name{font-weight:700;font-size:14px;word-break:break-all}
 .archive-file .toolbar{gap:6px;flex-wrap:nowrap}
+
+/* 器材库云端同步状态 */
+.cloud-sync{display:inline-block;margin-left:6px;padding:2px 8px;border-radius:99px;font-size:11px;font-weight:700;background:#eef2ee;color:#5b6b61;white-space:nowrap;vertical-align:1px}
+.cloud-sync.synced{background:#e7f5ec;color:#276749}
+.cloud-sync.syncing{background:#fff4d6;color:#8a5a00}
+.cloud-sync.offline,.cloud-sync.conflict{background:#fdecec;color:#b42318}
