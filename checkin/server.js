@@ -248,6 +248,19 @@ const server = http.createServer((req, res) => {
     });
     return json(res, { ok: true, projects: list });
   }
+  if (p === '/api/archive/project/delete' && req.method === 'POST') {
+    return readBody(req, 64 * 1024, (err, buf) => {
+      if (err) return json(res, { ok: false }, 400);
+      let body; try { body = JSON.parse(buf.toString('utf8')); } catch (e) { return json(res, { ok: false }, 400); }
+      const projectId = String(body.projectId || '').trim();
+      if (!projectId) return json(res, { ok: false, error: '缺少项目ID' }, 400);
+      const k = safeSeg(projectId);
+      delete archives[k];
+      try { fs.rmSync(path.join(ARCH_DIR, k), { recursive: true, force: true }); } catch (e) {}
+      saveArchives();
+      json(res, { ok: true });
+    });
+  }
   if (p === '/api/archive/project/save' && req.method === 'POST') {
     return readBody(req, 256 * 1024, (err, buf) => {
       if (err) return json(res, { ok: false }, 400);

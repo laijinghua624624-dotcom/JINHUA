@@ -2436,12 +2436,76 @@
       '</div>';
   }
 
+  function isDeletedProject(id) { return (state.settings.deletedProjects || []).indexOf(id) >= 0; }
+  function markDeletedProject(id) {
+    var arr = state.settings.deletedProjects || [];
+    if (arr.indexOf(id) < 0) arr.push(id);
+    state.settings.deletedProjects = arr;
+  }
+  function deletePinOK(pin) { pin = String(pin || '').trim(); return pin === '121212' || pin === '121223lai'; }
+  function openDeletePin(type, id) {
+    var title = '删除', desc = '', name = '';
+    if (type === 'project') {
+      var p = state.projects.filter(function (x) { return x.id === id; })[0]; if (!p) return;
+      title = '删除项目'; name = p.name || '未命名项目';
+      desc = (p.archiveOnly || (p.archive && (p.archive.files || []).length)) ? '该项目的服务器归档资料会一并删除，刷新后不会再出现。' : '删除后刷新不会再出现。';
+    } else if (type === 'kit') {
+      var k = kitById(id); if (!k) return; title = '删除器材组合'; name = k.name || '未命名组合'; desc = '删除后刷新不会再出现。';
+    } else if (type === 'group') {
+      var g = groupById(id); if (!g) return; title = '删除机位组'; name = g.name || '未命名机位组'; desc = '组内 ' + g.items.length + ' 行会一起删除，刷新后不会再出现。';
+    }
+    state.ui.deletePin = { type: type, id: id };
+    openModal('<div class="modal" style="width:min(460px,100%)"><div class="modal-head"><h3>' + esc(title) + '</h3><button class="x-btn" data-act="modal-close">✕</button></div>' +
+      '<div class="modal-body"><p style="margin:0 0 6px">确定删除「<b>' + esc(name) + '</b>」？</p>' +
+      '<p class="muted small" style="margin:0 0 12px">' + esc(desc) + '</p>' +
+      '<label class="field">输入删除密码<input id="del-pin" type="password" autocomplete="off" placeholder="请输入密码"></label>' +
+      '<div class="err" id="del-err" style="color:#b91c1c;font-size:12px;min-height:18px;margin-top:6px"></div></div>' +
+      '<div class="modal-foot"><span class="spacer"></span><button class="btn light" data-act="modal-close">取消</button>' +
+      '<button class="btn danger" data-act="delete-pin-ok">确认删除</button></div></div>');
+    setTimeout(function () { var el = $('#del-pin'); if (el) el.focus(); }, 60);
+  }
+  function confirmDeletePin() {
+    var act = state.ui.deletePin || {};
+    var pin = (($('#del-pin') || {}).value || '');
+    if (!deletePinOK(pin)) {
+      var err = $('#del-err'); if (err) err.textContent = '密码不正确';
+      var el = $('#del-pin'); if (el) { el.value = ''; el.focus(); }
+      return;
+    }
+    state.ui.deletePin = null; closeModal();
+    if (act.type === 'project') deleteProjectNow(act.id);
+    else if (act.type === 'kit') deleteKitNow(act.id);
+    else if (act.type === 'group') deleteGroupNow(act.id);
+  }
+  function deleteProjectNow(pid) {
+    var p = state.projects.filter(function (x) { return x.id === pid; })[0]; if (!p) return;
+    var hasArchive = p.archiveOnly || (p.archive && (p.archive.files || []).length);
+    markDeletedProject(pid);
+    state.projects = state.projects.filter(function (x) { return x.id !== pid; });
+    if (hasArchive) {
+      fetch(checkinBase() + '/api/archive/project/delete', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ projectId: pid }) }).catch(function () {});
+    }
+    commit(); render(); toast('已删除「' + (p.name || '项目') + '」', 'ok');
+  }
+  function deleteKitNow(id) {
+    var k = kitById(id); if (!k) return;
+    state.kits = state.kits.filter(function (x) { return x.id !== id; });
+    if (state.ui.editingKit === id) state.ui.editingKit = null;
+    commit(); render(); toast('已删除组合「' + (k.name || '') + '」', 'ok');
+  }
+  function deleteGroupNow(gid) {
+    var g = groupById(gid); if (!g) return;
+    state.project.groups = state.project.groups.filter(function (x) { return x.id !== gid; });
+    commit(); render(); toast('已删除机位组「' + (g.name || '') + '」', 'ok');
+  }
+
   function loadArchiveProjectsFromServer() {
     fetch(checkinBase() + '/api/archive/projects', { cache: 'no-store' }).then(function (r) { return r.json(); }).then(function (j) {
       if (!j || !Array.isArray(j.projects)) return;
       var changed = false;
       j.projects.forEach(function (rec) {
         if (!rec.projectId) return;
+        if (isDeletedProject(rec.projectId)) return;
         var p = state.projects.filter(function (x) { return x.id === rec.projectId; })[0];
         if (!p) {
           p = { id: rec.projectId, no: '', name: rec.projectName || '资料归档', client: rec.client || '', location: '', shootDate: rec.date || '', days: 1, groups: [], outbound: {}, archiveOnly: true, updatedAt: rec.updatedAt || '', archive: {} };
@@ -3129,7 +3193,7 @@
     switch (act) {
       case 'go-order': setTab('order'); break;
       case 'add-group': addGroup(); break;
-      case 'del-group': delGroup(el.dataset.gid); break;
+      case 'del-group': openDeletePin('group', el.dataset.gid); break;
       case 'add-item': openPicker(el.dataset.gid); break;
       case 'del-item': delItem(el.dataset.gid, el.dataset.iid); break;
       case 'open-kits': openKitsPicker(); break;
@@ -3141,7 +3205,7 @@
       case 'kit-light-build': lightingQuickBuild(el.dataset.kid); break;
       case 'kit-edit': kitEdit(el.dataset.kid); break;
       case 'kit-dup': kitDup(el.dataset.kid); break;
-      case 'kit-del': kitDel(el.dataset.kid); break;
+      case 'kit-del': openDeletePin('kit', el.dataset.kid); break;
       case 'kit-add': addKitsToProject([el.dataset.kid]); break;
       case 'kits-add-selected': addKitsToProject($$('#view input[data-kit-check]').filter(function (c) { return c.checked; }).map(function (c) { return c.dataset.kitCheck; })); break;
       case 'kit-add-item': openPicker({ kitId: el.dataset.kid }); break;
@@ -3212,7 +3276,7 @@
       case 'settle-back': state.ui.settleId = null; state.ui.settleView = null; render(); break;
       case 'history-load': loadProject(el.dataset.pid); break;
       case 'history-dup': dupProject(el.dataset.pid); break;
-      case 'history-del': delProject(el.dataset.pid); break;
+      case 'history-del': openDeletePin('project', el.dataset.pid); break;
       case 'export-all': exportAll(); break;
       case 'import-all': importAll(); break;
       case 'clear-all': clearAll(); break;
@@ -3242,6 +3306,7 @@
       case 'archive-upload': { var af = $('#archive-file'); if (af) af.click(); break; }
       case 'archive-upload-folder': { var afd = $('#archive-folder'); if (afd) afd.click(); break; }
       case 'archive-save': saveArchive(); break;
+      case 'delete-pin-ok': confirmDeletePin(); break;
       case 'archive-del': delArchiveFile(el.dataset.id); break;
       case 'supplier-del-sub': supplierDelete(el.dataset.id); break;
       case 'share-copy': (function () {
