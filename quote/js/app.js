@@ -2230,7 +2230,7 @@
       '</div>' : '') +
       '<div class="table-scroll catalog-table-wrap"><table class="grid catalog-table"><colgroup>' +
         (state.settings.batchMode ? '<col style="width:38px">' : '') +
-        '<col style="width:270px"><col style="width:100px"><col style="width:56px"><col style="width:70px"><col style="width:112px"><col style="width:112px"><col style="width:112px"><col style="width:112px"><col style="width:112px"><col style="width:210px"><col style="width:84px"></colgroup>' +
+        '<col style="width:420px"><col style="width:90px"><col style="width:50px"><col style="width:60px"><col style="width:108px"><col style="width:108px"><col style="width:108px"><col style="width:108px"><col style="width:108px"><col style="width:150px"><col style="width:70px"></colgroup>' +
         '<thead><tr>' + (state.settings.batchMode ? '<th style="text-align:center"><input type="checkbox" id="cat-check-all" title="全选"></th>' : '') + '<th>器材名称</th><th>分类</th><th>单位</th><th class="num">库存</th><th class="num">供应商报价</th><th class="num">供应商底价</th><th class="num">项目报价</th><th class="num">项目核价</th><th class="num">项目费用预计</th><th>备注</th><th></th></tr></thead>' +
           '<tbody>' + (rows || '<tr><td colspan="' + (state.settings.batchMode ? 12 : 11) + '" class="muted" style="text-align:center;padding:24px">没有数据</td></tr>') + '</tbody></table></div></section>') +
       '<div class="totals-bar">' + (state.meta.source ? '<div class="t-item"><span class="t-label">器材库来源</span><span class="t-val" style="font-size:13px">' + esc(state.meta.source) + '</span></div>' : '') +
@@ -2318,7 +2318,7 @@
     var ce = (e.costEstimate === undefined || e.costEstimate === null || e.costEstimate === '') ? '' : e.costEstimate;
     return '<tr data-eid="' + e.id + '" data-name="' + esc(e.name) + '" data-cat="' + esc(e.cat || '') + '" data-type="' + esc(e.type || 'equipment') + '" data-sup="' + esc(supOf(e)) + '" data-group="' + esc(grpOf(e)) + '" data-major="' + esc(majorOf(e)) + '">' +
       (state.settings.batchMode ? '<td><input type="checkbox" data-cat-check="' + e.id + '"></td>' : '') +
-      '<td><input class="name-edit" data-efield="name" value="' + esc(e.name) + '">' +
+      '<td><textarea class="name-edit" rows="' + (String(e.name || '').length > 26 ? 2 : 1) + '" data-efield="name">' + esc(e.name) + '</textarea>' +
       '<div class="parts-row"><button class="parts-link" data-act="catalog-parts" data-eid="' + e.id + '">配件明细' + ((e.parts || []).length ? ' · ' + (e.parts || []).length : '') + '</button></div></td>' +
       '<td><input class="input-plain" style="width:80px" data-efield="cat" value="' + esc(e.cat || '') + '"></td>' +
       '<td><input class="input-plain" style="width:42px" data-efield="unit" value="' + esc(e.unit || '个') + '"></td>' +

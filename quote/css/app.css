@@ -587,3 +587,13 @@ label.field.qk input.qty{width:54px;flex:none}
 }
 .catalog-table input.qty{border-color:transparent;background:transparent}
 .catalog-table input.qty:hover{background:#fff;border-color:#e2e8f0}
+
+/* 器材名称加宽换行 */
+.catalog-table textarea.name-edit{
+  width:100%;display:block;resize:none;overflow:hidden;
+  border:1px solid transparent;background:transparent;border-radius:7px;
+  padding:5px 7px;font:600 12.5px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+  color:#0f172a;white-space:pre-wrap;word-break:break-word;
+}
+.catalog-table textarea.name-edit:hover{background:#fff;border-color:#e2e8f0}
+.catalog-table textarea.name-edit:focus{background:#fff;border-color:#94a3b8;box-shadow:0 0 0 3px rgba(148,163,184,.12);outline:none}
