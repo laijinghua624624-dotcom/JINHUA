@@ -3300,6 +3300,7 @@
       case 'admin-clear-catalog': closeModal(); clearCatalogEquipment(); break;
       case 'admin-clear-crew': closeModal(); clearCatalogCrew(); break;
       case 'admin-clear-projects': closeModal(); clearProjectsOnly(); break;
+      case 'admin-reset-local': closeModal(); resetLocalKeepProjects(false); break;
       case 'admin-clear-all': closeModal(); clearAll(); break;
       case 'smart-import-confirm': smartConfirmImport(); break;
       case 'supplier-copy': copyText(supplierLink(), function (ok) { toast(ok ? '已复制填报链接' : '复制失败，请手动选中复制', ok ? 'ok' : 'err'); }); break;
@@ -3529,9 +3530,30 @@
       '<button class="btn danger" data-act="admin-clear-catalog">清空器材库（保留人员/组合/项目）</button>' +
       '<button class="btn danger" data-act="admin-clear-crew">清空人员标准（保留器材）</button>' +
       '<button class="btn danger" data-act="admin-clear-projects">清空所有项目（保留器材库/组合）</button>' +
+      '<button class="btn danger" data-act="admin-reset-local">清空本地数据（保留历史项目）</button>' +
       '<button class="btn danger" data-act="admin-clear-all">清空全部数据</button>' +
       '</div><p class="muted small" style="margin:14px 0 0">器材库当前 ' + state.catalog.length + ' 项 · 组合 ' + state.kits.length + ' 组 · 历史项目 ' + state.projects.length + ' 个</p></div>' +
       '<div class="modal-foot"><span class="spacer"></span><button class="btn light" data-act="modal-close">关闭</button></div></div>');
+  }
+
+  function resetLocalKeepProjects(silent) {
+    var keepProjects = state.projects;
+    state.catalog = [];
+    state.kits = [];
+    state.project = emptyProject();
+    state.supplierSubs = [];
+    state.meta = { generatedAt: '', source: '', catalogCount: 0, kitCount: 0, files: 0, supplierItems: 0, legacyItems: 0, overtimeCount: 0, removedSuppliers: [], crewCount: 0, catVersion: 4, catalogUpdatedAt: '' };
+    state.settings = defaultSettings();
+    state.settings.localResetExceptProjects = true;
+    state.settings.photoKitsCleared = true;
+    state.settings.metaSourceCleared = true;
+    state.settings.crewCleared = true;
+    state.settings.cleanVersion = 1;
+    state.settings.catVersion = 4;
+    state.ui.settleId = null; state.ui.settleView = null; state.ui.archivePid = null;
+    state.projects = keepProjects;
+    commit();
+    if (!silent) { setTab('order'); render(); toast('本地数据已清空，仅保留历史项目', 'ok'); }
   }
 
   function clearCatalogEquipment() {
@@ -3681,6 +3703,10 @@
       state.meta.generatedAt = '';
       state.settings.metaSourceCleared = true;
       commit();
+    }
+    // 迁移：清空本地数据，只保留历史项目
+    if (state.settings.localResetExceptProjects !== true) {
+      resetLocalKeepProjects(true);
     }
     var t = location.hash.replace('#', '');
     if (t === 'overtime' || t === 'expenses' || t === 'stats') { state.ui.tab = 'order'; state.ui.projView = t; t = 'order'; }
