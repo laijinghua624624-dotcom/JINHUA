@@ -793,6 +793,31 @@
     });
   }
   function isStar(e) { return !!e.star; }
+  function brandOf(e) {
+    var n = String((e && e.name) || '').trim();
+    var low = n.toLowerCase();
+    var pairs = [
+      ['SONY','Sony'],['ARRI','ARRI'],['DJI','DJI'],['RED','RED'],['Canon','Canon'],['佳能','Canon'],
+      ['Leica','Leica'],['徕卡','Leica'],['Cooke','Cooke'],['Atels','Atels'],['Atlas','Atlas'],
+      ['Angenieux','Angenieux'],['安琴','Angenieux'],['富士','Fujinon'],['Fujinon','Fujinon'],['FUJION','Fujinon'],
+      ['Zeiss','Zeiss'],['蔡司','Zeiss'],['Sigma','Sigma'],['适马','Sigma'],['Samyang','Samyang'],['三阳','Samyang'],
+      ['Tokina','Tokina'],['图丽','Tokina'],['Laowa','Laowa'],['老蛙','Laowa'],['DZOFilm','DZOFilm'],['东正','DZOFilm'],
+      ['Athena','Athena'],['雅典娜','Athena'],['Lensbaby','Lensbaby'],
+      ['Aputure','Aputure'],['爱图仕','Aputure'],['Godox','Godox'],['神牛','Godox'],['Nanlux','Nanlux'],['南光','Nanlux'],
+      ['Blackmagic','Blackmagic'],['BMD','Blackmagic'],['SmallHD','SmallHD'],['Atomos','Atomos'],['阿童木','Atomos'],
+      ['Vaxis','Vaxis'],['威固','Vaxis'],['Accsoon','Accsoon'],['致讯','Accsoon'],['Moma','Moma'],['猛犸','Moma'],
+      ['Saramonic','Saramonic'],['声刻','Saramonic'],['Panasonic','Panasonic'],['松下','Panasonic'],
+      ['Yamaha','Yamaha'],['Midas','Midas'],['TVLogic','TVLogic'],['Konvision','Konvision'],['康维讯','Konvision'],
+      ['KUPO','KUPO'],['Tilta','Tilta'],['Easyrig','Easyrig'],['青牛','Qingniu'],['Scorpio','Scorpio'],['Movi','Movi'],['智云','Zhiyun']
+    ];
+    for (var i = 0; i < pairs.length; i++) {
+      if (low.indexOf(pairs[i][0].toLowerCase()) === 0) return pairs[i][1];
+    }
+    var m = n.match(/^[A-Za-z][A-Za-z0-9&\-]*/);
+    if (m) return m[0].toUpperCase();
+    return '~其他';
+  }
+
   function isLock(e) { return !!e.lock; }
   function majorOf(e) {
     if (e.type === 'crew') return '人员';
@@ -2158,6 +2183,13 @@
     }).join('');
     var list = state.catalog.filter(function (e) { return crewMode ? e.type === 'crew' : e.type !== 'crew'; });
     if (!crewMode && state.ui.catalogMajor) list = list.filter(function (e) { return majorOf(e) === state.ui.catalogMajor; });
+    if (!crewMode) {
+      list = list.slice().sort(function (a, b) {
+        var ba = brandOf(a), bb = brandOf(b);
+        if (ba !== bb) return ba.localeCompare(bb, 'en');
+        return String(a.name || '').localeCompare(String(b.name || ''), 'zh-CN');
+      });
+    }
     var rows = list.map(crewMode ? crewRowHtml : catRowHtml).join('');
     var eqN = state.catalog.filter(function (e) { return e.type !== 'crew'; }).length;
     var crewN = state.catalog.length - eqN;
@@ -2222,7 +2254,7 @@
           '<div class="table-scroll"><table class="grid"><thead><tr><th style="min-width:220px">组名</th><th style="min-width:240px">人员组成</th><th>单位</th><th class="num">整组报价</th><th class="num">整组底价</th><th class="num">整组核价</th><th style="min-width:330px">加班费标准</th><th></th></tr></thead>' +
           '<tbody>' + (groupRows || '<tr><td colspan="8" class="muted" style="text-align:center;padding:22px">还没有人员组，点右上角「按组新增」。</td></tr>') + '</tbody></table></div></section>'
         : '<section class="card catalog-list-card"><div class="card-head catalog-list-head"><h2>器材清单</h2>' +
-          '<span class="sub">供应商报价/底价手动录入；项目报价/核价/费用预计暂不自动计算</span></div>' +
+          '<span class="sub">按品牌排序 · 供应商报价/底价手动录入；项目报价/核价/费用预计暂不自动计算</span></div>' +
           (state.settings.batchMode ? '<div id="cat-batch-bar" class="toolbar" style="display:none;margin:0 0 10px;gap:10px;align-items:center">' +
         '<span class="muted small" id="cat-sel-count">已选 0 项</span>' +
         '<button class="btn danger sm" data-act="catalog-batch-delete">删除选中</button>' +
