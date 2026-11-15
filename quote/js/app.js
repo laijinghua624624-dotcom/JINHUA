@@ -2216,7 +2216,7 @@
           '<div class="table-scroll"><table class="grid"><thead><tr><th style="min-width:220px">组名</th><th style="min-width:240px">人员组成</th><th>单位</th><th class="num">整组报价</th><th class="num">整组底价</th><th class="num">整组核价</th><th style="min-width:330px">加班费标准</th><th></th></tr></thead>' +
           '<tbody>' + (groupRows || '<tr><td colspan="8" class="muted" style="text-align:center;padding:22px">还没有人员组，点右上角「按组新增」。</td></tr>') + '</tbody></table></div></section>'
         : '<section class="card"><div class="card-head catalog-list-head"><h2>器材清单</h2>' +
-          '<span class="sub">底价 / 报价 / 核价可直接改；改完自动保存</span></div>' +
+          '<span class="sub">供应商报价/底价手动录入；项目报价/核价/费用预计暂不自动计算</span></div>' +
           '<div class="table-scroll"><table class="grid"><thead><tr><th style="min-width:250px">器材名称（含型号）</th><th>分类</th><th>单位</th><th class="num">库存</th><th class="num">供应商报价</th><th class="num">供应商底价</th><th class="num">项目报价</th><th class="num">项目核价</th><th class="num">项目费用预计</th><th style="min-width:160px">备注</th><th></th></tr></thead>' +
           '<tbody>' + (rows || '<tr><td colspan="11" class="muted" style="text-align:center;padding:24px">没有数据</td></tr>') + '</tbody></table></div></section>') +
       '<div class="totals-bar"><div class="t-item"><span class="t-label">器材库来源</span><span class="t-val" style="font-size:13px">' + esc(state.meta.source || '') + '</span></div>' +
@@ -3169,14 +3169,8 @@
     }
     else if (k === 'bottom') {
       e.bottom = M.num(t.value);
-      e.quote = M.round2(e.bottom * (1 + M.num(state.project.markupRate)));
-      e.approved = M.round2(e.quote * (1 - M.num(state.project.cutRate)));
-      tr.querySelector('[data-efield="quote"]').value = e.quote;
-      tr.querySelector('[data-efield="approved"]').value = e.approved;
     } else if (k === 'quote') {
       e.quote = M.num(t.value);
-      e.approved = M.round2(e.quote * (1 - M.num(state.project.cutRate)));
-      tr.querySelector('[data-efield="approved"]').value = e.approved;
     } else if (k === 'approved') { e.approved = M.num(t.value); }
     else if (k === 'supplierQuote' || k === 'costEstimate') { e[k] = M.num(t.value); }
     else if (k === 'note') {
