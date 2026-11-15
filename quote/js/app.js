@@ -3635,6 +3635,13 @@
       state.settings.crewCleared = true;
       if (hadCrew) commit();
     }
+    // 迁移：清空摄影器材组合，保留灯光/其他组合
+    if (state.settings.photoKitsCleared !== true) {
+      var beforeKits = state.kits.length;
+      state.kits = state.kits.filter(function (k) { return (k.cat || '') !== '摄影器材'; });
+      state.settings.photoKitsCleared = true;
+      if (state.kits.length !== beforeKits) commit();
+    }
     var t = location.hash.replace('#', '');
     if (t === 'overtime' || t === 'expenses' || t === 'stats') { state.ui.tab = 'order'; state.ui.projView = t; t = 'order'; }
     if (!HASH_TABS[t]) t = 'order';
