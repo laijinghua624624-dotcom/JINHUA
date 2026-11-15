@@ -540,7 +540,7 @@
       '<input id="smart-supplier" value="' + esc(smartImport.supplier || '') + '" placeholder="供应商名称" style="padding:8px 10px;border:1px solid var(--line-2);border-radius:9px;min-width:160px">' +
       '<select id="smart-dedupe" style="padding:8px 10px;border:1px solid var(--line-2);border-radius:9px">' +
       '<option value="skip">同名器材：跳过</option><option value="update">同名器材：更新价格</option><option value="add">同名也新增</option></select>' +
-      '<span class="spacer"></span><span class="muted small">预览前 50 行；底价/报价按当前加价率换算</span></div>' +
+      '<span class="spacer"></span><span class="muted small">预览前 50 行；比例公式已暂停，导入只写供应商报价/底价</span></div>' +
       '<div style="max-height:52vh;overflow:auto;border:1px solid var(--line);border-radius:10px"><table class="tbl"><thead><tr><th>#</th><th>名称</th><th>分类</th><th>单位</th><th>库存</th><th>底价</th><th>报价</th><th>核价</th><th>备注</th></tr></thead><tbody>' + body + '</tbody></table></div>' +
       (rows.length > 50 ? '<p class="muted small" style="margin:8px 0 0">仅预览前 50 行，导入会包含全部 ' + rows.length + ' 项。</p>' : '') +
       '</div><div class="modal-foot"><span class="spacer"></span><button class="btn light" data-act="modal-close">取消</button>' +
@@ -589,10 +589,13 @@
     rows.forEach(function (r) {
       var key = M.normalizeName(r.name);
       var old = existing[key];
-      var p = smartCalcRow(r, priceMode);
+      var kindBottom = r.kind === 'bottom' || (r.kind === 'generic' && priceMode === 'bottom');
+      var supplierQuote = (r.value === null || kindBottom) ? '' : M.round2(r.value);
+      var supplierBottom = (r.value === null || !kindBottom) ? '' : M.round2(r.value);
       if (old && mode === 'skip') { skipped++; return; }
       if (old && mode === 'update') {
-        old.bottom = p.bottom; old.quote = p.quote; old.approved = p.approved;
+        if (supplierQuote !== '') old.supplierQuote = supplierQuote;
+        if (supplierBottom !== '') old.bottom = supplierBottom;
         if (r.stock !== null) old.stock = r.stock;
         if (r.unit) old.unit = r.unit;
         if (r.cat) old.cat = r.cat;
@@ -601,7 +604,8 @@
       }
       var item = {
         id: uid('eq'), key: key, name: r.name, cat: r.cat || M.classifyName(r.name, 'equipment'), unit: r.unit || '个', type: 'equipment',
-        bottom: p.bottom, quote: p.quote, approved: p.approved, stock: r.stock === null ? null : r.stock,
+        supplierQuote: supplierQuote, bottom: supplierBottom || 0, quote: 0, approved: 0, costEstimate: '',
+        stock: r.stock === null ? null : r.stock,
         note: r.note || '', supplier: supplier, group: '供应商导入', src: '智能导入'
       };
       state.catalog.push(item); existing[key] = item; added++;
@@ -1509,15 +1513,12 @@
   function supplierImport(id) {
     var rec = (state.ui.supplierSubs || []).filter(function (x) { return x.id === id; })[0];
     if (!rec) return;
-    var rate = M.num(state.settings.markupRate) || 30, cut = M.num(state.settings.cutRate) || 20;
     var added = 0, updated = 0;
     (rec.rows || []).forEach(function (r) {
       var key = M.normalizeName(r.name);
       var old = state.catalog.filter(function (x) { return M.normalizeName(x.name) === key && x.type !== 'crew'; })[0];
-      var quote = M.round2(M.num(r.bottom) * (1 + rate / 100));
-      var approved = M.round2(quote * (1 - cut / 100));
       if (old) {
-        old.bottom = M.num(r.bottom); old.quote = quote; old.approved = approved;
+        old.bottom = M.num(r.bottom);
         if (r.stock !== null && r.stock !== undefined) old.stock = r.stock;
         updated++; return;
       }
@@ -1526,7 +1527,7 @@
       if (r.major && major !== r.major) cat = r.major;
       state.catalog.push({
         id: uid('eq'), key: key, name: r.name, cat: cat, unit: r.unit || '个', type: 'equipment',
-        bottom: M.num(r.bottom), quote: quote, approved: approved,
+        supplierQuote: '', bottom: M.num(r.bottom), quote: 0, approved: 0, costEstimate: '',
         stock: r.stock === null || r.stock === undefined ? null : r.stock,
         note: [r.model ? '型号 ' + r.model : '', r.note || ''].filter(Boolean).join('；'),
         supplier: rec.supplier || '供应商填报', group: '供应商填报', src: '供应商填报'
@@ -3443,13 +3444,13 @@
     var bottomIn = M.num($('#modal-root [data-custom="bottom"]').value);
     var quote = M.num($('#modal-root [data-custom="quote"]').value);
     var approvedIn = M.num($('#modal-root [data-custom="approved"]').value);
-    var bottom = bottomIn > 0 ? bottomIn : M.round2(quote / (1 + M.num(state.project.markupRate)));
-    var approved = approvedIn > 0 ? approvedIn : M.round2(quote * (1 - M.num(state.project.cutRate)));
+    var bottom = bottomIn;
+    var approved = approvedIn;
     var ce = state.catalog.filter(function (x) { return M.normalizeName(x.name) === M.normalizeName(name); })[0];
     if (!ce) {
       ce = {
         id: uid('eq'), key: M.normalizeName(name), name: name, cat: type === 'crew' ? '人员' : M.classifyName(name, 'equipment'), unit: unit, type: type,
-        bottom: bottom, quote: quote, approved: approved,
+        supplierQuote: '', bottom: bottom, quote: quote, approved: approved, costEstimate: '',
         stock: null, note: type === 'crew' ? ruleForCrew(name) : ''
       };
       state.catalog.push(ce);
