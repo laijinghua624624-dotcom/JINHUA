@@ -3299,7 +3299,7 @@
       case 'go-order': setTab('order'); break;
       case 'add-group': addGroup(); break;
       case 'del-group': openDeletePin('group', el.dataset.gid); break;
-      case 'add-item': openPicker(el.dataset.gid); break;
+      case 'add-item': openPicker({ gid: el.dataset.gid }); break;
       case 'del-item': delItem(el.dataset.gid, el.dataset.iid); break;
       case 'open-kits': openKitsPicker(); break;
       case 'go-kits': setTab('kits'); break;
