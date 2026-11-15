@@ -131,6 +131,10 @@
   }
 
   var saveTimer = null;
+  function updateMetaStatus() {
+    var el = document.getElementById('meta-status');
+    if (el) el.textContent = '器材库 ' + state.catalog.length + ' 项 · 组合 ' + state.kits.length + ' 组 · 已自动保存';
+  }
   function commit() {
     clearTimeout(saveTimer);
     saveTimer = setTimeout(function () {
@@ -146,6 +150,7 @@
         localStorage.setItem(KEY, JSON.stringify({ catalog: state.catalog, kits: state.kits, projects: state.projects, project: state.project, settings: state.settings, meta: meta }));
         if (catalogCloud.ready && fp !== catalogCloud.syncedFp) scheduleCatalogPush();
         setDraftStatus('草稿已自动保存 ' + nowTime());
+        updateMetaStatus();
       } catch (e) { setDraftStatus('自动保存失败：' + (e && e.name || '存储空间不足')); }
     }, 200);
   }
@@ -3852,7 +3857,7 @@
     $('#storage-status').textContent = storageOK
       ? '本机存储：可用（数据只保存在这台电脑）'
       : '本机存储不可用：请用「设置 → 导出全部数据」备份';
-    $('#meta-status').textContent = '器材库 ' + state.catalog.length + ' 项 · 组合 ' + state.kits.length + ' 组 · 已自动保存';
+    updateMetaStatus();
     setDraftStatus(storageOK ? '就绪' : '');
     render();
     initCatalogCloud();
