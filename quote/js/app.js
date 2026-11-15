@@ -2220,7 +2220,7 @@
           '<span class="sub">供应商报价/底价手动录入；项目报价/核价/费用预计暂不自动计算</span></div>' +
           '<div class="table-scroll"><table class="grid"><thead><tr><th style="min-width:250px">器材名称（含型号）</th><th>分类</th><th>单位</th><th class="num">库存</th><th class="num">供应商报价</th><th class="num">供应商底价</th><th class="num">项目报价</th><th class="num">项目核价</th><th class="num">项目费用预计</th><th style="min-width:160px">备注</th><th></th></tr></thead>' +
           '<tbody>' + (rows || '<tr><td colspan="11" class="muted" style="text-align:center;padding:24px">没有数据</td></tr>') + '</tbody></table></div></section>') +
-      '<div class="totals-bar"><div class="t-item"><span class="t-label">器材库来源</span><span class="t-val" style="font-size:13px">' + esc(state.meta.source || '') + '</span></div>' +
+      '<div class="totals-bar">' + (state.meta.source ? '<div class="t-item"><span class="t-label">器材库来源</span><span class="t-val" style="font-size:13px">' + esc(state.meta.source) + '</span></div>' : '') +
       '<span class="spacer"></span><span class="t-note">共 ' + state.catalog.length + ' 项 · 更新于 ' + esc(state.meta.catalogUpdatedAt || state.meta.generatedAt || '—') + ' · 改价/改名自动保存</span></div>' +
       '</div>';
   }
@@ -2559,7 +2559,7 @@
       '<div class="kv"><span class="k">供应商板块</span><span class="v">' + (function () { var g = {}; state.catalog.forEach(function (e) { if (grpOf(e)) g[grpOf(e)] = 1; }); return Object.keys(g).length; })() + ' 个</span></div>' +
       '<div class="kv"><span class="k">器材组合</span><span class="v">' + state.kits.length + ' 组</span></div>' +
       '<div class="kv"><span class="k">历史项目</span><span class="v">' + state.projects.length + ' 个</span></div>' +
-      '<div class="kv"><span class="k">器材库来源</span><span class="v">' + esc(state.meta.source || '') + '</span></div>' +
+      (state.meta.source ? '<div class="kv"><span class="k">器材库来源</span><span class="v">' + esc(state.meta.source) + '</span></div>' : '') +
       '<div class="toolbar" style="margin-top:14px;flex-wrap:wrap">' +
       '<button class="btn solid" data-act="export-all">导出全部数据（备份）</button>' +
       '<button class="btn light" data-act="import-all">导入全部数据</button>' +
@@ -3641,6 +3641,13 @@
       state.kits = state.kits.filter(function (k) { return (k.cat || '') !== '摄影器材'; });
       state.settings.photoKitsCleared = true;
       if (state.kits.length !== beforeKits) commit();
+    }
+    // 迁移：清空旧的器材库来源/2025 版本信息
+    if (state.settings.metaSourceCleared !== true) {
+      state.meta.source = '';
+      state.meta.generatedAt = '';
+      state.settings.metaSourceCleared = true;
+      commit();
     }
     var t = location.hash.replace('#', '');
     if (t === 'overtime' || t === 'expenses' || t === 'stats') { state.ui.tab = 'order'; state.ui.projView = t; t = 'order'; }
