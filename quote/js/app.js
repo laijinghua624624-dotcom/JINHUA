@@ -2563,11 +2563,8 @@
       '<div class="toolbar" style="margin-top:14px;flex-wrap:wrap">' +
       '<button class="btn solid" data-act="export-all">导出全部数据（备份）</button>' +
       '<button class="btn light" data-act="import-all">导入全部数据</button>' +
-      '<button class="btn danger" data-act="clear-catalog">清空器材库（保留人员/组合/项目）</button>' +
-      '<button class="btn danger" data-act="clear-crew">清空人员标准（保留器材）</button>' +
-      '<button class="btn danger" data-act="clear-projects">清空所有项目（保留器材库/组合）</button>' +
-      '<button class="btn danger" data-act="clear-all">清空全部数据</button>' +
-      '</div><p class="muted small" style="margin:12px 0 0">数据只存在这台电脑的浏览器里，建议每周导出一次备份。</p>' +
+      '<button class="btn light" data-act="admin-backend" style="margin-left:auto">🔒 后台管理</button>' +
+      '</div><p class="muted small" style="margin:12px 0 0">清空/重置等危险操作已移到「后台管理」，需要密码。数据只存在这台电脑的浏览器里，建议每周导出一次备份。</p>' +
       '</div></section>' +
       '<section class="card" style="grid-column:1/-1"><div class="card-head"><h2>两个界面怎么用</h2></div><div class="card-body">' +
       '<div class="kv"><span class="k">下单报价（对外）</span><span class="v" style="font-weight:400">只显示报价，适合给公司/外包下单；默认打开就是它，别人看不到底价和利润。</span></div>' +
@@ -3280,6 +3277,7 @@
       case 'export-all': exportAll(); break;
       case 'import-all': importAll(); break;
       case 'clear-all': clearAll(); break;
+      case 'admin-backend': openAdminBackend(); break;
       case 'clear-catalog': clearCatalogEquipment(); break;
       case 'clear-crew': clearCatalogCrew(); break;
       case 'clear-projects': clearProjectsOnly(); break;
@@ -3298,6 +3296,11 @@
       case 'cg-save': saveCrewGroupAdd(); break;
       case 'crew-card-save': saveCrewCard(el.dataset.eid); break;
       case 'profit-pin-ok': checkProfitPin(); break;
+      case 'admin-pin-ok': checkAdminPin(); break;
+      case 'admin-clear-catalog': closeModal(); clearCatalogEquipment(); break;
+      case 'admin-clear-crew': closeModal(); clearCatalogCrew(); break;
+      case 'admin-clear-projects': closeModal(); clearProjectsOnly(); break;
+      case 'admin-clear-all': closeModal(); clearAll(); break;
       case 'smart-import-confirm': smartConfirmImport(); break;
       case 'supplier-copy': copyText(supplierLink(), function (ok) { toast(ok ? '已复制填报链接' : '复制失败，请手动选中复制', ok ? 'ok' : 'err'); }); break;
       case 'supplier-open-link': window.open(supplierLink(), '_blank', 'noopener'); break;
@@ -3501,6 +3504,36 @@
       commit(); render(); toast('导入完成', 'ok');
     });
   }
+  function openAdminBackend() {
+    openModal('<div class="modal" style="width:min(440px,100%)"><div class="modal-head"><h3>后台管理</h3><button class="x-btn" data-act="modal-close">✕</button></div>' +
+      '<div class="modal-body"><p class="muted small" style="margin:0 0 10px">危险操作已收进后台，请输入后台密码。</p>' +
+      '<label class="field">后台密码<input id="admin-pin" type="password" autocomplete="off" placeholder="请输入密码"></label>' +
+      '<div class="err" id="admin-err" style="color:#b91c1c;font-size:12px;min-height:18px;margin-top:6px"></div></div>' +
+      '<div class="modal-foot"><span class="spacer"></span><button class="btn light" data-act="modal-close">取消</button>' +
+      '<button class="btn primary" data-act="admin-pin-ok">进入后台</button></div></div>');
+    setTimeout(function () { var el = $('#admin-pin'); if (el) el.focus(); }, 60);
+  }
+  function checkAdminPin() {
+    var pin = (($('#admin-pin') || {}).value || '');
+    if (!deletePinOK(pin)) {
+      var err = $('#admin-err'); if (err) err.textContent = '密码不正确';
+      var el = $('#admin-pin'); if (el) { el.value = ''; el.focus(); }
+      return;
+    }
+    openAdminDanger();
+  }
+  function openAdminDanger() {
+    openModal('<div class="modal" style="width:min(560px,100%)"><div class="modal-head"><h3>后台 · 危险操作</h3><button class="x-btn" data-act="modal-close">✕</button></div>' +
+      '<div class="modal-body"><p style="margin:0 0 8px;color:#b91c1c;font-weight:600">以下操作不可恢复，建议先导出备份。</p>' +
+      '<div class="toolbar" style="flex-wrap:wrap;gap:8px">' +
+      '<button class="btn danger" data-act="admin-clear-catalog">清空器材库（保留人员/组合/项目）</button>' +
+      '<button class="btn danger" data-act="admin-clear-crew">清空人员标准（保留器材）</button>' +
+      '<button class="btn danger" data-act="admin-clear-projects">清空所有项目（保留器材库/组合）</button>' +
+      '<button class="btn danger" data-act="admin-clear-all">清空全部数据</button>' +
+      '</div><p class="muted small" style="margin:14px 0 0">器材库当前 ' + state.catalog.length + ' 项 · 组合 ' + state.kits.length + ' 组 · 历史项目 ' + state.projects.length + ' 个</p></div>' +
+      '<div class="modal-foot"><span class="spacer"></span><button class="btn light" data-act="modal-close">关闭</button></div></div>');
+  }
+
   function clearCatalogEquipment() {
     var eqs = state.catalog.filter(function (e) { return e.type !== 'crew'; });
     if (!eqs.length) { toast('器材库已经是空的', 'warn'); return; }
