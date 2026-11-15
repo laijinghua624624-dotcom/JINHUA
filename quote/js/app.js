@@ -620,7 +620,7 @@
   }
 
   function addCatalog() {
-    var name = prompt('新增器材名称（含型号），例如：Sony FX6 Camera摄影机机身：');
+    var name = prompt('新增器材名称，例如：Sony FX6 Camera摄影机机身：');
     if (!name) return;
     var item = {
       id: uid('eq'), key: M.normalizeName(name), name: name.trim(), cat: M.classifyName(name.trim(), 'equipment'), unit: '个', type: 'equipment',
@@ -2033,7 +2033,7 @@
       '<span class="muted small">人员 ' + ob.crewQty + ' 人不计入器材出库；实发数量可直接填，自动算差异</span>' +
       '</div>' +
       '<section class="card"><div class="card-head"><h2>出库汇总</h2><span class="sub">' + ob.lineCount + ' 项器材 / 共 ' + ob.totalQty + ' 件 · 同名器材跨机位合并</span></div>' +
-      '<div class="table-wrap"><table class="grid"><thead><tr><th>序号</th><th>分类</th><th>器材名称（含型号）</th><th>单位</th><th class="num">应发数量</th><th>分属机位及数量</th><th>实发数量</th><th class="num">差异</th></tr></thead><tbody>' + rows + '</tbody></table></div></section>' +
+      '<div class="table-wrap"><table class="grid"><thead><tr><th>序号</th><th>分类</th><th>器材名称</th><th>单位</th><th class="num">应发数量</th><th>分属机位及数量</th><th>实发数量</th><th class="num">差异</th></tr></thead><tbody>' + rows + '</tbody></table></div></section>' +
       '<div class="totals-bar"><div class="t-item"><span class="t-label">应发合计</span><span class="t-val accent">' + ob.totalQty + ' 件</span></div>' +
       '<div class="t-item"><span class="t-label">器材项数</span><span class="t-val">' + ob.lineCount + ' 项</span></div>' +
       '<span class="spacer"></span><span class="t-note">按报价数量生成，含备用器材</span></div>' +
@@ -2231,7 +2231,7 @@
       '<div class="table-scroll catalog-table-wrap"><table class="grid catalog-table"><colgroup>' +
         (state.settings.batchMode ? '<col style="width:38px">' : '') +
         '<col style="width:270px"><col style="width:100px"><col style="width:56px"><col style="width:70px"><col style="width:112px"><col style="width:112px"><col style="width:112px"><col style="width:112px"><col style="width:112px"><col style="width:210px"><col style="width:84px"></colgroup>' +
-        '<thead><tr>' + (state.settings.batchMode ? '<th style="text-align:center"><input type="checkbox" id="cat-check-all" title="全选"></th>' : '') + '<th>器材名称（含型号）</th><th>分类</th><th>单位</th><th class="num">库存</th><th class="num">供应商报价</th><th class="num">供应商底价</th><th class="num">项目报价</th><th class="num">项目核价</th><th class="num">项目费用预计</th><th>备注</th><th></th></tr></thead>' +
+        '<thead><tr>' + (state.settings.batchMode ? '<th style="text-align:center"><input type="checkbox" id="cat-check-all" title="全选"></th>' : '') + '<th>器材名称</th><th>分类</th><th>单位</th><th class="num">库存</th><th class="num">供应商报价</th><th class="num">供应商底价</th><th class="num">项目报价</th><th class="num">项目核价</th><th class="num">项目费用预计</th><th>备注</th><th></th></tr></thead>' +
           '<tbody>' + (rows || '<tr><td colspan="' + (state.settings.batchMode ? 12 : 11) + '" class="muted" style="text-align:center;padding:24px">没有数据</td></tr>') + '</tbody></table></div></section>') +
       '<div class="totals-bar">' + (state.meta.source ? '<div class="t-item"><span class="t-label">器材库来源</span><span class="t-val" style="font-size:13px">' + esc(state.meta.source) + '</span></div>' : '') +
       '<span class="spacer"></span><span class="t-note">共 ' + state.catalog.length + ' 项 · 更新于 ' + esc(state.meta.catalogUpdatedAt || state.meta.generatedAt || '—') + ' · 改价/改名自动保存</span></div>' +
