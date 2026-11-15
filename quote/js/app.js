@@ -615,7 +615,7 @@
     if (!name) return;
     var item = {
       id: uid('eq'), key: M.normalizeName(name), name: name.trim(), cat: M.classifyName(name.trim(), 'equipment'), unit: '个', type: 'equipment',
-      bottom: 0, quote: 0, approved: 0, stock: null, note: '', supplier: '自定义', group: '自定义', src: '自定义'
+      supplierQuote: '', bottom: 0, quote: 0, approved: 0, costEstimate: '', stock: null, note: '', supplier: '自定义', group: '自定义', src: '自定义'
     };
     state.catalog.push(item); commit(); render();
     toast('已新增器材，可直接在表格里改价格', 'ok');
@@ -2217,8 +2217,8 @@
           '<tbody>' + (groupRows || '<tr><td colspan="8" class="muted" style="text-align:center;padding:22px">还没有人员组，点右上角「按组新增」。</td></tr>') + '</tbody></table></div></section>'
         : '<section class="card"><div class="card-head catalog-list-head"><h2>器材清单</h2>' +
           '<span class="sub">底价 / 报价 / 核价可直接改；改完自动保存</span></div>' +
-          '<div class="table-scroll"><table class="grid"><thead><tr><th style="min-width:250px">器材名称（含型号）</th><th>分类</th><th>类型</th><th>单位</th><th class="num">底价</th><th class="num">报价</th><th class="num">核价</th><th class="num">库存</th><th style="min-width:160px">备注</th><th></th></tr></thead>' +
-          '<tbody>' + (rows || '<tr><td colspan="10" class="muted" style="text-align:center;padding:24px">没有数据</td></tr>') + '</tbody></table></div></section>') +
+          '<div class="table-scroll"><table class="grid"><thead><tr><th style="min-width:250px">器材名称（含型号）</th><th>分类</th><th>单位</th><th class="num">库存</th><th class="num">供应商报价</th><th class="num">供应商底价</th><th class="num">项目报价</th><th class="num">项目核价</th><th class="num">项目费用预计</th><th style="min-width:160px">备注</th><th></th></tr></thead>' +
+          '<tbody>' + (rows || '<tr><td colspan="11" class="muted" style="text-align:center;padding:24px">没有数据</td></tr>') + '</tbody></table></div></section>') +
       '<div class="totals-bar"><div class="t-item"><span class="t-label">器材库来源</span><span class="t-val" style="font-size:13px">' + esc(state.meta.source || '') + '</span></div>' +
       '<span class="spacer"></span><span class="t-note">共 ' + state.catalog.length + ' 项 · 更新于 ' + esc(state.meta.catalogUpdatedAt || state.meta.generatedAt || '—') + ' · 改价/改名自动保存</span></div>' +
       '</div>';
@@ -2252,19 +2252,23 @@
       '<button class="del" data-act="catalog-del" data-eid="' + e.id + '">✕</button></td></tr>';
   }
   function catRowHtml(e) {
+    var sq = (e.supplierQuote === undefined || e.supplierQuote === null || e.supplierQuote === '') ? '' : e.supplierQuote;
+    var ce = (e.costEstimate === undefined || e.costEstimate === null || e.costEstimate === '') ? '' : e.costEstimate;
     return '<tr data-eid="' + e.id + '" data-name="' + esc(e.name) + '" data-cat="' + esc(e.cat || '') + '" data-type="' + esc(e.type || 'equipment') + '" data-sup="' + esc(supOf(e)) + '" data-group="' + esc(grpOf(e)) + '" data-major="' + esc(majorOf(e)) + '">' +
       '<td><input class="name-edit" data-efield="name" value="' + esc(e.name) + '"> <span class="major-tag ' + (majorOf(e) === '灯光器材' ? 'light' : 'photo') + '">' + esc(majorOf(e)) + '</span> <span class="src-tag" title="' + esc(supOf(e)) + '">' + esc(srcLabel(supOf(e))) + '</span>' + (grpOf(e) ? '<div class="grp-tag" title="' + esc(grpOf(e)) + '">' + esc(grpOf(e)) + '</div>' : '') + '</td>' +
       '<td><input class="input-plain" style="width:80px" data-efield="cat" value="' + esc(e.cat || '') + '"></td>' +
-      '<td><span class="cat-tag ' + (e.type === 'crew' ? 'crew' : '') + '">' + (e.type === 'crew' ? '人员' : '器材') + '</span></td>' +
       '<td><input class="input-plain" style="width:42px" data-efield="unit" value="' + esc(e.unit || '个') + '"></td>' +
-      '<td class="num"><input class="price" type="number" min="0" step="0.01" data-efield="bottom" value="' + esc(e.bottom) + '"' + (isLock(e) ? ' disabled' : '') + '></td>' +
-      '<td class="num"><input class="price" type="number" min="0" step="0.01" data-efield="quote" value="' + esc(e.quote) + '"' + (isLock(e) ? ' disabled' : '') + '></td>' +
-      '<td class="num"><input class="price" type="number" min="0" step="0.01" data-efield="approved" value="' + esc(e.approved) + '"' + (isLock(e) ? ' disabled' : '') + '></td>' +
       '<td class="num"><input class="qty" type="number" min="0" step="1" data-efield="stock" value="' + esc(e.stock === null || e.stock === undefined ? '' : e.stock) + '" placeholder="—"></td>' +
+      '<td class="num"><input class="price" type="number" min="0" step="0.01" data-efield="supplierQuote" value="' + esc(sq) + '"' + (isLock(e) ? ' disabled' : '') + ' title="供应商对外报价"></td>' +
+      '<td class="num"><input class="price" type="number" min="0" step="0.01" data-efield="bottom" value="' + esc(e.bottom) + '"' + (isLock(e) ? ' disabled' : '') + ' title="供应商给我们底价"></td>' +
+      '<td class="num"><input class="price" type="number" min="0" step="0.01" data-efield="quote" value="' + esc(e.quote) + '"' + (isLock(e) ? ' disabled' : '') + ' title="我们报给客户"></td>' +
+      '<td class="num"><input class="price" type="number" min="0" step="0.01" data-efield="approved" value="' + esc(e.approved) + '"' + (isLock(e) ? ' disabled' : '') + ' title="公司核定"></td>' +
+      '<td class="num"><input class="price" type="number" min="0" step="0.01" data-efield="costEstimate" value="' + esc(ce) + '"' + (isLock(e) ? ' disabled' : '') + ' title="项目费用预计"></td>' +
       '<td><input class="note" data-efield="note" value="' + esc(e.note || '') + '"></td>' +
       '<td style="text-align:center;white-space:nowrap"><button class="btn sm ' + (isLock(e) ? 'solid' : 'light') + '" data-act="catalog-lock" data-eid="' + e.id + '" title="锁定/解锁价格">' + (isLock(e) ? '🔒' : '🔓') + '</button> ' +
       '<button class="del" data-act="catalog-del" data-eid="' + e.id + '">✕</button></td></tr>';
   }
+
   function applyCatalogFilter() {
     var q = (($('[data-search="catalog"]') || {}).value || '').trim().toLowerCase();
     var cat = ($('[data-cat-filter]') || {}).value || '';
@@ -3174,6 +3178,7 @@
       e.approved = M.round2(e.quote * (1 - M.num(state.project.cutRate)));
       tr.querySelector('[data-efield="approved"]').value = e.approved;
     } else if (k === 'approved') { e.approved = M.num(t.value); }
+    else if (k === 'supplierQuote' || k === 'costEstimate') { e[k] = M.num(t.value); }
     else if (k === 'note') {
       e.note = t.value;
       if (e.type === 'crew') propagateCrewNote(e.name, e.note);
