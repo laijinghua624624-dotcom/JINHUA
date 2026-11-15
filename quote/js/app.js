@@ -2261,11 +2261,9 @@
     var e = state.catalog.filter(function (x) { return x.id === eid; })[0]; if (!e) return;
     state.ui.partsEid = eid;
     var parts = (e.parts || []).map(function (p, i) { return { id: p.id || ('pt_' + i), name: p.name || '', qty: p.qty === undefined || p.qty === null ? 1 : p.qty }; });
-    var fromNote = false;
-    if (!parts.length && e.note) { parts = [{ id: uid('pt'), name: e.note, qty: 1 }]; fromNote = true; }
     var rows = parts.map(partsRowHtml).join('');
     openModal('<div class="modal" style="width:min(640px,100%)"><div class="modal-head"><h3>配件明细 · ' + esc(e.name || '器材') + '</h3><button class="x-btn" data-act="modal-close">✕</button></div>' +
-      '<div class="modal-body"><p class="muted small" style="margin:0 0 10px">供应商：' + esc(supOf(e)) + (grpOf(e) ? ' · 分组：' + esc(grpOf(e)) : '') + (fromNote ? ' · 已从备注带入，可修改' : '') + '</p>' +
+      '<div class="modal-body"><p class="muted small" style="margin:0 0 10px">供应商：' + esc(supOf(e)) + (grpOf(e) ? ' · 分组：' + esc(grpOf(e)) : '') + '</p>' +
       '<div class="parts-head"><span>配件名称</span><span>数量</span><span></span></div>' +
       '<div id="parts-list">' + (rows || '<div class="muted small" style="padding:12px 0">还没有配件，点下面添加。</div>') + '</div>' +
       '<div class="toolbar" style="margin-top:10px"><button class="btn light sm" data-act="catalog-parts-add">＋ 添加配件</button></div>' +
@@ -3784,6 +3782,9 @@
     setTimeout(function () { el.remove(); }, 2400);
   }
 
+  function looksLikePartsNote(note) {
+    return /(卡|电池|读卡器|转接环|兔笼|内存|SSD|CFast|CFexpress|SXS|套件|跟焦|提手|肩托|导轨|滤镜|遮光斗|麦克风|PL口|EF口)/i.test(String(note || ''));
+  }
   function init() {
     // 迁移：人员标准已清空，旧本地缓存里的人员一并移除（只做一次）
     if (state.settings.catVersion !== 4) {
@@ -3817,6 +3818,19 @@
       state.meta.generatedAt = '';
       state.settings.metaSourceCleared = true;
       commit();
+    }
+    // 迁移：把备注里的配件明细移到配件明细，备注列不再显示配件
+    if (state.settings.partsMovedFromNote !== true) {
+      var movedParts = 0;
+      state.catalog.forEach(function (e) {
+        if ((!e.parts || !e.parts.length) && e.note && looksLikePartsNote(e.note)) {
+          e.parts = [{ id: uid('pt'), name: e.note, qty: 1 }];
+          e.note = ''; movedParts++;
+        }
+      });
+      state.settings.partsMovedFromNote = true;
+      commit();
+      if (movedParts) console.log('配件明细已从备注迁移：' + movedParts + ' 项');
     }
     // 迁移：清空本地数据，只保留历史项目
     if (state.settings.localResetExceptProjects !== true) {
