@@ -2218,13 +2218,13 @@
           '<tbody>' + (groupRows || '<tr><td colspan="8" class="muted" style="text-align:center;padding:22px">还没有人员组，点右上角「按组新增」。</td></tr>') + '</tbody></table></div></section>'
         : '<section class="card"><div class="card-head catalog-list-head"><h2>器材清单</h2>' +
           '<span class="sub">供应商报价/底价手动录入；项目报价/核价/费用预计暂不自动计算</span></div>' +
-          '<div id="cat-batch-bar" class="toolbar" style="display:none;margin:0 0 10px;gap:10px;align-items:center">' +
+          (state.settings.batchMode ? '<div id="cat-batch-bar" class="toolbar" style="display:none;margin:0 0 10px;gap:10px;align-items:center">' +
         '<span class="muted small" id="cat-sel-count">已选 0 项</span>' +
         '<button class="btn danger sm" data-act="catalog-batch-delete">删除选中</button>' +
         '<button class="btn light sm" data-act="catalog-batch-clear">取消选择</button>' +
-      '</div>' +
-      '<div class="table-scroll"><table class="grid"><thead><tr><th style="width:34px"><input type="checkbox" id="cat-check-all" title="全选"></th><th style="min-width:250px">器材名称（含型号）</th><th>分类</th><th>单位</th><th class="num">库存</th><th class="num">供应商报价</th><th class="num">供应商底价</th><th class="num">项目报价</th><th class="num">项目核价</th><th class="num">项目费用预计</th><th style="min-width:160px">备注</th><th></th></tr></thead>' +
-          '<tbody>' + (rows || '<tr><td colspan="12" class="muted" style="text-align:center;padding:24px">没有数据</td></tr>') + '</tbody></table></div></section>') +
+      '</div>' : '') +
+      '<div class="table-scroll"><table class="grid"><thead><tr>' + (state.settings.batchMode ? '<th style="width:34px"><input type="checkbox" id="cat-check-all" title="全选"></th>' : '') + '<th style="min-width:250px">器材名称（含型号）</th><th>分类</th><th>单位</th><th class="num">库存</th><th class="num">供应商报价</th><th class="num">供应商底价</th><th class="num">项目报价</th><th class="num">项目核价</th><th class="num">项目费用预计</th><th style="min-width:160px">备注</th><th></th></tr></thead>' +
+          '<tbody>' + (rows || '<tr><td colspan="' + (state.settings.batchMode ? 12 : 11) + '" class="muted" style="text-align:center;padding:24px">没有数据</td></tr>') + '</tbody></table></div></section>') +
       '<div class="totals-bar">' + (state.meta.source ? '<div class="t-item"><span class="t-label">器材库来源</span><span class="t-val" style="font-size:13px">' + esc(state.meta.source) + '</span></div>' : '') +
       '<span class="spacer"></span><span class="t-note">共 ' + state.catalog.length + ' 项 · 更新于 ' + esc(state.meta.catalogUpdatedAt || state.meta.generatedAt || '—') + ' · 改价/改名自动保存</span></div>' +
       '</div>';
@@ -2311,7 +2311,7 @@
     var sq = (e.supplierQuote === undefined || e.supplierQuote === null || e.supplierQuote === '') ? '' : e.supplierQuote;
     var ce = (e.costEstimate === undefined || e.costEstimate === null || e.costEstimate === '') ? '' : e.costEstimate;
     return '<tr data-eid="' + e.id + '" data-name="' + esc(e.name) + '" data-cat="' + esc(e.cat || '') + '" data-type="' + esc(e.type || 'equipment') + '" data-sup="' + esc(supOf(e)) + '" data-group="' + esc(grpOf(e)) + '" data-major="' + esc(majorOf(e)) + '">' +
-      '<td><input type="checkbox" data-cat-check="' + e.id + '"></td>' +
+      (state.settings.batchMode ? '<td><input type="checkbox" data-cat-check="' + e.id + '"></td>' : '') +
       '<td><input class="name-edit" data-efield="name" value="' + esc(e.name) + '"> <span class="major-tag ' + (majorOf(e) === '灯光器材' ? 'light' : 'photo') + '">' + esc(majorOf(e)) + '</span>' +
       '<div><button class="parts-link" data-act="catalog-parts" data-eid="' + e.id + '">🧩 配件明细' + ((e.parts || []).length ? '（' + (e.parts || []).length + '）' : '') + '</button></div></td>' +
       '<td><input class="input-plain" style="width:80px" data-efield="cat" value="' + esc(e.cat || '') + '"></td>' +
@@ -2654,6 +2654,8 @@
       '<div class="kv"><span class="k">供应商板块</span><span class="v">' + (function () { var g = {}; state.catalog.forEach(function (e) { if (grpOf(e)) g[grpOf(e)] = 1; }); return Object.keys(g).length; })() + ' 个</span></div>' +
       '<div class="kv"><span class="k">器材组合</span><span class="v">' + state.kits.length + ' 组</span></div>' +
       '<div class="kv"><span class="k">历史项目</span><span class="v">' + state.projects.length + ' 个</span></div>' +
+      '<div class="kv"><span class="k">批量功能</span><span class="v">' + (state.settings.batchMode ? '已开启' : '已关闭') + '</span></div>' +
+      '<div class="toolbar" style="margin:8px 0 2px"><button class="btn ' + (state.settings.batchMode ? 'danger' : 'light') + '" data-act="toggle-batch-mode">' + (state.settings.batchMode ? '关闭批量删除' : '开启批量删除') + '</button></div>' +
       (state.meta.source ? '<div class="kv"><span class="k">器材库来源</span><span class="v">' + esc(state.meta.source) + '</span></div>' : '') +
       '<div class="toolbar" style="margin-top:14px;flex-wrap:wrap">' +
       '<button class="btn solid" data-act="export-all">导出全部数据（备份）</button>' +
@@ -3381,6 +3383,12 @@
       case 'import-all': importAll(); break;
       case 'clear-all': clearAll(); break;
       case 'admin-backend': openAdminBackend(); break;
+      case 'toggle-batch-mode':
+        state.settings.batchMode = !state.settings.batchMode;
+        if (!state.settings.batchMode) state.ui.batchSelection = [];
+        commit(); render();
+        toast(state.settings.batchMode ? '批量删除已开启：器材库左侧出现勾选框' : '批量删除已关闭', 'ok');
+        break;
       case 'clear-catalog': clearCatalogEquipment(); break;
       case 'clear-crew': clearCatalogCrew(); break;
       case 'clear-projects': clearProjectsOnly(); break;
