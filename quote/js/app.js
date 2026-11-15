@@ -3852,9 +3852,7 @@
     $('#storage-status').textContent = storageOK
       ? '本机存储：可用（数据只保存在这台电脑）'
       : '本机存储不可用：请用「设置 → 导出全部数据」备份';
-    var supCount = {}; state.catalog.forEach(function (e) { var x = supOf(e); supCount[x] = (supCount[x] || 0) + 1; });
-    $('#meta-status').textContent = '器材库 ' + state.catalog.length + ' 项 · 组合 ' + state.kits.length + ' 组 · 来源：' +
-      Object.keys(supCount).map(function (k) { return srcLabel(k) + ' ' + supCount[k]; }).join(' / ');
+    $('#meta-status').textContent = '器材库 ' + state.catalog.length + ' 项 · 组合 ' + state.kits.length + ' 组 · 已自动保存';
     setDraftStatus(storageOK ? '就绪' : '');
     render();
     initCatalogCloud();
