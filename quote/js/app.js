@@ -2201,7 +2201,7 @@
       '<div class="catalog-row catalog-row-tools">' +
       (crewMode ? '' : '<button class="btn sm light" data-act="auto-cat">自动识别分类</button>' +
         '<button class="btn sm light" data-act="cat-health">数据体检</button>') +
-      '<button class="btn sm solid" data-act="sync-prices">价格同步到当前项目</button>' +
+      '<button class="btn sm light" data-act="sync-prices">价格同步到当前项目</button>' +
       (crewMode ? '' : '<button class="btn sm light" data-act="catalog-import">导入 JSON</button>' +
         '<button class="btn sm light" data-act="catalog-export">导出 JSON</button>') +
       '<span class="spacer"></span>' +
@@ -2216,14 +2216,17 @@
           '<span class="sub">整组计价：一组人一个总价，按组数结算</span></div>' +
           '<div class="table-scroll"><table class="grid"><thead><tr><th style="min-width:220px">组名</th><th style="min-width:240px">人员组成</th><th>单位</th><th class="num">整组报价</th><th class="num">整组底价</th><th class="num">整组核价</th><th style="min-width:330px">加班费标准</th><th></th></tr></thead>' +
           '<tbody>' + (groupRows || '<tr><td colspan="8" class="muted" style="text-align:center;padding:22px">还没有人员组，点右上角「按组新增」。</td></tr>') + '</tbody></table></div></section>'
-        : '<section class="card"><div class="card-head catalog-list-head"><h2>器材清单</h2>' +
+        : '<section class="card catalog-list-card"><div class="card-head catalog-list-head"><h2>器材清单</h2>' +
           '<span class="sub">供应商报价/底价手动录入；项目报价/核价/费用预计暂不自动计算</span></div>' +
           (state.settings.batchMode ? '<div id="cat-batch-bar" class="toolbar" style="display:none;margin:0 0 10px;gap:10px;align-items:center">' +
         '<span class="muted small" id="cat-sel-count">已选 0 项</span>' +
         '<button class="btn danger sm" data-act="catalog-batch-delete">删除选中</button>' +
         '<button class="btn light sm" data-act="catalog-batch-clear">取消选择</button>' +
       '</div>' : '') +
-      '<div class="table-scroll"><table class="grid"><thead><tr>' + (state.settings.batchMode ? '<th style="width:34px"><input type="checkbox" id="cat-check-all" title="全选"></th>' : '') + '<th style="min-width:250px">器材名称（含型号）</th><th>分类</th><th>单位</th><th class="num">库存</th><th class="num">供应商报价</th><th class="num">供应商底价</th><th class="num">项目报价</th><th class="num">项目核价</th><th class="num">项目费用预计</th><th style="min-width:160px">备注</th><th></th></tr></thead>' +
+      '<div class="table-scroll catalog-table-wrap"><table class="grid catalog-table"><colgroup>' +
+        (state.settings.batchMode ? '<col style="width:38px">' : '') +
+        '<col style="width:270px"><col style="width:100px"><col style="width:56px"><col style="width:70px"><col style="width:112px"><col style="width:112px"><col style="width:112px"><col style="width:112px"><col style="width:112px"><col style="width:210px"><col style="width:84px"></colgroup>' +
+        '<thead><tr>' + (state.settings.batchMode ? '<th style="text-align:center"><input type="checkbox" id="cat-check-all" title="全选"></th>' : '') + '<th>器材名称（含型号）</th><th>分类</th><th>单位</th><th class="num">库存</th><th class="num">供应商报价</th><th class="num">供应商底价</th><th class="num">项目报价</th><th class="num">项目核价</th><th class="num">项目费用预计</th><th>备注</th><th></th></tr></thead>' +
           '<tbody>' + (rows || '<tr><td colspan="' + (state.settings.batchMode ? 12 : 11) + '" class="muted" style="text-align:center;padding:24px">没有数据</td></tr>') + '</tbody></table></div></section>') +
       '<div class="totals-bar">' + (state.meta.source ? '<div class="t-item"><span class="t-label">器材库来源</span><span class="t-val" style="font-size:13px">' + esc(state.meta.source) + '</span></div>' : '') +
       '<span class="spacer"></span><span class="t-note">共 ' + state.catalog.length + ' 项 · 更新于 ' + esc(state.meta.catalogUpdatedAt || state.meta.generatedAt || '—') + ' · 改价/改名自动保存</span></div>' +
@@ -2310,8 +2313,8 @@
     var ce = (e.costEstimate === undefined || e.costEstimate === null || e.costEstimate === '') ? '' : e.costEstimate;
     return '<tr data-eid="' + e.id + '" data-name="' + esc(e.name) + '" data-cat="' + esc(e.cat || '') + '" data-type="' + esc(e.type || 'equipment') + '" data-sup="' + esc(supOf(e)) + '" data-group="' + esc(grpOf(e)) + '" data-major="' + esc(majorOf(e)) + '">' +
       (state.settings.batchMode ? '<td><input type="checkbox" data-cat-check="' + e.id + '"></td>' : '') +
-      '<td><input class="name-edit" data-efield="name" value="' + esc(e.name) + '"> <span class="major-tag ' + (majorOf(e) === '灯光器材' ? 'light' : 'photo') + '">' + esc(majorOf(e)) + '</span>' +
-      '<div><button class="parts-link" data-act="catalog-parts" data-eid="' + e.id + '">🧩 配件明细' + ((e.parts || []).length ? '（' + (e.parts || []).length + '）' : '') + '</button></div></td>' +
+      '<td><input class="name-edit" data-efield="name" value="' + esc(e.name) + '">' +
+      '<div class="parts-row"><button class="parts-link" data-act="catalog-parts" data-eid="' + e.id + '">配件明细' + ((e.parts || []).length ? ' · ' + (e.parts || []).length : '') + '</button></div></td>' +
       '<td><input class="input-plain" style="width:80px" data-efield="cat" value="' + esc(e.cat || '') + '"></td>' +
       '<td><input class="input-plain" style="width:42px" data-efield="unit" value="' + esc(e.unit || '个') + '"></td>' +
       '<td class="num"><input class="qty" type="number" min="0" step="1" data-efield="stock" value="' + esc(e.stock === null || e.stock === undefined ? '' : e.stock) + '" placeholder="—"></td>' +
