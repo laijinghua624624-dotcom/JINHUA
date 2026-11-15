@@ -2257,12 +2257,63 @@
       '<button class="btn sm ' + (isLock(e) ? 'solid' : 'light') + '" data-act="catalog-lock" data-eid="' + e.id + '" title="锁定/解锁价格">' + (isLock(e) ? '🔒' : '🔓') + '</button> ' +
       '<button class="del" data-act="catalog-del" data-eid="' + e.id + '">✕</button></td></tr>';
   }
+  function openCatalogParts(eid) {
+    var e = state.catalog.filter(function (x) { return x.id === eid; })[0]; if (!e) return;
+    state.ui.partsEid = eid;
+    var parts = (e.parts || []).map(function (p, i) { return { id: p.id || ('pt_' + i), name: p.name || '', qty: p.qty === undefined || p.qty === null ? 1 : p.qty }; });
+    var fromNote = false;
+    if (!parts.length && e.note) { parts = [{ id: uid('pt'), name: e.note, qty: 1 }]; fromNote = true; }
+    var rows = parts.map(partsRowHtml).join('');
+    openModal('<div class="modal" style="width:min(640px,100%)"><div class="modal-head"><h3>配件明细 · ' + esc(e.name || '器材') + '</h3><button class="x-btn" data-act="modal-close">✕</button></div>' +
+      '<div class="modal-body"><p class="muted small" style="margin:0 0 10px">供应商：' + esc(supOf(e)) + (grpOf(e) ? ' · 分组：' + esc(grpOf(e)) : '') + (fromNote ? ' · 已从备注带入，可修改' : '') + '</p>' +
+      '<div class="parts-head"><span>配件名称</span><span>数量</span><span></span></div>' +
+      '<div id="parts-list">' + (rows || '<div class="muted small" style="padding:12px 0">还没有配件，点下面添加。</div>') + '</div>' +
+      '<div class="toolbar" style="margin-top:10px"><button class="btn light sm" data-act="catalog-parts-add">＋ 添加配件</button></div>' +
+      '</div><div class="modal-foot"><span class="spacer"></span><button class="btn light" data-act="modal-close">取消</button>' +
+      '<button class="btn primary" data-act="catalog-parts-save">保存配件</button></div></div>');
+  }
+  function partsRowHtml(p) {
+    return '<div class="part-row" data-part-id="' + esc(p.id || '') + '">' +
+      '<input data-part-name value="' + esc(p.name || '') + '" placeholder="例如：Cfast卡 256G">' +
+      '<input data-part-qty type="number" min="0" step="1" value="' + esc(p.qty === undefined || p.qty === null ? 1 : p.qty) + '">' +
+      '<button class="del" data-act="catalog-parts-del" title="删除这条">✕</button></div>';
+  }
+  function addCatalogPartRow() {
+    var list = document.getElementById('parts-list'); if (!list) return;
+    var empty = list.querySelector('.muted'); if (empty) empty.remove();
+    list.insertAdjacentHTML('beforeend', partsRowHtml({ id: uid('pt'), name: '', qty: 1 }));
+    var rows = list.querySelectorAll('.part-row'); if (rows.length) rows[rows.length - 1].querySelector('[data-part-name]').focus();
+  }
+  function delCatalogPartRow(el) {
+    var row = el.closest('.part-row'); if (row) row.remove();
+    var list = document.getElementById('parts-list');
+    if (list && !list.querySelector('.part-row')) list.innerHTML = '<div class="muted small" style="padding:12px 0">还没有配件，点下面添加。</div>';
+  }
+  function saveCatalogParts() {
+    var eid = state.ui.partsEid;
+    var e = state.catalog.filter(function (x) { return x.id === eid; })[0]; if (!e) return closeModal();
+    var list = document.getElementById('parts-list');
+    var parts = [];
+    if (list) {
+      Array.prototype.forEach.call(list.querySelectorAll('.part-row'), function (row) {
+        var name = (row.querySelector('[data-part-name]').value || '').trim();
+        if (!name) return;
+        var qty = M.num(row.querySelector('[data-part-qty]').value);
+        parts.push({ id: row.dataset.partId || uid('pt'), name: name, qty: qty > 0 ? qty : 1 });
+      });
+    }
+    e.parts = parts;
+    state.ui.partsEid = null;
+    commit(); closeModal(); render(); toast('已保存配件明细', 'ok');
+  }
+
   function catRowHtml(e) {
     var sq = (e.supplierQuote === undefined || e.supplierQuote === null || e.supplierQuote === '') ? '' : e.supplierQuote;
     var ce = (e.costEstimate === undefined || e.costEstimate === null || e.costEstimate === '') ? '' : e.costEstimate;
     return '<tr data-eid="' + e.id + '" data-name="' + esc(e.name) + '" data-cat="' + esc(e.cat || '') + '" data-type="' + esc(e.type || 'equipment') + '" data-sup="' + esc(supOf(e)) + '" data-group="' + esc(grpOf(e)) + '" data-major="' + esc(majorOf(e)) + '">' +
       '<td><input type="checkbox" data-cat-check="' + e.id + '"></td>' +
-      '<td><input class="name-edit" data-efield="name" value="' + esc(e.name) + '"> <span class="major-tag ' + (majorOf(e) === '灯光器材' ? 'light' : 'photo') + '">' + esc(majorOf(e)) + '</span> <span class="src-tag" title="' + esc(supOf(e)) + '">' + esc(srcLabel(supOf(e))) + '</span>' + (grpOf(e) ? '<div class="grp-tag" title="' + esc(grpOf(e)) + '">' + esc(grpOf(e)) + '</div>' : '') + '</td>' +
+      '<td><input class="name-edit" data-efield="name" value="' + esc(e.name) + '"> <span class="major-tag ' + (majorOf(e) === '灯光器材' ? 'light' : 'photo') + '">' + esc(majorOf(e)) + '</span>' +
+      '<div><button class="parts-link" data-act="catalog-parts" data-eid="' + e.id + '">🧩 配件明细' + ((e.parts || []).length ? '（' + (e.parts || []).length + '）' : '') + '</button></div></td>' +
       '<td><input class="input-plain" style="width:80px" data-efield="cat" value="' + esc(e.cat || '') + '"></td>' +
       '<td><input class="input-plain" style="width:42px" data-efield="unit" value="' + esc(e.unit || '个') + '"></td>' +
       '<td class="num"><input class="qty" type="number" min="0" step="1" data-efield="stock" value="' + esc(e.stock === null || e.stock === undefined ? '' : e.stock) + '" placeholder="—"></td>' +
@@ -3308,6 +3359,7 @@
       case 'crew-star-filter': state.ui.starOnly = !state.ui.starOnly; commit(); render(); break;
       case 'catalog-del': delCatalog(el.dataset.eid); break;
       case 'catalog-batch-delete': openCatalogBatchDelete(); break;
+      case 'catalog-parts': openCatalogParts(el.dataset.eid); break;
       case 'catalog-batch-clear': clearCatalogSelection(); break;
       case 'catalog-export': downloadText(JSON.stringify(state.catalog, null, 2), '器材库_' + today() + '.json'); break;
       case 'catalog-smart-import': openSmartImport(); break;
@@ -3348,6 +3400,9 @@
       case 'crew-card-save': saveCrewCard(el.dataset.eid); break;
       case 'profit-pin-ok': checkProfitPin(); break;
       case 'admin-pin-ok': checkAdminPin(); break;
+      case 'catalog-parts-add': addCatalogPartRow(); break;
+      case 'catalog-parts-del': delCatalogPartRow(el); break;
+      case 'catalog-parts-save': saveCatalogParts(); break;
       case 'admin-clear-catalog': closeModal(); clearCatalogEquipment(); break;
       case 'admin-clear-crew': closeModal(); clearCatalogCrew(); break;
       case 'admin-clear-projects': closeModal(); clearProjectsOnly(); break;

@@ -489,3 +489,11 @@ label.field.qk input.qty{width:54px;flex:none}
 /* 历史项目搜索 */
 .history-searchbar{gap:12px}
 .history-search{flex:1 1 320px;min-width:220px;padding:10px 13px;border:1px solid var(--line-2);border-radius:10px;background:#fff;font-size:14px}
+
+/* 器材配件明细 */
+.parts-link{border:0;background:#f1f5f9;color:#475569;font-size:11px;padding:2px 8px;border-radius:99px;margin-top:4px;cursor:pointer}
+.parts-link:hover{background:#e2e8f0;color:#0f172a}
+.parts-head{display:grid;grid-template-columns:1fr 90px 32px;gap:8px;font-size:11px;color:#64748b;padding:0 2px 6px}
+.part-row{display:grid;grid-template-columns:1fr 90px 32px;gap:8px;align-items:center;margin-bottom:6px}
+.part-row input[type=text],.part-row input:not([type]){width:100%;padding:7px 9px;border:1px solid #dbe2ea;border-radius:7px;font-size:13px}
+.part-row input[type=number]{width:100%;padding:7px 9px;border:1px solid #dbe2ea;border-radius:7px;font-size:13px}
