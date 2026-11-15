@@ -2218,8 +2218,13 @@
           '<tbody>' + (groupRows || '<tr><td colspan="8" class="muted" style="text-align:center;padding:22px">还没有人员组，点右上角「按组新增」。</td></tr>') + '</tbody></table></div></section>'
         : '<section class="card"><div class="card-head catalog-list-head"><h2>器材清单</h2>' +
           '<span class="sub">供应商报价/底价手动录入；项目报价/核价/费用预计暂不自动计算</span></div>' +
-          '<div class="table-scroll"><table class="grid"><thead><tr><th style="min-width:250px">器材名称（含型号）</th><th>分类</th><th>单位</th><th class="num">库存</th><th class="num">供应商报价</th><th class="num">供应商底价</th><th class="num">项目报价</th><th class="num">项目核价</th><th class="num">项目费用预计</th><th style="min-width:160px">备注</th><th></th></tr></thead>' +
-          '<tbody>' + (rows || '<tr><td colspan="11" class="muted" style="text-align:center;padding:24px">没有数据</td></tr>') + '</tbody></table></div></section>') +
+          '<div id="cat-batch-bar" class="toolbar" style="display:none;margin:0 0 10px;gap:10px;align-items:center">' +
+        '<span class="muted small" id="cat-sel-count">已选 0 项</span>' +
+        '<button class="btn danger sm" data-act="catalog-batch-delete">删除选中</button>' +
+        '<button class="btn light sm" data-act="catalog-batch-clear">取消选择</button>' +
+      '</div>' +
+      '<div class="table-scroll"><table class="grid"><thead><tr><th style="width:34px"><input type="checkbox" id="cat-check-all" title="全选"></th><th style="min-width:250px">器材名称（含型号）</th><th>分类</th><th>单位</th><th class="num">库存</th><th class="num">供应商报价</th><th class="num">供应商底价</th><th class="num">项目报价</th><th class="num">项目核价</th><th class="num">项目费用预计</th><th style="min-width:160px">备注</th><th></th></tr></thead>' +
+          '<tbody>' + (rows || '<tr><td colspan="12" class="muted" style="text-align:center;padding:24px">没有数据</td></tr>') + '</tbody></table></div></section>') +
       '<div class="totals-bar">' + (state.meta.source ? '<div class="t-item"><span class="t-label">器材库来源</span><span class="t-val" style="font-size:13px">' + esc(state.meta.source) + '</span></div>' : '') +
       '<span class="spacer"></span><span class="t-note">共 ' + state.catalog.length + ' 项 · 更新于 ' + esc(state.meta.catalogUpdatedAt || state.meta.generatedAt || '—') + ' · 改价/改名自动保存</span></div>' +
       '</div>';
@@ -2256,6 +2261,7 @@
     var sq = (e.supplierQuote === undefined || e.supplierQuote === null || e.supplierQuote === '') ? '' : e.supplierQuote;
     var ce = (e.costEstimate === undefined || e.costEstimate === null || e.costEstimate === '') ? '' : e.costEstimate;
     return '<tr data-eid="' + e.id + '" data-name="' + esc(e.name) + '" data-cat="' + esc(e.cat || '') + '" data-type="' + esc(e.type || 'equipment') + '" data-sup="' + esc(supOf(e)) + '" data-group="' + esc(grpOf(e)) + '" data-major="' + esc(majorOf(e)) + '">' +
+      '<td><input type="checkbox" data-cat-check="' + e.id + '"></td>' +
       '<td><input class="name-edit" data-efield="name" value="' + esc(e.name) + '"> <span class="major-tag ' + (majorOf(e) === '灯光器材' ? 'light' : 'photo') + '">' + esc(majorOf(e)) + '</span> <span class="src-tag" title="' + esc(supOf(e)) + '">' + esc(srcLabel(supOf(e))) + '</span>' + (grpOf(e) ? '<div class="grp-tag" title="' + esc(grpOf(e)) + '">' + esc(grpOf(e)) + '</div>' : '') + '</td>' +
       '<td><input class="input-plain" style="width:80px" data-efield="cat" value="' + esc(e.cat || '') + '"></td>' +
       '<td><input class="input-plain" style="width:42px" data-efield="unit" value="' + esc(e.unit || '个') + '"></td>' +
@@ -2269,6 +2275,41 @@
       '<td style="text-align:center;white-space:nowrap"><button class="btn sm ' + (isLock(e) ? 'solid' : 'light') + '" data-act="catalog-lock" data-eid="' + e.id + '" title="锁定/解锁价格">' + (isLock(e) ? '🔒' : '🔓') + '</button> ' +
       '<button class="del" data-act="catalog-del" data-eid="' + e.id + '">✕</button></td></tr>';
   }
+
+  function catalogSelectedIds() {
+    return Array.prototype.map.call(document.querySelectorAll('#view [data-cat-check]:checked'), function (x) { return x.dataset.catCheck; });
+  }
+  function updateCatalogSelection() {
+    var ids = catalogSelectedIds();
+    var bar = document.getElementById('cat-batch-bar');
+    var count = document.getElementById('cat-sel-count');
+    if (bar) bar.style.display = ids.length ? 'flex' : 'none';
+    if (count) count.textContent = '已选 ' + ids.length + ' 项';
+    var all = document.getElementById('cat-check-all');
+    if (all) {
+      var boxes = Array.prototype.slice.call(document.querySelectorAll('#view [data-cat-check]')).filter(function (x) { return x.closest('tr').style.display !== 'none'; });
+      all.checked = boxes.length > 0 && ids.length === boxes.length;
+      all.indeterminate = ids.length > 0 && ids.length < boxes.length;
+    }
+  }
+  function clearCatalogSelection() {
+    var all = document.getElementById('cat-check-all'); if (all) all.checked = false;
+    Array.prototype.forEach.call(document.querySelectorAll('#view [data-cat-check]'), function (x) { x.checked = false; });
+    updateCatalogSelection();
+  }
+  function openCatalogBatchDelete() {
+    var ids = catalogSelectedIds();
+    if (!ids.length) { toast('请先勾选要删除的器材', 'warn'); return; }
+    openDeletePin('catalog-batch', null, ids);
+  }
+  function deleteCatalogBatchNow(ids) {
+    if (!ids || !ids.length) return;
+    var map = {}; ids.forEach(function (id) { map[id] = 1; });
+    var n = state.catalog.filter(function (x) { return map[x.id]; }).length;
+    state.catalog = state.catalog.filter(function (x) { return !map[x.id]; });
+    commit(); render(); toast('已批量删除 ' + n + ' 项器材', 'ok');
+  }
+
 
   function applyCatalogFilter() {
     var q = (($('[data-search="catalog"]') || {}).value || '').trim().toLowerCase();
@@ -2448,9 +2489,11 @@
     state.settings.deletedProjects = arr;
   }
   function deletePinOK(pin) { pin = String(pin || '').trim(); return pin === '121212' || pin === '121223lai'; }
-  function openDeletePin(type, id) {
+  function openDeletePin(type, id, ids) {
     var title = '删除', desc = '', name = '';
-    if (type === 'project') {
+    if (type === 'catalog-batch') {
+      title = '批量删除器材'; name = (ids || []).length + ' 项器材'; desc = '删除后本地和云端器材库都不会再出现，不可恢复。';
+    } else if (type === 'project') {
       var p = state.projects.filter(function (x) { return x.id === id; })[0]; if (!p) return;
       title = '删除项目'; name = p.name || '未命名项目';
       desc = (p.archiveOnly || (p.archive && (p.archive.files || []).length)) ? '该项目的服务器归档资料会一并删除，刷新后不会再出现。' : '删除后刷新不会再出现。';
@@ -2459,7 +2502,7 @@
     } else if (type === 'group') {
       var g = groupById(id); if (!g) return; title = '删除机位组'; name = g.name || '未命名机位组'; desc = '组内 ' + g.items.length + ' 行会一起删除，刷新后不会再出现。';
     }
-    state.ui.deletePin = { type: type, id: id };
+    state.ui.deletePin = { type: type, id: id, ids: ids || [] };
     openModal('<div class="modal" style="width:min(460px,100%)"><div class="modal-head"><h3>' + esc(title) + '</h3><button class="x-btn" data-act="modal-close">✕</button></div>' +
       '<div class="modal-body"><p style="margin:0 0 6px">确定删除「<b>' + esc(name) + '</b>」？</p>' +
       '<p class="muted small" style="margin:0 0 12px">' + esc(desc) + '</p>' +
@@ -2481,6 +2524,7 @@
     if (act.type === 'project') deleteProjectNow(act.id);
     else if (act.type === 'kit') deleteKitNow(act.id);
     else if (act.type === 'group') deleteGroupNow(act.id);
+    else if (act.type === 'catalog-batch') deleteCatalogBatchNow(act.ids);
   }
   function deleteProjectNow(pid) {
     var p = state.projects.filter(function (x) { return x.id === pid; })[0]; if (!p) return;
@@ -3036,6 +3080,11 @@
     if (t.dataset.kitCheck) { var card = t.closest('.kit-card'); if (card) card.classList.toggle('selected', t.checked); }
     if (t.dataset.kitcat) { var kk = kitById(t.dataset.kitcat); if (kk) { kk.cat = t.value; commit(); render(); } }
     if (t.dataset.gpkg) { toggleGroupPkg(t.dataset.gpkg, t.checked); }
+    if (t.id === 'cat-check-all') {
+      Array.prototype.forEach.call(document.querySelectorAll('#view [data-cat-check]'), function (x) { if (x.closest('tr').style.display !== 'none') x.checked = t.checked; });
+      updateCatalogSelection();
+    }
+    if (t.dataset.catCheck) updateCatalogSelection();
   });
   $('#modal-root').addEventListener('click', function (e) {
     var t = e.target.closest('[data-act]');
@@ -3258,6 +3307,8 @@
       case 'catalog-lock': toggleCatalogLock(el.dataset.eid); break;
       case 'crew-star-filter': state.ui.starOnly = !state.ui.starOnly; commit(); render(); break;
       case 'catalog-del': delCatalog(el.dataset.eid); break;
+      case 'catalog-batch-delete': openCatalogBatchDelete(); break;
+      case 'catalog-batch-clear': clearCatalogSelection(); break;
       case 'catalog-export': downloadText(JSON.stringify(state.catalog, null, 2), '器材库_' + today() + '.json'); break;
       case 'catalog-smart-import': openSmartImport(); break;
       case 'smart-pick': smartPickFile(); break;
