@@ -166,6 +166,21 @@
   var PROFIT_TABS = { profit: 1, catalog: 1, history: 1, settings: 1 };
   var HASH_TABS = { order: 1, outbound: 1, kits: 1, overtime: 1, expenses: 1, stats: 1, profit: 1, catalog: 1, history: 1, settings: 1 };
 
+  function updateHeaderActions() {
+    var tab = state.ui.tab;
+    var isOrder = tab === 'order';
+    var bNew = document.getElementById('btn-new');
+    var bSave = document.getElementById('btn-save');
+    var bExport = document.getElementById('btn-export-main');
+    if (bNew) bNew.style.display = isOrder ? '' : 'none';
+    if (bSave) {
+      bSave.style.display = isOrder ? '' : 'none';
+      bSave.textContent = '存入历史';
+      bSave.title = '把当前项目存入历史项目；日常修改会自动保存，不需要每次点';
+    }
+    if (bExport) bExport.style.display = (isOrder || tab === 'profit') ? '' : 'none';
+  }
+
   function renderTabs() {
     var tabs = state.ui.mode === 'order' ? TABS_ORDER : TABS_PROFIT;
     $('#tabs').innerHTML = tabs.map(function (t) {
@@ -202,6 +217,7 @@
   var view = $('#view');
   function render() {
     renderTabs();
+    updateHeaderActions();
     var f;
     if (state.ui.tab === 'order') {
       var pv = state.ui.projView || 'quote';
