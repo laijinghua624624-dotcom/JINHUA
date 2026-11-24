@@ -48,8 +48,10 @@
     return num(r, 0);
   }
   function lineRebate(item, project) { return round2(lineBottom(item, project) * rebateRateOf(item, project)); }
-  /* 我的利润 = 公司核价 - 底价 + 供应商返点 */
-  function lineProfit(item, project) { return round2(lineApproved(item, project) - lineBottom(item, project) + lineRebate(item, project)); }
+  function taxRateOf(project) { return num(project && project.taxRate, 0); }
+  /* 税费按报价分摊；利润 = 核价 - 底价 + 返点 - 税费分摊 */
+  function lineTax(item, project) { return round2(lineQuote(item, project) * taxRateOf(project)); }
+  function lineProfit(item, project) { return round2(lineApproved(item, project) - lineBottom(item, project) + lineRebate(item, project) - lineTax(item, project)); }
 
   /* 按项目默认比例，从底价推导报价和核价 */
   function derivePrices(item, project) {
@@ -69,7 +71,7 @@
       t.bottom = round2(num(group.pkgBottom) * q);
       t.approved = round2(num(group.pkgApproved) * q);
       t.rebate = round2(num(group.pkgBottom) * q * num(project.rebateRate));
-      t.profit = round2(t.approved - t.bottom + t.rebate);
+      t.profit = round2(t.approved - t.bottom + t.rebate - t.quote * taxRateOf(project));
       t.qty = q; t.count = (group.items || []).length; t.pkg = true;
       return t;
     }
@@ -334,7 +336,7 @@
     classifyName: classifyName, num: num, int: toInt, normalizeName: normalizeName, money: money,
     lineDays: lineDays,
     lineBottom: lineBottom, lineQuote: lineQuote, lineApproved: lineApproved,
-    lineRebate: lineRebate, lineProfit: lineProfit, rebateRateOf: rebateRateOf,
+    lineRebate: lineRebate, lineTax: lineTax, lineProfit: lineProfit, rebateRateOf: rebateRateOf, taxRateOf: taxRateOf,
     derivePrices: derivePrices,
     groupTotals: groupTotals, totals: totals, outbound: outbound,
     stockIssues: stockIssues, zeroPriceLines: zeroPriceLines, sumQty: sumQty

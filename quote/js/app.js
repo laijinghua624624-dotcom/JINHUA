@@ -908,7 +908,7 @@
       field('拍摄日期', 'shootDate', p.shootDate, '', 'date') +
       field('活动地址', 'location', p.location, 'span-2') +
       field('拍摄天数', 'days', M.lineDays(p), '', 'number', 'min="1" step="1"') +
-      field('税率 %', 'taxRatePct', M.round2(M.num(p.taxRate) * 100), '', 'number', 'min="0" step="0.01"') +
+      field('税率 %（利润扣除）', 'taxRatePct', M.round2(M.num(p.taxRate) * 100), '', 'number', 'min="0" step="0.01"') +
       field('备注 / 说明（打印在报价单顶部）', 'remark', p.remark, 'span-4') +
       '</div></div></section>' +
       '<div class="toolbar">' +
@@ -985,7 +985,7 @@
       '<div class="divider"></div>' +
       '<div class="t-item"><span class="t-label">数量 / 行数</span><span class="t-val" data-ot="qty">' + t.qty + ' / ' + t.lines + '</span></div>' +
       '<span class="spacer"></span>' +
-      '<span class="t-note">' + M.lineDays(state.project) + ' 天 · 税率 ' + pct(M.num(state.project.taxRate)) + '</span>';
+      '<span class="t-note">' + M.lineDays(state.project) + ' 天 · 税率 ' + pct(M.num(state.project.taxRate)) + ' · 利润已扣税费</span>';
   }
   function updateOrderDOM() {
     var t = M.totals(state.project);
@@ -1018,6 +1018,7 @@
       statCard('底价合计', money(t.bottom), '供应商成本', '') +
       statCard('供应商返点', money(t.rebate), pct(M.num(p.rebateRate)) + ' × 底价', '') +
       '</div>' +
+      '<div class="hint">利润已扣除税费分摊 ' + money(t.tax) + '（按报价 ' + pct(t.taxRate) + ' 计算）。</div>' +
       '<section class="card"><div class="card-head"><h2>项目与价格比例</h2><span class="sub">和「设置」里的比例是同一组：改任意一边，所有项目一起同步重算；手工改过的核价会保留</span></div>' +
       '<div class="card-body"><div class="form-grid">' +
       field('项目名称', 'name', p.name, 'span-2') +
@@ -1057,7 +1058,7 @@
       '<div class="t-item"><span class="t-label">我的利润</span><span class="t-val green" data-pt="profit">' + money(t.profit) + '</span></div>' +
       '<div class="t-item"><span class="t-label">利润率（对底价 / 对核价）</span><span class="t-val green" style="font-size:15px" data-pt="rates">' + t.profitRateBottom + '% / ' + t.profitRateApproved + '%</span></div>' +
       '<span class="spacer"></span>' +
-      '<span class="t-note">底价为供应商价；核价可按实际结果手动改</span></div>' +
+      '<span class="t-note">底价为供应商价；利润已扣税费；核价可按实际结果手动改</span></div>' +
       '</div>';
   }
   function bizFin(p) {
@@ -1066,7 +1067,8 @@
       var q = M.num(a.quoteAmount || a.contractAmount);
       var c = M.num(a.contractAmount), inv = M.num(a.invoiceAmount);
       var cost = (a.cost === '' || a.cost === null || a.cost === undefined) ? null : M.num(a.cost);
-      return { quote: q, contract: c, invoice: inv, approved: c, bottom: 0, profit: cost === null ? null : M.round2(q - cost), margin: cost === null ? null : (q > 0 ? M.round2((q - cost) / q * 100) : 0), files: (a.files || []).length, archive: true };
+      var ap = cost === null ? null : archiveProfit(p);
+      return { quote: q, contract: c, invoice: inv, approved: c, bottom: 0, profit: ap, margin: ap === null ? null : (q > 0 ? M.round2(ap / q * 100) : 0), files: (a.files || []).length, archive: true };
     }
     var t = M.totals(p), ar = archiveOf(p);
     return { quote: t.quote, contract: M.num(ar.contractAmount), invoice: M.num(ar.invoiceAmount), approved: t.approved, bottom: t.bottom, profit: t.profit, margin: t.profitRateBottom, files: (ar.files || []).length, archive: false };
@@ -1666,16 +1668,22 @@
         '<button class="btn sm danger" data-act="archive-del" data-id="' + esc(f.id) + '">删除</button></div></div>';
     }).join('');
   }
+  function archiveTaxRate() {
+    var r = state && state.settings ? M.num(state.settings.taxRate) : 1;
+    return r / 100;
+  }
   function archiveProfit(p) {
     var a = archiveOf(p);
     if (a.cost === '' || a.cost === null || a.cost === undefined) return null;
-    return M.round2(M.num(a.quoteAmount || a.contractAmount) - M.num(a.cost));
+    var base = M.num(a.quoteAmount || a.contractAmount);
+    var tax = M.round2(base * archiveTaxRate());
+    return M.round2(base - M.num(a.cost) - tax);
   }
   function updateArchiveProfit() {
     var c = M.num((($('#arc-quote') || {}).value) || (($('#arc-amount') || {}).value));
     var costRaw = ($('#arc-cost') || {}).value;
     var el = $('#arc-profit'); if (!el) return;
-    el.value = (costRaw === '' || costRaw === undefined || costRaw === null) ? '' : M.round2(c - M.num(costRaw));
+    el.value = (costRaw === '' || costRaw === undefined || costRaw === null) ? '' : M.round2(c - M.num(costRaw) - M.round2(c * archiveTaxRate()));
   }
   function newArchiveProject() {
     var p = {
@@ -1702,7 +1710,7 @@
       '<label class="field">合同金额（元）<input id="arc-amount" type="number" min="0" step="0.01" value="' + esc(a.contractAmount === '' ? '' : a.contractAmount) + '" placeholder="合同金额"></label>' +
       '<label class="field">发票金额（元）<input id="arc-invoice" type="number" min="0" step="0.01" value="' + esc(a.invoiceAmount === '' || a.invoiceAmount === undefined ? '' : a.invoiceAmount) + '" placeholder="开票金额"></label>' +
       '<label class="field">项目成本（元）<input id="arc-cost" type="number" min="0" step="0.01" value="' + esc(a.cost === '' || a.cost === undefined ? '' : a.cost) + '" placeholder="后可补"></label>' +
-      '<label class="field">利润（自动）<input id="arc-profit" type="number" readonly value="' + esc(a.cost === '' || a.cost === undefined ? '' : M.round2(M.num(a.quoteAmount || a.contractAmount) - M.num(a.cost))) + '" style="background:#f3f6f3" placeholder="填成本后自动算"></label>' +
+      '<label class="field">利润（自动，已扣税费）<input id="arc-profit" type="number" readonly value="' + esc(a.cost === '' || a.cost === undefined ? '' : archiveProfit(p)) + '" style="background:#f3f6f3" placeholder="填成本后自动算"></label>' +
       '</div>' +
       '<label class="field" style="margin-top:10px">归档备注<input id="arc-note" value="' + esc(a.note || '') + '" placeholder="例如：合同编号 / 已开票 / 结算情况"></label>' +
       '<div class="toolbar" style="margin:14px 0 4px"><button class="btn solid" data-act="archive-upload">上传发票 / 合同</button>' +
@@ -1762,7 +1770,7 @@
     a.invoiceAmount = M.num(($('#arc-invoice') || {}).value);
     var costVal = ($('#arc-cost') || {}).value;
     a.cost = (costVal === '' || costVal === undefined || costVal === null) ? '' : M.num(costVal);
-    a.profit = a.cost === '' ? null : M.round2(M.num(a.quoteAmount || a.contractAmount) - a.cost);
+    a.profit = a.cost === '' ? null : archiveProfit(p);
     a.note = (($('#arc-note') || {}).value || '').trim();
     p.updatedAt = new Date().toISOString().slice(0, 16).replace('T', ' ');
     commit(); closeModal(); render();
@@ -2585,7 +2593,10 @@
         seenDocs[docKey] = 1; s.contract += M.num(a.contractAmount); s.invoice += M.num(a.invoiceAmount);
       }
       s.cost += M.num(a.cost);
-      if (a.cost !== '' && a.cost !== null && a.cost !== undefined) s.profit += M.round2(M.num(a.quoteAmount || a.contractAmount) - M.num(a.cost));
+      if (a.cost !== '' && a.cost !== null && a.cost !== undefined) {
+        var abase = M.num(a.quoteAmount || a.contractAmount);
+        s.profit += M.round2(abase - M.num(a.cost) - M.round2(abase * archiveTaxRate()));
+      }
       s.files += (a.files || []).length;
       return s;
     }, { quote: 0, contract: 0, invoice: 0, cost: 0, profit: 0, files: 0 });
@@ -2772,7 +2783,7 @@
       '<label class="field span-2">单位地址<input data-sfield="address" value="' + esc(s.address) + '"></label>' +
       '<label class="field">制表人<input data-sfield="preparer" value="' + esc(s.preparer) + '"></label>' +
       '<label class="field">报价单编号前缀<input data-sfield="noPrefix" value="' + esc(s.noPrefix) + '"></label>' +
-      '<label class="field">默认税率 %<input type="number" min="0" step="0.01" data-sfield="taxRate" value="' + esc(M.round2(M.num(s.taxRate) * 100)) + '"></label>' +
+      '<label class="field">默认税率 %（利润扣除）<input type="number" min="0" step="0.01" data-sfield="taxRate" value="' + esc(M.round2(M.num(s.taxRate) * 100)) + '"></label>' +
       '<label class="field">数据统计 / 设置访问密码<input data-sfield="profitPin" value="' + esc(s.profitPin || '') + '" placeholder="留空则不设密码"></label>' +
       '</div></div></section>' +
       '<section class="card"><div class="card-head"><h2>价格比例（所有项目同步）</h2><span class="sub">改这里会同步到全部项目；器材库的「项目报价/核价」也按底价重算，手改过的价格保留</span></div><div class="card-body">' +
