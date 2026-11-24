@@ -288,7 +288,7 @@
         ws.getRow(r).height = 20;
         r += 1;
       }
-      totalQty += l.qty;
+      if (!l.isCrew) totalQty += l.qty;
       cell(ws, r, 1, i + 1, { font: font(10) });
       cell(ws, r, 2, l.name, { font: font(10.5), left: true });
       cell(ws, r, 3, l.unit, { font: font(10) });

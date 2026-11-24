@@ -2066,13 +2066,14 @@
       '<button class="btn light" data-act="export-outbound">导出出库单</button>' +
       '<button class="btn light" data-act="print-outbound">打印 / 存 PDF</button>' +
       '<span class="spacer"></span>' +
-      '<span class="muted small">按器材类别排序 · 同分类同名合并 · 人员 ' + ob.crewQty + ' 人不计入器材出库</span>' +
+      '<span class="muted small">按摄影组 / 灯光组标准顺序 · 同分类同名合并 · 人员 ' + ob.crewQty + ' 人不计入器材数</span>' +
       '</div>' +
       '<section class="card"><div class="card-head"><h2>出库清单</h2><span class="sub">' + ob.lineCount + ' 项 / ' + ob.totalQty + ' 件 · 只保留单位、配件、数量</span></div>' +
       '<div class="table-wrap"><table class="grid outbound-simple"><thead><tr><th style="width:56px">序号</th><th>器材名称</th><th style="width:80px">单位</th><th>配件</th><th class="num" style="width:90px">数量</th></tr></thead><tbody>' + rows + '</tbody></table></div></section>' +
       '<div class="totals-bar"><div class="t-item"><span class="t-label">应发合计</span><span class="t-val accent">' + ob.totalQty + ' 件</span></div>' +
       '<div class="t-item"><span class="t-label">器材项数</span><span class="t-val">' + ob.lineCount + ' 项</span></div>' +
-      '<span class="spacer"></span><span class="t-note">按报价数量生成，含备用器材</span></div>' +
+      (ob.crewQty ? '<div class="t-item"><span class="t-label">人员</span><span class="t-val">' + ob.crewQty + ' 人</span></div>' : '') +
+      '<span class="spacer"></span><span class="t-note">按报价数量生成，含备用器材 · 人员不计入器材数</span></div>' +
       '</div>';
   }
 

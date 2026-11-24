@@ -147,8 +147,23 @@
       var gLines = [];
       var lastParent = null;
       var itemLine = {};
+      var groupLight = /灯光/.test(String(g.name || ''));
       (g.items || []).forEach(function (it) {
-        if (it.type === 'crew') { crewQty += num(it.qty); return; }
+        if (it.type === 'crew') {
+          var cq = num(it.qty);
+          crewQty += cq;
+          var crewLight = groupLight || /灯光|灯/.test(String(it.name || ''));
+          var ckey = 'crew|' + (crewLight ? 'light' : 'photo') + '|' + normalizeName(it.name);
+          var co = map.get(ckey);
+          if (!co) {
+            co = { key: ckey, name: it.name, unit: it.unit || '人', cat: '人员', qty: 0, groups: [], parts: [], isCrew: true, crewLight: crewLight };
+            map.set(ckey, co);
+          }
+          co.qty += cq;
+          var chit = co.groups.filter(function (x) { return x.name === g.name; })[0];
+          if (chit) chit.qty += cq; else co.groups.push({ name: g.name, qty: cq });
+          return;
+        }
         var partLike = it.isPart || /^配件\s*·/.test(String(it.name || ''));
         if (partLike) {
           var target = (it.parentId && itemLine[it.parentId]) || lastParent;
@@ -186,27 +201,54 @@
       groups.push({ name: g.name, items: gLines });
     });
     function outboundRank(l) {
-      var t = String((l.cat || '') + ' ' + (l.name || '')).toLowerCase();
-      if (/摄影机|机身|电影机|camera/.test(t)) return 10;
-      if (/镜头|lens|广角|长焦|变焦|定焦/.test(t)) return 20;
-      if (/图传|无线|监视器|监视|录机|导播|切换台|transmission/.test(t)) return 30;
-      if (/灯光|led|聚光|柔光|镝灯|灯架|灯控/.test(t)) return 60;
-      if (/电池|存储|内存|卡|支撑|移动|稳定|云台|滤镜|电源|线材|配件/.test(t)) return 40;
-      return 50;
+      if (l.isCrew) return l.crewLight ? 120 : 95;
+      var cat = String(l.cat || '').trim();
+      var t = (cat + ' ' + String(l.name || '')).toLowerCase();
+      if (/灯光/.test(cat) || /LED灯|聚光灯|柔光灯|镝灯|灯光控台|灯架|钢脚|柔光|旗板|布景|沙包|支撑\/灯光|灯光供电|灯光配件/.test(cat)) {
+        if (/灯光器材|灯光设备|LED灯|柔光灯|聚光灯|镝灯|灯光控台/.test(cat)) return 100;
+        return 110;
+      }
+      if (/摄影机|运动相机|航拍|无人机/.test(cat)) return 10;
+      if (/存储卡|储存卡|内存卡|SSD|读卡器/.test(cat)) return 20;
+      if (/镜头/.test(cat)) return 30;
+      if (/滤镜/.test(cat)) return 40;
+      if (/无线|图传|监视|声传|导播|录机|音频|跟焦/.test(cat)) return 50;
+      if (/支撑|移动|稳定器|云台/.test(cat)) return 60;
+      if (/电池|电源|供电/.test(cat)) {
+        if (/线|sdi|hdmi/i.test(String(l.name || ''))) return 80;
+        return 70;
+      }
+      if (/线材|线/.test(cat) || /线|sdi|hdmi/i.test(String(l.name || ''))) return 80;
+      if (/配件|遮光斗|耗材|跟焦器/.test(cat)) return 90;
+      return 90;
     }
     function sectionOf(rank) {
-      return rank === 10 ? '摄影机' : rank === 20 ? '镜头' : rank === 30 ? '图传 / 监视' : rank === 40 ? '配件' : rank === 60 ? '灯光' : '其他';
+      return rank === 10 ? '摄影机' : rank === 20 ? '储存卡' : rank === 30 ? '镜头' : rank === 40 ? '滤镜' :
+        rank === 50 ? '无线控制 / 图传 / 声传 / 监视器' : rank === 60 ? '支撑 / 移动' : rank === 70 ? '供电' :
+        rank === 80 ? '线材' : rank === 90 ? '配件' : rank === 95 ? '人员' : rank === 100 ? '灯光器材' :
+        rank === 110 ? '灯光配件' : '人员';
+    }
+    function outboundSubRank(l) {
+      if (l.isCrew) return 0;
+      var cat = String(l.cat || '').trim();
+      if (/无线控制|无线跟焦|云台控制/.test(cat)) return 1;
+      if (/图传/.test(cat)) return 2;
+      if (/声传|录音|音频/.test(cat)) return 3;
+      if (/监视|录机|导播/.test(cat)) return 4;
+      return 9;
     }
     var lines = Array.from(map.values()).sort(function (a, b) {
       var ra = outboundRank(a), rb = outboundRank(b);
       if (ra !== rb) return ra - rb;
+      var sa = outboundSubRank(a), sb = outboundSubRank(b);
+      if (sa !== sb) return sa - sb;
       return String(a.name).localeCompare(String(b.name), 'zh');
     });
     lines.forEach(function (l) { l.section = sectionOf(outboundRank(l)); });
     return {
       lines: lines, groups: groups,
-      totalQty: lines.reduce(function (s, l) { return s + l.qty; }, 0),
-      crewQty: crewQty, lineCount: lines.length
+      totalQty: lines.filter(function (l) { return !l.isCrew; }).reduce(function (s, l) { return s + l.qty; }, 0),
+      crewQty: crewQty, lineCount: lines.filter(function (l) { return !l.isCrew; }).length
     };
   }
 
