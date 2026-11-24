@@ -2327,6 +2327,7 @@
     copy.key = M.normalizeName(name);
     copy.crewMembers = clone(src.crewMembers || []);
     copy.stock = null;
+    copy.locked = false;
     copy.parts = clone(src.parts || []);
     var idx = state.catalog.indexOf(src);
     state.catalog.splice(idx >= 0 ? idx + 1 : state.catalog.length, 0, copy);
