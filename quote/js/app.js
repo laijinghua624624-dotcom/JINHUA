@@ -1359,7 +1359,9 @@
   function updateIssues() {
     var box = $('#issues'); if (!box) return;
     var issues = M.stockIssues(state.project, state.catalog);
-    var zero = M.zeroPriceLines(state.project);
+    var zero = M.zeroPriceLines(state.project).filter(function (x) {
+      return (x.name || '').indexOf('配件 ·') !== 0;
+    });
     var neg = 0;
     (state.project.groups || []).forEach(function (g) { (g.items || []).forEach(function (it) { if (M.lineProfit(it, state.project) < 0) neg += 1; }); });
     var html = '';
@@ -1374,6 +1376,7 @@
     var missing = [];
     (state.project.groups || []).forEach(function (g) {
       (g.items || []).forEach(function (it) {
+        if (it.isPart || (it.name || '').indexOf('配件 ·') === 0) return;
         if (!catalogByName(it.name)) missing.push(it.name);
       });
     });
