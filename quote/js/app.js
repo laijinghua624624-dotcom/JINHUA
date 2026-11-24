@@ -2759,22 +2759,26 @@
     if (!owner) return;
     state.ui.pickerTarget = target;
     var pool = state.catalog.filter(function (e) { return isKit ? e.type !== 'crew' : true; });
-    var cats = {}; pool.forEach(function (e) { cats[e.cat || '其他'] = 1; });
+    var crewGroups = isKit ? [] : pool.filter(function (e) { return e.crewGroup; });
+    var cats = {}; pool.forEach(function (e) { cats[e.crewGroup ? '人员组' : (e.cat || '其他')] = 1; });
     var chips = ['<button class="chip active" data-pcat="">全部</button>'].concat(Object.keys(cats).sort().map(function (c) {
       return '<button class="chip" data-pcat="' + esc(c) + '">' + esc(c) + '</button>';
     })).join('');
     var rows = pool.map(function (e) {
       var stock = (e.stock === null || e.stock === undefined || e.stock === '') ? '—' : e.stock;
-      return '<tr class="pick-row" data-pick-eqid="' + e.id + '" data-cat="' + esc(e.cat || '') + '" data-name="' + esc(e.name) + '">' +
+      return '<tr class="pick-row" data-pick-eqid="' + e.id + '" data-cat="' + esc(e.crewGroup ? '人员组' : (e.cat || '')) + '" data-name="' + esc(e.name) + '">' +
         '<td class="center"><input type="checkbox" data-pick-check></td>' +
-        '<td>' + esc(e.name) + '</td><td><span class="cat-tag ' + (e.type === 'crew' ? 'crew' : '') + '">' + esc(e.cat || '') + '</span></td>' +
-        '<td class="center">' + esc(e.unit || '个') + '</td>' +
-        '<td class="num">' + money(e.quote) + '</td><td class="num muted">' + stock + '</td></tr>';
+        '<td>' + esc(e.name) + '</td><td><span class="cat-tag ' + (e.type === 'crew' ? 'crew' : '') + '">' + esc(e.crewGroup ? '人员组' : (e.cat || '')) + '</span></td>' +
+        '<td class="center">' + esc(e.crewGroup ? '组' : (e.unit || '个')) + '</td>' +
+        '<td class="num">' + money(e.quote) + '</td><td class="num muted">' + (e.crewGroup ? '整组' : stock) + '</td></tr>';
     }).join('');
     var title = isKit ? '添加到组合「' + esc(owner.name) + '」' : '添加器材 / 人员 到「' + esc(owner.name) + '」';
     openModal('<div class="modal"><div class="modal-head"><h3>' + title + '</h3><button class="x-btn" data-act="modal-close">✕</button></div>' +
       '<div class="modal-body"><div class="picker-search"><input type="search" data-search="picker" placeholder="搜索名称 / 型号，例如 FX3、图传、灯光助理…">' +
       '<div class="chips" data-picker-cats>' + chips + '</div></div>' +
+      (crewGroups.length ? '<div class="picker-quick"><b>人员组快速添加</b>' + crewGroups.map(function (e) {
+        return '<button type="button" data-act="picker-quick-crew" data-eid="' + e.id + '">' + esc(e.name) + ' · ' + money(e.quote) + '</button>';
+      }).join('') + '</div>' : '') +
       '<div class="picker-list"><table class="grid"><thead><tr><th style="width:36px"></th><th>名称</th><th>分类</th><th>单位</th><th class="num">报价单价</th><th class="num">库存</th></tr></thead><tbody>' + rows + '</tbody></table></div>' +
       '<details style="margin-top:12px"><summary class="muted small" style="cursor:pointer">找不到？手动新增一条（会同时加入器材库）</summary><div class="form-grid" style="grid-template-columns:2fr .8fr 1fr 1fr 1fr 1fr;margin-top:10px">' +
       '<label class="field">名称<input data-custom="name" placeholder="例如：Sony FX6 机身 / 跟机员"></label>' +
@@ -3494,6 +3498,7 @@
     switch (act) {
       case 'modal-close': closeModal(); break;
       case 'picker-add': pickerAdd(); break;
+      case 'picker-quick-crew': pickerQuickCrew(el.dataset.eid); break;
       case 'picker-custom': pickerCustom(); break;
       case 'kits-add': kitsAddFromModal(); break;
       case 'crew-add-save': saveCrewAdd(); break;
@@ -3644,6 +3649,22 @@
 
 
   /* ---------------- 弹窗操作 ---------------- */
+  function pickerQuickCrew(eid) {
+    var target = state.ui.pickerTarget || {};
+    if (target.kitId) { toast('器材组合不能放人员组', 'warn'); return; }
+    var g = groupById(target.gid); if (!g) return;
+    var ce = state.catalog.filter(function (x) { return x.id === eid; })[0];
+    if (!ce || !ce.crewGroup) return;
+    g.items.push({
+      id: uid('l'), eqId: ce.id, name: ce.name, unit: '组', type: 'crew',
+      cat: '人员', qty: 1, bottom: ce.bottom, quote: ce.quote, approved: ce.approved,
+      approvedManual: true, crewGroup: true, crewMembers: ce.crewMembers || [],
+      note: ce.note || ((ce.crewMembers || []).map(function (m) { return m.name + (m.qty > 1 ? '×' + m.qty : '×1'); }).join('、'))
+    });
+    closeModal(); commit(); render();
+    toast('已加入人员组「' + ce.name + '」：' + money(ce.quote), 'ok');
+  }
+
   function pickerAdd() {
     var target = state.ui.pickerTarget || {};
     var picked = $$('#modal-root tr.pick-row').filter(function (tr) { var cb = tr.querySelector('[data-pick-check]'); return cb && cb.checked; });
@@ -3663,7 +3684,12 @@
     picked.forEach(function (tr) {
       var ce = state.catalog.filter(function (x) { return x.id === tr.dataset.pickEqid; })[0];
       if (!ce) return;
-      g.items.push({
+      g.items.push(ce.crewGroup ? {
+        id: uid('l'), eqId: ce.id, name: ce.name, unit: '组', type: 'crew',
+        cat: '人员', qty: 1, bottom: ce.bottom, quote: ce.quote, approved: ce.approved,
+        approvedManual: true, crewGroup: true, crewMembers: ce.crewMembers || [],
+        note: ce.note || ((ce.crewMembers || []).map(function (m) { return m.name + (m.qty > 1 ? '×' + m.qty : '×1'); }).join('、'))
+      } : {
         id: uid('l'), eqId: ce.id, name: ce.name, unit: ce.unit || '个', type: ce.type || 'equipment',
         cat: ce.cat || '其他', qty: 1, bottom: ce.bottom, quote: ce.quote, approved: ce.approved,
         approvedManual: false, note: ce.note || ((ce.type === 'crew') ? ruleForCrew(ce.name) : '')
