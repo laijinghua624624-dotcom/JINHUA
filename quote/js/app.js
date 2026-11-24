@@ -101,6 +101,44 @@
     if (p.rebateRate === undefined || p.rebateRate === null) p.rebateRate = M.num(state ? state.settings.rebateRate : 5) / 100;
     return p;
   }
+  var RATE_FIELDS = { markupRate: 1, cutRate: 1, rebateRate: 1 };
+  function isRateSettingField(k) { return !!RATE_FIELDS[k]; }
+  function isProjectRateField(k) { return k === 'markupPct' || k === 'cutPct' || k === 'rebatePct'; }
+  function syncSettingsFromProjectRates() {
+    var p = state.project;
+    state.settings.markupRate = M.round2(M.num(p.markupRate) * 100);
+    state.settings.cutRate = M.round2(M.num(p.cutRate) * 100);
+    state.settings.rebateRate = M.round2(M.num(p.rebateRate) * 100);
+  }
+  function recalcProjectRates(p) {
+    if (!p) return;
+    (p.groups || []).forEach(function (g) {
+      (g.items || []).forEach(function (it) {
+        if (!it || it.type === 'crew') return;
+        var bottom = M.num(it.bottom);
+        if (bottom <= 0) return;
+        if (!it.quoteManual) it.quote = M.round2(bottom * (1 + M.num(p.markupRate)));
+        if (!it.approvedManual && M.num(it.quote) > 0) it.approved = M.round2(M.num(it.quote) * (1 - M.num(p.cutRate)));
+      });
+    });
+  }
+  function applyGlobalRates(recalcPrices) {
+    var s = state.settings;
+    var rates = {
+      markupRate: M.num(s.markupRate) / 100,
+      cutRate: M.num(s.cutRate) / 100,
+      rebateRate: M.num(s.rebateRate) / 100
+    };
+    function apply(p) {
+      if (!p) return;
+      p.markupRate = rates.markupRate;
+      p.cutRate = rates.cutRate;
+      p.rebateRate = rates.rebateRate;
+      if (recalcPrices) recalcProjectRates(p);
+    }
+    apply(state.project);
+    (state.projects || []).forEach(apply);
+  }
   function ensureProjectExtras(p) {
     if (!p) return p;
     p.overtime = p.overtime || [];
@@ -979,7 +1017,7 @@
       statCard('底价合计', money(t.bottom), '供应商成本', '') +
       statCard('供应商返点', money(t.rebate), pct(M.num(p.rebateRate)) + ' × 底价', '') +
       '</div>' +
-      '<section class="card"><div class="card-head"><h2>项目与价格比例</h2><span class="sub">改比例后点「按默认比例重算」应用到所有行</span></div>' +
+      '<section class="card"><div class="card-head"><h2>项目与价格比例</h2><span class="sub">和「设置」里的比例是同一组：改任意一边，所有项目一起同步重算；手工改过的核价会保留</span></div>' +
       '<div class="card-body"><div class="form-grid">' +
       field('项目名称', 'name', p.name, 'span-2') +
       field('拍摄天数', 'days', M.lineDays(p), '', 'number', 'min="1" step="1"') +
@@ -987,7 +1025,7 @@
       field('核价砍价 %（报价→核价）', 'cutPct', M.round2(M.num(p.cutRate) * 100), '', 'number', 'min="0" step="0.01"') +
       field('供应商返点 %（按底价）', 'rebatePct', M.round2(M.num(p.rebateRate) * 100), '', 'number', 'min="0" step="0.01"') +
       '</div><div class="toolbar" style="margin-top:12px">' +
-      '<button class="btn light" data-act="recalc">按默认比例重算</button>' +
+      '<button class="btn light" data-act="recalc">按当前比例重算本项目</button>' +
       '<button class="btn light" data-act="sync-prices">按器材库刷新底价</button>' +
       '<button class="btn light" data-act="export-approved">导出核价单</button>' +
       '<button class="btn light" data-act="export-combined">导出报价+核价</button>' +
@@ -2731,7 +2769,7 @@
       '<label class="field">默认税率 %<input type="number" min="0" step="0.01" data-sfield="taxRate" value="' + esc(M.round2(M.num(s.taxRate) * 100)) + '"></label>' +
       '<label class="field">数据统计 / 设置访问密码<input data-sfield="profitPin" value="' + esc(s.profitPin || '') + '" placeholder="留空则不设密码"></label>' +
       '</div></div></section>' +
-      '<section class="card"><div class="card-head"><h2>默认价格比例（新项目生效）</h2><span class="sub">老项目在数据统计里单独改</span></div><div class="card-body">' +
+      '<section class="card"><div class="card-head"><h2>价格比例（所有项目同步）</h2><span class="sub">改这里会同步到全部项目，并重算按比例生成的报价/核价；手工核价保留</span></div><div class="card-body">' +
       '<div class="form-grid" style="grid-template-columns:1fr 1fr">' +
       '<label class="field">加价率 %（底价→报价）<input type="number" min="0" step="0.01" data-sfield="markupRate" value="' + esc(M.round2(M.num(s.markupRate))) + '"></label>' +
       '<label class="field">核价砍价 %（报价→核价）<input type="number" min="0" step="0.01" data-sfield="cutRate" value="' + esc(M.round2(M.num(s.cutRate))) + '"></label>' +
@@ -3292,13 +3330,26 @@
     if (t.dataset.search === 'picker') { var chip = $('#modal-root .chip.active'); pickerFilter(t.value.trim().toLowerCase(), chip ? chip.dataset.pcat : ''); return; }
     if (t.dataset.sfield) {
       var k = t.dataset.sfield;
+      if (isRateSettingField(k) && t.value === '') return;
       state.settings[k] = (k === 'taxRate' || k === 'markupRate' || k === 'cutRate' || k === 'rebateRate') ? M.num(t.value) : t.value;
+      if (isRateSettingField(k)) applyGlobalRates(false);
       commit(); return;
     }
   });
   view.addEventListener('change', function (e) {
     var t = e.target;
     if (t.dataset.kitemfield) { onKitItemField(t); return; }
+    if (t.dataset.sfield && isRateSettingField(t.dataset.sfield)) {
+      applyGlobalRates(true); commit();
+      if (state.ui.tab === 'profit' || state.ui.tab === 'order') render();
+      toast('价格比例已同步到所有项目', 'ok');
+      return;
+    }
+    if (t.dataset.pfield && isProjectRateField(t.dataset.pfield)) {
+      applyGlobalRates(true); commit(); render();
+      toast('价格比例已同步到所有项目', 'ok');
+      return;
+    }
     if (t.dataset.catFilter !== undefined || t.dataset.typeFilter !== undefined || t.dataset.supFilter !== undefined || t.dataset.groupFilter !== undefined || t.dataset.majorFilter !== undefined) { applyCatalogFilter(); }
     if (t.dataset.kitCheck) { var card = t.closest('.kit-card'); if (card) card.classList.toggle('selected', t.checked); }
     if (t.dataset.kitcat) { var kk = kitById(t.dataset.kitcat); if (kk) { kk.cat = t.value; commit(); render(); } }
@@ -3369,9 +3420,9 @@
       commit(); return;
     }
     if (k === 'taxRatePct') { state.project.taxRate = M.num(v) / 100; if (state.ui.tab === 'order') updateOrderDOM(); commit(); return; }
-    if (k === 'markupPct') { state.project.markupRate = M.num(v) / 100; commit(); return; }
-    if (k === 'cutPct') { state.project.cutRate = M.num(v) / 100; commit(); return; }
-    if (k === 'rebatePct') { state.project.rebateRate = M.num(v) / 100; if (state.ui.tab === 'profit') updateProfitDOM(); commit(); return; }
+    if (k === 'markupPct') { if (v === '') return; state.project.markupRate = M.num(v) / 100; syncSettingsFromProjectRates(); applyGlobalRates(false); commit(); return; }
+    if (k === 'cutPct') { if (v === '') return; state.project.cutRate = M.num(v) / 100; syncSettingsFromProjectRates(); applyGlobalRates(false); commit(); return; }
+    if (k === 'rebatePct') { if (v === '') return; state.project.rebateRate = M.num(v) / 100; syncSettingsFromProjectRates(); applyGlobalRates(false); commit(); return; }
     state.project[k] = v;
     commit();
   }
@@ -3382,6 +3433,7 @@
     var k = t.dataset.ifield;
     it[k] = t.value;
     if (k === 'quote') {
+      it.quoteManual = true;
       if (it.type !== 'crew' && !it.approvedManual) it.approved = M.round2(M.num(it.quote) * (1 - M.num(state.project.cutRate)));
       updateOrderDOM();
     } else if (k === 'qty') { updateOrderDOM(); updateIssues(); }
@@ -3400,6 +3452,7 @@
       } else {
         it.quote = M.round2(it.bottom * (1 + M.num(state.project.markupRate)));
         it.approved = M.round2(it.quote * (1 - M.num(state.project.cutRate)));
+        it.quoteManual = false;
         it.approvedManual = false;
       }
     } else {
@@ -3690,9 +3743,12 @@
   }
   function recalc() {
     var p = state.project;
-    if (!confirm('按当前默认比例重算全部行？\n底价 × (1+' + pct(M.num(p.markupRate)) + ') = 报价，报价 × (1−' + pct(M.num(p.cutRate)) + ') = 核价。\n（会覆盖手工改过的报价/核价）')) return;
-    p.groups.forEach(function (g) { g.items.forEach(function (it) { M.derivePrices(it, p); it.approvedManual = false; }); });
-    commit(); render(); toast('已按默认比例重算', 'ok');
+    if (!confirm('按当前项目比例重算全部行？\n底价 × (1+' + pct(M.num(p.markupRate)) + ') = 报价，报价 × (1−' + pct(M.num(p.cutRate)) + ') = 核价。\n（会覆盖手工改过的报价/核价）')) return;
+    p.groups.forEach(function (g) { g.items.forEach(function (it) {
+      if (it.type === 'crew' || M.num(it.bottom) <= 0) return;
+      M.derivePrices(it, p); it.quoteManual = false; it.approvedManual = false;
+    }); });
+    commit(); render(); toast('已按当前比例重算本项目', 'ok');
   }
   function syncPrices() {
     var n = 0, skipped = 0;
@@ -3704,7 +3760,7 @@
         if (ce.lock) { skipped += 1; return; }
         var pf = projectFeeOf(ce);
         it.bottom = ce.bottom; it.quote = pf.quote; it.approved = pf.approved;
-        it.eqId = ce.id; it.approvedManual = false; n += 1;
+        it.eqId = ce.id; it.quoteManual = false; it.approvedManual = false; n += 1;
       });
     });
     commit(); render();
@@ -3740,6 +3796,7 @@
   function loadProject(pid) {
     var p = state.projects.filter(function (x) { return x.id === pid; })[0]; if (!p) return;
     state.project = ensureIds(clone(p));
+    applyGlobalRates(false);
     commit(); setTab('order'); toast('已载入「' + (p.name || '项目') + '」', 'ok');
   }
   function dupProject(pid) {
@@ -4304,6 +4361,8 @@
       : '本机存储不可用：请用「设置 → 导出全部数据」备份';
     updateMetaStatus();
     setDraftStatus(storageOK ? '就绪' : '');
+    applyGlobalRates(false);
+    commit();
     render();
     initCatalogCloud();
     loadArchiveProjectsFromServer();
