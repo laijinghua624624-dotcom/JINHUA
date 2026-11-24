@@ -3011,11 +3011,16 @@
     var rows = kit.items.map(function (it, idx) {
       return '<tr data-kidx="' + idx + '">' +
         '<td class="num">' + (idx + 1) + '</td>' +
-        '<td><span class="cat-tag ' + (it.type === 'crew' ? 'crew' : '') + '">' + (it.type === 'crew' ? '人员' : '器材') + '</span> ' + esc(it.name) + '</td>' +
+        '<td><span class="cat-tag ' + (it.type === 'crew' ? 'crew' : '') + '">' + (it.type === 'crew' ? '人员' : '器材') + '</span> ' +
+        '<input class="name-edit" data-kitemfield="name" data-kidx="' + idx + '" value="' + esc(it.name) + '">' +
+        '<div class="muted small">' + esc(it.note || '') + '</div></td>' +
         '<td><input class="input-plain" style="width:46px" data-kitemfield="unit" data-kidx="' + idx + '" value="' + esc(it.unit || '个') + '"></td>' +
         '<td><input class="qty" type="number" min="1" step="1" data-kitemfield="qty" data-kidx="' + idx + '" value="' + esc(it.qty) + '"></td>' +
-        '<td class="muted">' + esc(it.cat || '') + '</td>' +
-        '<td style="text-align:center"><button class="del" data-act="kit-del-item" data-kid="' + kit.id + '" data-kidx="' + idx + '">✕</button></td></tr>';
+        '<td><input class="input-plain" style="width:90px" data-kitemfield="cat" data-kidx="' + idx + '" value="' + esc(it.cat || '') + '"></td>' +
+        '<td style="text-align:center;white-space:nowrap">' +
+        '<button class="btn sm light order-move" data-act="kit-item-up" data-kid="' + kit.id + '" data-kidx="' + idx + '" title="上移">↑</button> ' +
+        '<button class="btn sm light order-move" data-act="kit-item-down" data-kid="' + kit.id + '" data-kidx="' + idx + '" title="下移">↓</button> ' +
+        '<button class="del" data-act="kit-del-item" data-kid="' + kit.id + '" data-kidx="' + idx + '">✕</button></td></tr>';
     }).join('');
     if (!rows) rows = '<tr><td colspan="6" class="muted" style="text-align:center;padding:18px">这个组合还没有器材，用上面的快速配置生成，或点「＋ 手动添加器材」</td></tr>';
     var quick = kitCat === '摄影器材' ? quickCameraPanel().replace('__KID__', kit.id)
@@ -3037,7 +3042,9 @@
       '<label class="field">整组核价（选填）<input data-kitfield="pkgApproved" data-kid="' + kit.id + '" type="number" step="0.01" value="' + esc(kit.pkgApproved || '') + '"></label>' +
       '<label class="field">组数<input data-kitfield="pkgQty" data-kid="' + kit.id + '" type="number" step="1" min="1" value="' + esc(kit.pkgQty || 1) + '"></label>' +
       '</div></div></section>' + quick +
-      '<section class="card"><div class="card-head"><h2>组合清单</h2><span class="sub">' + kit.items.length + ' 项 / ' + kitQty(kit) + ' 件</span></div>' +
+      '<section class="card"><div class="card-head"><h2>组合清单</h2><span class="sub">' + kit.items.length + ' 项 / ' + kitQty(kit) + ' 件 · 可直接改名/单位/数量/分类，↑↓调整顺序</span>' +
+      '<span class="spacer"></span><button class="btn sm light" data-act="kit-add-item" data-kid="' + kit.id + '">＋ 添加器材</button>' +
+      '<button class="btn sm light" data-act="kit-add-blank" data-kid="' + kit.id + '">＋ 空白行</button></div>' +
       '<div class="table-wrap"><table class="grid"><thead><tr><th>序号</th><th style="min-width:260px">器材 / 人员</th><th>单位</th><th>数量</th><th>分类</th><th></th></tr></thead><tbody>' + rows + '</tbody></table></div>' +
       '</section></div>';
   }
@@ -3167,6 +3174,18 @@
     if (g.pkg) { kit.pkgQuote = M.num(g.pkgQuote); kit.pkgBottom = M.num(g.pkgBottom); kit.pkgApproved = M.num(g.pkgApproved); kit.pkgQty = g.pkgQty || 1; }
     state.kits.push(kit); commit();
     toast('已存为组合「' + kit.name + '」，去「器材组合」可以继续改', 'ok');
+  }
+  function kitMoveItem(kid, idx, dir) {
+    var kit = kitById(kid); if (!kit) return;
+    var to = idx + dir;
+    if (!kit.items[idx] || to < 0 || to >= kit.items.length) return;
+    var tmp = kit.items[idx]; kit.items[idx] = kit.items[to]; kit.items[to] = tmp;
+    commit(); render();
+  }
+  function kitAddBlank(kid) {
+    var kit = kitById(kid); if (!kit) return;
+    kit.items.push({ name: '新器材 / 配件', unit: '个', type: 'equipment', cat: '其他配件', qty: 1, note: '' });
+    commit(); render();
   }
   function kitDelItem(kid, idx) {
     var k = kitById(kid); if (!k) return;
@@ -3409,6 +3428,9 @@
       case 'kit-add-item': openPicker({ kitId: el.dataset.kid }); break;
       case 'kit-quick-build': kitQuickBuild(el.dataset.kid); break;
       case 'kit-del-item': kitDelItem(el.dataset.kid, +el.dataset.kidx); break;
+      case 'kit-item-up': kitMoveItem(el.dataset.kid, +el.dataset.kidx, -1); break;
+      case 'kit-item-down': kitMoveItem(el.dataset.kid, +el.dataset.kidx, 1); break;
+      case 'kit-add-blank': kitAddBlank(el.dataset.kid); break;
       case 'recalc': recalc(); break;
       case 'sync-prices': syncPrices(); break;
       case 'save': saveProject(); break;
