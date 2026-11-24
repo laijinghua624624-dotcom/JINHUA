@@ -2930,8 +2930,6 @@
     function opts(re) { return '<option value="">不选</option>' + eq(re).map(function (e) { return '<option value="' + e.id + '">' + esc(e.name) + '（¥' + M.round2(e.quote) + '）</option>'; }).join(''); }
     function optsCat(cat) { return '<option value="">不选</option>' + state.catalog.filter(function (e) { return e.type !== 'crew' && e.cat === cat; })
       .map(function (e) { return '<option value="' + e.id + '">' + esc(e.name) + '（¥' + M.round2(e.quote) + '）</option>'; }).join(''); }
-    var crew = state.catalog.filter(function (e) { return e.type === 'crew'; });
-    function crewOpts(re) { return crew.filter(function (e) { return re.test(e.name); }).map(function (e) { return '<option value="' + e.id + '">' + esc(e.name) + '（¥' + M.round2(e.quote) + '）</option>'; }).join(''); }
     var lensOpts = optsCat('镜头');
     var filterOpts = opts(/(滤镜|镜片|ND|偏振|柔光镜|拉丝|黑魔法|棱镜|放大镜|渐变|星光)/i);
     var supportOpts = [
@@ -2961,9 +2959,8 @@
       '</div><div class="qk-sub">滤镜</div><div class="qk-grid qk-5">' +
       [1, 2, 3, 4, 5].map(function (i) { return '<label class="field qk">滤镜 ' + i + '<select data-qk="filter' + i + '">' + filterOpts + '</select></label>'; }).join('') +
       '</div></details>' +
-      '<div class="qk-grid qk-main" style="margin-top:10px">' +
-      '<label class="field qk">摄影助理<select data-qk="assistant">' + crewOpts(/摄影助理/i) + '</select><input class="qty" type="number" min="0" step="1" data-qk="assistantQty" value="1"></label>' +
-      '<label class="field qk">技术助理<select data-qk="tech">' + crewOpts(/跟机员|机器技术|摄影大助理|技术/i) + '</select><input class="qty" type="number" min="0" step="1" data-qk="techQty" value="1"></label>' +
+      '<div class="toolbar" style="margin-top:12px">' +
+      '<span class="muted small">器材组合只生成器材，人员请去「人员标准」建组</span>' +
       '<span class="spacer"></span>' +
       '<button class="btn primary" data-act="kit-quick-build" data-kid="__KID__">生成到组合清单</button>' +
       '</div>' +
@@ -2984,8 +2981,6 @@
     var accList = byCat(['柔光/旗板', '布景/沙包', '灯光附件']);
     var standList = byCat(['灯架/钢脚']);
     var wireList = byCat(['电源/线材']).filter(function (e) { return !/16A|32A/.test(e.name); });
-    var crew = state.catalog.filter(function (e) { return e.type === 'crew'; });
-    function crewOpts(re) { return crew.filter(function (e) { return re.test(e.name); }).map(function (e) { return '<option value="' + e.id + '">' + esc(e.name) + '（¥' + M.round2(e.quote) + '）</option>'; }).join(''); }
     return '<section class="card"><div class="card-head"><h2>灯光快速配置</h2><span class="sub">灯光器材 → 灯光附件 → 灯架 → 电线，选完一键生成</span></div><div class="card-body">' +
       '<div class="qk-sub">灯光器材（最多 6 台）</div><div class="qk-grid qk-5">' +
       [1, 2, 3, 4, 5, 6].map(function (i) { return '<label class="field qk">灯具 ' + i + '<select data-lk="lamp' + i + '">' + opts(lampList) + '</select></label>'; }).join('') +
@@ -3002,10 +2997,7 @@
       '<label class="field qk">其他线材<select data-lk="wireOther">' + opts(wireList) + '</select></label>' +
       '<label class="field qk">其他线材数量<input class="qty" type="number" min="0" step="1" data-lk="wireOtherQty" value="1"></label>' +
       '</div>' +
-      '<div class="qk-sub">人员</div><div class="qk-grid qk-main">' +
-      '<label class="field qk">灯光师<select data-lk="chief">' + crewOpts(/灯光师/i) + '</select><input class="qty" type="number" min="0" step="1" data-lk="chiefQty" value="1"></label>' +
-      '<label class="field qk">灯光助理<select data-lk="assist">' + crewOpts(/灯光助理/i) + '</select><input class="qty" type="number" min="0" step="1" data-lk="assistQty" value="4"></label>' +
-      '</div>' +
+      '<p class="muted small" style="margin:6px 0 0">器材组合只生成灯光器材，人员请去「人员标准」建组。</p>' +
       '<div class="toolbar" style="margin-top:14px">' +
       '<button class="btn primary" data-act="kit-light-build" data-kid="__KID__">生成到组合清单（替换现有清单）</button>' +
       '<span class="muted small">电线按 10 米/条 折算数量，生成后可改；价格按当前器材库计算。</span></div></div></section>';
@@ -3110,8 +3102,6 @@
     if (w16 > 0) push(first(/16A电源线/), Math.ceil(w16 / 10), '16A 电线共 ' + w16 + ' 米（按 10 米/条 折算）');
     if (w32 > 0) push(first(/32A电源线/), Math.ceil(w32 / 10), '32A 电线共 ' + w32 + ' 米（按 10 米/条 折算）');
     push(pick(v('wireOther')), M.num(v('wireOtherQty')));
-    push(pick(v('chief')), M.num(v('chiefQty')));
-    push(pick(v('assist')), M.num(v('assistQty')));
     var merged = {};
     items.forEach(function (it) {
       var k = M.normalizeName(it.name);
@@ -3170,8 +3160,6 @@
       pushFrom(tc, 1);
     }
     pushFrom(pick(v('support')), 1);
-    pushFrom(pick(v('assistant')), M.num(v('assistantQty')));
-    pushFrom(pick(v('tech')), M.num(v('techQty')));
     // 同一器材合并数量
     var merged = {};
     items.forEach(function (it) {
@@ -3209,7 +3197,7 @@
     if (!name) return;
     var kit = {
       id: uid('kit'), name: name.trim(), note: '来自项目 ' + (state.project.name || ''),
-      items: g.items.map(function (it) { return { name: it.name, unit: it.unit || '个', type: it.type || 'equipment', cat: it.cat || '其他', qty: M.num(it.qty) }; })
+      items: g.items.filter(function (it) { return it.type !== 'crew'; }).map(function (it) { return { name: it.name, unit: it.unit || '个', type: it.type || 'equipment', cat: it.cat || '其他', qty: M.num(it.qty) }; })
     };
     if (g.pkg) { kit.pkgQuote = M.num(g.pkgQuote); kit.pkgBottom = M.num(g.pkgBottom); kit.pkgApproved = M.num(g.pkgApproved); kit.pkgQty = g.pkgQty || 1; }
     state.kits.push(kit); commit();
@@ -4223,6 +4211,17 @@
       });
       state.settings.kitCrewCleaned = true;
       if (kitChanged) commit();
+    }
+    // 迁移：再次清理组合里的人员（快速配置曾可加入）
+    if (state.settings.kitCrewCleaned2 !== true) {
+      var kc2 = 0;
+      state.kits.forEach(function (k) {
+        var before2 = (k.items || []).length;
+        k.items = (k.items || []).filter(function (i) { return i.type !== 'crew'; });
+        kc2 += before2 - k.items.length;
+      });
+      state.settings.kitCrewCleaned2 = true;
+      if (kc2) commit();
     }
     // 迁移：组合清单名称按器材库校正
     if (state.settings.kitNamesAligned !== true) {
