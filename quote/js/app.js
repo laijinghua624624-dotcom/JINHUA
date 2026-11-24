@@ -138,6 +138,7 @@
     }
     apply(state.project);
     (state.projects || []).forEach(apply);
+    if (recalcPrices) syncCatalogFormulaPrices('rates');
   }
   function ensureProjectExtras(p) {
     if (!p) return p;
@@ -2138,6 +2139,8 @@
     state.catalog = data.items;
     if (data.updatedAt) state.meta.catalogUpdatedAt = data.updatedAt;
     addMissingCatalogEntries();
+    syncCatalogFormulaPrices('init');
+    fillEmptyProjectPrices();
     commit();
     setCloudStatus('synced');
     if (state.ui.tab === 'catalog') render(); else updateCloudBadgeDom();
@@ -2295,7 +2298,7 @@
           '<div class="table-scroll"><table class="grid"><thead><tr><th style="min-width:220px">组名</th><th style="min-width:240px">人员组成</th><th>单位</th><th class="num">整组报价</th><th class="num">整组底价</th><th class="num">整组核价</th><th style="min-width:330px">加班费标准</th><th></th></tr></thead>' +
           '<tbody>' + (groupRows || '<tr><td colspan="8" class="muted" style="text-align:center;padding:22px">还没有人员组，点右上角「按组新增」。</td></tr>') + '</tbody></table></div></section>'
         : '<section class="card catalog-list-card"><div class="card-head catalog-list-head"><h2>器材清单</h2>' +
-          '<span class="sub">供应商报价/底价手动录入；项目报价/核价/费用预计暂不自动计算</span></div>' +
+          '<span class="sub">项目报价 = 供应商底价 × (1+加价率)，核价 = 项目报价 × (1−核价砍价)；手改过的价格保留</span></div>' +
           (state.settings.batchMode ? '<div id="cat-batch-bar" class="toolbar" style="display:none;margin:0 0 10px;gap:10px;align-items:center">' +
         '<span class="muted small" id="cat-sel-count">已选 0 项</span>' +
         '<button class="btn danger sm" data-act="catalog-batch-delete">删除选中</button>' +
@@ -2769,7 +2772,7 @@
       '<label class="field">默认税率 %<input type="number" min="0" step="0.01" data-sfield="taxRate" value="' + esc(M.round2(M.num(s.taxRate) * 100)) + '"></label>' +
       '<label class="field">数据统计 / 设置访问密码<input data-sfield="profitPin" value="' + esc(s.profitPin || '') + '" placeholder="留空则不设密码"></label>' +
       '</div></div></section>' +
-      '<section class="card"><div class="card-head"><h2>价格比例（所有项目同步）</h2><span class="sub">改这里会同步到全部项目，并重算按比例生成的报价/核价；手工核价保留</span></div><div class="card-body">' +
+      '<section class="card"><div class="card-head"><h2>价格比例（所有项目同步）</h2><span class="sub">改这里会同步到全部项目；器材库的「项目报价/核价」也按底价重算，手改过的价格保留</span></div><div class="card-body">' +
       '<div class="form-grid" style="grid-template-columns:1fr 1fr">' +
       '<label class="field">加价率 %（底价→报价）<input type="number" min="0" step="0.01" data-sfield="markupRate" value="' + esc(M.round2(M.num(s.markupRate))) + '"></label>' +
       '<label class="field">核价砍价 %（报价→核价）<input type="number" min="0" step="0.01" data-sfield="cutRate" value="' + esc(M.round2(M.num(s.cutRate))) + '"></label>' +
@@ -3477,6 +3480,13 @@
     }
     commit();
   }
+  function updateCatalogPriceInputs(tr, e) {
+    if (!tr) return;
+    var q = tr.querySelector('[data-efield="quote"]');
+    var a = tr.querySelector('[data-efield="approved"]');
+    if (q) q.value = e.quote;
+    if (a) a.value = e.approved;
+  }
   function onCatalogField(t) {
     var tr = t.closest('tr'); if (!tr) return;
     var e = state.catalog.filter(function (x) { return x.id === tr.dataset.eid; })[0]; if (!e) return;
@@ -3492,9 +3502,19 @@
     }
     else if (k === 'bottom') {
       e.bottom = M.num(t.value);
+      if (!e.quoteManual && applyCatalogFormula(e, 'bottom')) updateCatalogPriceInputs(tr, e);
     } else if (k === 'quote') {
       e.quote = M.num(t.value);
-    } else if (k === 'approved') { e.approved = M.num(t.value); }
+      e.quoteManual = true;
+      e.quoteAuto = false;
+      if (!e.approvedManual) {
+        e.approved = M.round2(M.num(e.quote) * (1 - M.num(state.project.cutRate)));
+        updateCatalogPriceInputs(tr, e);
+      }
+    } else if (k === 'approved') {
+      e.approved = M.num(t.value);
+      e.approvedManual = true;
+    }
     else if (k === 'supplierQuote' || k === 'costEstimate') { e[k] = M.num(t.value); }
     else if (k === 'note') {
       e.note = t.value;
@@ -3838,8 +3858,68 @@
     toast('已加入器材组「' + kit.name + '」：' + added + ' 项器材', 'ok');
   }
 
+  function catalogFormulaPrice(ce) {
+    if (!ce || ce.type === 'crew') return null;
+    var bottom = M.num(ce.bottom);
+    if (!(bottom > 0)) return null;
+    var p = state.project || state.settings;
+    var q = M.round2(bottom * (1 + M.num(p.markupRate)));
+    var a = M.round2(q * (1 - M.num(p.cutRate)));
+    return { bottom: bottom, quote: q, approved: a };
+  }
+  function applyCatalogFormula(e, mode) {
+    if (!e || e.type === 'crew' || e.lock) return false;
+    if (e.quoteManual) return false;
+    var f = catalogFormulaPrice(e);
+    if (!f) return false;
+    if (mode === 'init' && !(M.num(e.quote) <= 0 || e.quoteAuto)) return false;
+    if (mode === 'rates' && !e.quoteAuto) return false;
+    if (mode === 'bottom' && M.num(e.quote) > 0 && !e.quoteAuto) return false;
+    var nextApproved = e.approvedManual ? M.num(e.approved) : f.approved;
+    if (M.num(e.quote) === f.quote && M.num(e.approved) === nextApproved) {
+      if (!e.quoteAuto) { e.quoteAuto = true; return true; }
+      return false;
+    }
+    e.quote = f.quote;
+    if (!e.approvedManual) e.approved = f.approved;
+    e.quoteAuto = true;
+    return true;
+  }
+  function syncCatalogFormulaPrices(mode) {
+    var n = 0;
+    (state.catalog || []).forEach(function (e) { if (applyCatalogFormula(e, mode)) n += 1; });
+    return n;
+  }
+  function fillEmptyProjectPrices() {
+    var n = 0;
+    function fill(p) {
+      if (!p) return;
+      (p.groups || []).forEach(function (g) {
+        (g.items || []).forEach(function (it) {
+          if (!it || it.type === 'crew' || it.isPart) return;
+          var ce = catalogByName(it.name);
+          if (M.num(it.bottom) <= 0 && ce && M.num(ce.bottom) > 0) it.bottom = M.num(ce.bottom);
+          if (M.num(it.quote) <= 0 && M.num(it.bottom) > 0) {
+            it.quote = M.round2(M.num(it.bottom) * (1 + M.num(p.markupRate)));
+            it.quoteManual = false;
+            n += 1;
+          }
+          if (M.num(it.approved) <= 0 && M.num(it.quote) > 0) {
+            it.approved = M.round2(M.num(it.quote) * (1 - M.num(p.cutRate)));
+            it.approvedManual = false;
+            n += 1;
+          }
+        });
+      });
+    }
+    fill(state.project);
+    (state.projects || []).forEach(fill);
+    return n;
+  }
   function projectFeeOf(ce) {
     if (!ce) return { quote: 0, approved: 0 };
+    var f = catalogFormulaPrice(ce);
+    if (f && (ce.quoteAuto || M.num(ce.quote) <= 0)) return { quote: f.quote, approved: f.approved };
     var q = M.num(ce.quote);
     if (!(q > 0)) q = M.num(ce.supplierQuote);
     var a = M.num(ce.approved);
@@ -4362,6 +4442,8 @@
     updateMetaStatus();
     setDraftStatus(storageOK ? '就绪' : '');
     applyGlobalRates(false);
+    syncCatalogFormulaPrices('init');
+    fillEmptyProjectPrices();
     commit();
     render();
     initCatalogCloud();
