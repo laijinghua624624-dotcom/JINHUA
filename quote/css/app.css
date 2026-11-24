@@ -598,3 +598,4 @@ label.field.qk input.qty{width:54px;flex:none}
 .catalog-table textarea.name-edit:hover{background:#fff;border-color:#e2e8f0}
 .catalog-table textarea.name-edit:focus{background:#fff;border-color:#94a3b8;box-shadow:0 0 0 3px rgba(148,163,184,.12);outline:none}
 .combo-section-title{font-size:12px;font-weight:700;color:#475569;margin:4px 0 6px;padding-bottom:4px;border-bottom:1px solid #eef2f6}
+.order-move{padding:0 6px!important;height:26px!important;min-width:26px;font-size:12px}

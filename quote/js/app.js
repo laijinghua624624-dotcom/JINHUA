@@ -857,9 +857,10 @@
       field('备注 / 说明（打印在报价单顶部）', 'remark', p.remark, 'span-4') +
       '</div></div></section>' +
       '<div class="toolbar">' +
-      '<button class="btn primary" data-act="open-kits">① 选择组合（器材 / 人员）</button>' +
+      '<button class="btn primary" data-act="add-group" data-kind="photo">＋ 摄影机位组</button>' +
+      '<button class="btn primary" data-act="add-group" data-kind="light">＋ 灯光组</button>' +
+      '<button class="btn light" data-act="open-kits">从组合添加</button>' +
       '<button class="btn light" data-act="go-kits">管理组合</button>' +
-      '<button class="btn light" data-act="add-group">＋ 新增机位组</button>' +
       '<button class="btn light" data-act="sync-prices">按器材库刷新价格</button>' +
       '<span class="spacer"></span>' +
       '<button class="btn light" data-act="share-links">🔗 分享链接</button>' +
@@ -882,7 +883,9 @@
       '<label class="pkg-toggle"><input type="checkbox" data-gpkg="' + g.id + '"' + (g.pkg ? ' checked' : '') + '> 整组报价</label>' +
       (g.pkg ? '<span class="pkg-field">整组报价 ¥<input class="price" type="number" min="0" step="0.01" data-gpfield="pkgQuote" data-gid="' + g.id + '" value="' + esc(M.num(g.pkgQuote)) + '"></span>' : '') +
       '<div class="g-actions">' +
-      '<button class="btn sm light" data-act="add-item" data-gid="' + g.id + '">＋ 添加器材</button>' +
+      '<button class="btn sm light" data-act="add-item" data-gid="' + g.id + '">＋ 添加器材 / 人员</button>' +
+      '<button class="btn sm light" data-act="group-up" data-gid="' + g.id + '" title="上移机位组">↑</button>' +
+      '<button class="btn sm light" data-act="group-down" data-gid="' + g.id + '" title="下移机位组">↓</button>' +
       '<button class="btn sm light" data-act="save-kit" data-gid="' + g.id + '" title="把这个机位组存成常用组合">存为组合</button>' +
       '<button class="btn sm danger" data-act="del-group" data-gid="' + g.id + '">删除机位组</button>' +
       '</div></div>' +
@@ -902,7 +905,7 @@
       '<td><input class="price" type="number" step="0.01" min="0" data-ifield="quote" value="' + esc(it.quote) + '" title="给公司的报价"' + (g.pkg ? ' disabled' : '') + '></td>' +
       '<td class="num money" data-oamount="' + gid + '|' + iid + '">' + (g.pkg ? '含整组' : money(M.lineQuote(it, state.project))) + '</td>' +
       '<td><input class="note" data-ifield="note" value="' + esc(it.note || '') + '" placeholder="备注"></td>' +
-      '<td style="text-align:center"><button class="del" data-act="del-item" data-gid="' + gid + '" data-iid="' + iid + '" title="删除">✕</button></td>' +
+      '<td style="text-align:center;white-space:nowrap"><button class="btn sm light order-move" data-act="item-up" data-gid="' + gid + '" data-iid="' + iid + '" title="上移">↑</button> <button class="btn sm light order-move" data-act="item-down" data-gid="' + gid + '" data-iid="' + iid + '" title="下移">↓</button> <button class="del" data-act="del-item" data-gid="' + gid + '" data-iid="' + iid + '" title="删除">✕</button></td>' +
       '</tr>';
   }
   function toggleGroupPkg(gid, on) {
@@ -2169,7 +2172,7 @@
 
   function renderCatalog() {
     var crewMode = state.ui.catalogMode === 'crew';
-    var pool = state.catalog.filter(function (e) { return e.type !== 'crew'; });
+    var pool = state.catalog.filter(function (e) { return isKit ? e.type !== 'crew' : true; });
     var cats = {}; pool.forEach(function (e) { cats[e.cat || '其他'] = 1; });
     var catOpts = Object.keys(cats).sort().map(function (c) { return '<option value="' + esc(c) + '">' + esc(c) + '</option>'; }).join('');
     var sups = {}; state.catalog.forEach(function (e) { var x = supOf(e); sups[x] = (sups[x] || 0) + 1; });
@@ -2756,7 +2759,8 @@
     var owner = isKit ? state.kits.filter(function (k) { return k.id === target.kitId; })[0] : groupById(target && target.gid);
     if (!owner) return;
     state.ui.pickerTarget = target;
-    var cats = {}; state.catalog.forEach(function (e) { cats[e.cat || '其他'] = 1; });
+    var pool = state.catalog.filter(function (e) { return isKit ? e.type !== 'crew' : true; });
+    var cats = {}; pool.forEach(function (e) { cats[e.cat || '其他'] = 1; });
     var chips = ['<button class="chip active" data-pcat="">全部</button>'].concat(Object.keys(cats).sort().map(function (c) {
       return '<button class="chip" data-pcat="' + esc(c) + '">' + esc(c) + '</button>';
     })).join('');
@@ -3376,10 +3380,14 @@
   function handleAct(act, el) {
     switch (act) {
       case 'go-order': setTab('order'); break;
-      case 'add-group': addGroup(); break;
+      case 'add-group': addGroup(el.dataset.kind); break;
       case 'del-group': openDeletePin('group', el.dataset.gid); break;
       case 'add-item': openPicker({ gid: el.dataset.gid }); break;
       case 'del-item': delItem(el.dataset.gid, el.dataset.iid); break;
+      case 'item-up': moveGroupItem(el.dataset.gid, el.dataset.iid, -1); break;
+      case 'item-down': moveGroupItem(el.dataset.gid, el.dataset.iid, 1); break;
+      case 'group-up': moveGroup(el.dataset.gid, -1); break;
+      case 'group-down': moveGroup(el.dataset.gid, 1); break;
       case 'open-kits': openKitsPicker(); break;
       case 'go-kits': setTab('kits'); break;
       case 'kits-back': state.ui.editingKit = null; commit(); render(); break;
@@ -3532,7 +3540,30 @@
   }
 
   /* ---------------- 项目操作 ---------------- */
-  function addGroup() { state.project.groups.push({ id: uid('g'), name: '机位组 ' + (state.project.groups.length + 1), items: [] }); commit(); render(); }
+  function addGroup(kind) {
+    var base = kind === 'light' ? '灯光组' : (kind === 'photo' ? '摄影机位组' : '机位组');
+    var name = base, n = 2;
+    while (state.project.groups.some(function (g) { return g.name === name; })) { name = base + ' ' + n; n++; }
+    state.project.groups.push({ id: uid('g'), name: name, kind: kind || '', items: [] });
+    commit(); render();
+    toast('已新增「' + name + '」，点「＋ 添加器材 / 人员」自由添加', 'ok');
+  }
+  function moveGroupItem(gid, iid, dir) {
+    var g = groupById(gid); if (!g) return;
+    var idx = (g.items || []).findIndex(function (x) { return x.id === iid; });
+    var to = idx + dir;
+    if (idx < 0 || to < 0 || to >= g.items.length) return;
+    var tmp = g.items[idx]; g.items[idx] = g.items[to]; g.items[to] = tmp;
+    commit(); render();
+  }
+  function moveGroup(gid, dir) {
+    var groups = state.project.groups || [];
+    var idx = groups.findIndex(function (x) { return x.id === gid; });
+    var to = idx + dir;
+    if (idx < 0 || to < 0 || to >= groups.length) return;
+    var tmp = groups[idx]; groups[idx] = groups[to]; groups[to] = tmp;
+    commit(); render();
+  }
   function delGroup(gid) {
     var g = groupById(gid); if (!g) return;
     if (!confirm('删除机位组「' + g.name + '」？（组内 ' + g.items.length + ' 行会一起删除）')) return;
@@ -3632,7 +3663,7 @@
     var g = groupById(target.gid); if (!g) { closeModal(); return; }
     picked.forEach(function (tr) {
       var ce = state.catalog.filter(function (x) { return x.id === tr.dataset.pickEqid; })[0];
-      if (!ce || ce.type === 'crew') return;
+      if (!ce) return;
       g.items.push({
         id: uid('l'), eqId: ce.id, name: ce.name, unit: ce.unit || '个', type: ce.type || 'equipment',
         cat: ce.cat || '其他', qty: 1, bottom: ce.bottom, quote: ce.quote, approved: ce.approved,
