@@ -1016,7 +1016,7 @@
       statCard('公司核价合计', money(t.approved), '报价×' + pct(1 - M.num(p.cutRate)), '') +
       statCard('报价合计', money(t.quote), '含税 ' + money(t.quoteTotal), 'accent') +
       statCard('底价合计', money(t.bottom), '供应商成本', '') +
-      statCard('供应商返点', money(t.rebate), pct(M.num(p.rebateRate)) + ' × 项目报价', '') +
+      statCard('供应商返点', money(t.rebate), pct(M.num(p.rebateRate)) + ' × 底价', '') +
       '</div>' +
       '<div class="hint">利润已扣除税费分摊 ' + money(t.tax) + '（按报价 ' + pct(t.taxRate) + ' 计算）。</div>' +
       '<section class="card"><div class="card-head"><h2>项目与价格比例</h2><span class="sub">和「设置」里的比例是同一组：改任意一边，所有项目一起同步重算；手工改过的核价会保留</span></div>' +
@@ -1024,8 +1024,8 @@
       field('项目名称', 'name', p.name, 'span-2') +
       field('拍摄天数', 'days', M.lineDays(p), '', 'number', 'min="1" step="1"') +
       field('加价率 %（底价→报价）', 'markupPct', M.round2(M.num(p.markupRate) * 100), '', 'number', 'min="0" step="0.01"') +
-      field('公司核价砍价 %（报价→核价）', 'cutPct', M.round2(M.num(p.cutRate) * 100), '', 'number', 'min="0" step="0.01"') +
-      field('供应商返点 %（按项目报价）', 'rebatePct', M.round2(M.num(p.rebateRate) * 100), '', 'number', 'min="0" step="0.01"') +
+      field('总核价砍价 %（我5+公司10）', 'cutPct', M.round2(M.num(p.cutRate) * 100), '', 'number', 'min="0" step="0.01"') +
+      field('供应商返点 %（按底价）', 'rebatePct', M.round2(M.num(p.rebateRate) * 100), '', 'number', 'min="0" step="0.01"') +
       '</div><div class="toolbar" style="margin-top:12px">' +
       '<button class="btn light" data-act="recalc">按当前比例重算本项目</button>' +
       '<button class="btn light" data-act="sync-prices">按器材库刷新底价</button>' +
@@ -1211,8 +1211,8 @@
     var mk = M.num(state.settings.markupRate) || 30, cut = M.num(state.settings.cutRate) || 20, reb = M.num(state.settings.rebateRate) || 5;
     var simHtml = '<div class="biz-sim"><div class="form-grid" style="grid-template-columns:repeat(3,1fr)">' +
       '<label class="field">加价率 %<input data-sim="markup" type="number" min="0" step="0.01" value="' + esc(mk) + '"></label>' +
-      '<label class="field">公司核价砍价 %<input data-sim="cut" type="number" min="0" step="0.01" value="' + esc(cut) + '"></label>' +
-      '<label class="field">返点 %（按报价）<input data-sim="rebate" type="number" min="0" step="0.01" value="' + esc(reb) + '"></label>' +
+      '<label class="field">总核价砍价 %<input data-sim="cut" type="number" min="0" step="0.01" value="' + esc(cut) + '"></label>' +
+      '<label class="field">返点 %（按底价）<input data-sim="rebate" type="number" min="0" step="0.01" value="' + esc(reb) + '"></label>' +
       '</div><p class="muted small" style="margin:8px 0">按当前项目底价合计 ' + money(base) + ' 试算：</p>' +
       '<div class="biz-sim-result"><span>报价 <b id="sim-quote">—</b></span><span>核价 <b id="sim-approved">—</b></span><span>返点 <b id="sim-rebate">—</b></span><span>利润 <b id="sim-profit">—</b></span></div></div>';
     return kpi +
@@ -1237,7 +1237,7 @@
     var reb = M.num((document.querySelector('[data-sim="rebate"]') || {}).value) || 0;
     var quote = M.round2(base * (1 + mk / 100));
     var approved = M.round2(quote * (1 - cut / 100));
-    var rebate = M.round2(quote * reb / 100);
+    var rebate = M.round2(base * reb / 100);
     var tax = M.round2(quote * (M.num(state.project.taxRate) || 0));
     var profit = M.round2(approved - base + rebate - tax);
     function set(id, v) { var el = document.getElementById(id); if (el) el.textContent = v; }
@@ -1280,7 +1280,7 @@
       '<td class="num" data-gcell="quote">' + money(gt.quote) + '</td>' +
       '<td class="num" data-gcell="approved">' + money(gt.approved) + '</td>' +
       '<td class="num" data-gcell="bottom">' + money(gt.bottom) + '</td>' +
-      '<td class="num" data-gcell="rebate">' + money(M.round2(gt.quote * M.num(state.project.rebateRate))) + '</td>' +
+      '<td class="num" data-gcell="rebate">' + money(M.round2(gt.bottom * M.num(state.project.rebateRate))) + '</td>' +
       '<td class="num profit-cell ' + (gt.profit < 0 ? 'neg' : '') + '" data-gcell="profit">' + money(gt.profit) + '</td>' +
       '<td class="num rate" data-gcell="rate">' + profitRate(gt) + '%</td></tr>';
   }
@@ -1338,7 +1338,7 @@
       var row = $('[data-grow="' + g.id + '"]'); if (!row) return;
       var setG = function (k, v) { var e = row.querySelector('[data-gcell="' + k + '"]'); if (e) { e.textContent = v; } };
       setG('count', gt.count); setG('quote', money(gt.quote)); setG('approved', money(gt.approved));
-      setG('bottom', money(gt.bottom)); setG('rebate', money(M.round2(gt.quote * M.num(p.rebateRate))));
+      setG('bottom', money(gt.bottom)); setG('rebate', money(M.round2(gt.bottom * M.num(p.rebateRate))));
       var pcell = row.querySelector('[data-gcell="profit"]'); if (pcell) { pcell.textContent = money(gt.profit); pcell.classList.toggle('neg', gt.profit < 0); }
       setG('rate', profitRate(gt) + '%');
       (g.items || []).forEach(function (it) {
@@ -2310,7 +2310,7 @@
           '<div class="table-scroll"><table class="grid"><thead><tr><th style="min-width:220px">组名</th><th style="min-width:240px">人员组成</th><th>单位</th><th class="num">整组报价</th><th class="num">整组底价</th><th class="num">整组核价</th><th style="min-width:330px">加班费标准</th><th></th></tr></thead>' +
           '<tbody>' + (groupRows || '<tr><td colspan="8" class="muted" style="text-align:center;padding:22px">还没有人员组，点右上角「按组新增」。</td></tr>') + '</tbody></table></div></section>'
         : '<section class="card catalog-list-card"><div class="card-head catalog-list-head"><h2>器材清单</h2>' +
-          '<span class="sub">项目报价 = 供应商底价 × (1+加价率)，核价 = 项目报价 × (1−公司核价砍价)；手改过的价格保留</span></div>' +
+          '<span class="sub">项目报价 = 供应商底价 × (1+加价率)，核价 = 项目报价 × (1−总核价砍价)；手改过的价格保留</span></div>' +
           (state.settings.batchMode ? '<div id="cat-batch-bar" class="toolbar" style="display:none;margin:0 0 10px;gap:10px;align-items:center">' +
         '<span class="muted small" id="cat-sel-count">已选 0 项</span>' +
         '<button class="btn danger sm" data-act="catalog-batch-delete">删除选中</button>' +
@@ -2790,8 +2790,8 @@
       '<section class="card"><div class="card-head"><h2>价格比例（所有项目同步）</h2><span class="sub">改这里会同步到全部项目；器材库的「项目报价/核价」也按底价重算，手改过的价格保留</span></div><div class="card-body">' +
       '<div class="form-grid" style="grid-template-columns:1fr 1fr">' +
       '<label class="field">加价率 %（底价→报价）<input type="number" min="0" step="0.01" data-sfield="markupRate" value="' + esc(M.round2(M.num(s.markupRate))) + '"></label>' +
-      '<label class="field">公司核价砍价 %（报价→核价）<input type="number" min="0" step="0.01" data-sfield="cutRate" value="' + esc(M.round2(M.num(s.cutRate))) + '"></label>' +
-      '<label class="field">供应商返点 %（按项目报价）<input type="number" min="0" step="0.01" data-sfield="rebateRate" value="' + esc(M.round2(M.num(s.rebateRate))) + '"></label>' +
+      '<label class="field">总核价砍价 %（我5+公司10）<input type="number" min="0" step="0.01" data-sfield="cutRate" value="' + esc(M.round2(M.num(s.cutRate))) + '"></label>' +
+      '<label class="field">供应商返点 %（按底价）<input type="number" min="0" step="0.01" data-sfield="rebateRate" value="' + esc(M.round2(M.num(s.rebateRate))) + '"></label>' +
       '</div></div></section>' +
       '<section class="card"><div class="card-head"><h2>数据与备份</h2><span class="sub">本机存储：' + (storageOK ? '可用' : '不可用（请用导出备份）') + '</span></div><div class="card-body">' +
       '<div class="kv"><span class="k">器材库</span><span class="v">' + state.catalog.length + ' 项</span></div>' +

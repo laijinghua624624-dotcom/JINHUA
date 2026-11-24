@@ -47,7 +47,7 @@
     if (r === undefined || r === null || r === '') r = project.rebateRate;
     return num(r, 0);
   }
-  function lineRebate(item, project) { return round2(lineQuote(item, project) * rebateRateOf(item, project)); }
+  function lineRebate(item, project) { return round2(lineBottom(item, project) * rebateRateOf(item, project)); }
   function taxRateOf(project) { return num(project && project.taxRate, 0); }
   /* 税费按报价分摊；利润 = 核价 - 底价 + 返点 - 税费分摊 */
   function lineTax(item, project) { return round2(lineQuote(item, project) * taxRateOf(project)); }
@@ -70,7 +70,7 @@
       t.quote = round2(num(group.pkgQuote) * q);
       t.bottom = round2(num(group.pkgBottom) * q);
       t.approved = round2(num(group.pkgApproved) * q);
-      t.rebate = round2(t.quote * num(project.rebateRate));
+      t.rebate = round2(num(group.pkgBottom) * q * num(project.rebateRate));
       t.profit = round2(t.approved - t.bottom + t.rebate - t.quote * taxRateOf(project));
       t.qty = q; t.count = (group.items || []).length; t.pkg = true;
       return t;
