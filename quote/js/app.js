@@ -2172,8 +2172,7 @@
 
   function renderCatalog() {
     var crewMode = state.ui.catalogMode === 'crew';
-    var pool = state.catalog.filter(function (e) { return isKit ? e.type !== 'crew' : true; });
-    var cats = {}; pool.forEach(function (e) { cats[e.cat || '其他'] = 1; });
+    var cats = {}; state.catalog.forEach(function (e) { cats[e.cat || '其他'] = 1; });
     var catOpts = Object.keys(cats).sort().map(function (c) { return '<option value="' + esc(c) + '">' + esc(c) + '</option>'; }).join('');
     var sups = {}; state.catalog.forEach(function (e) { var x = supOf(e); sups[x] = (sups[x] || 0) + 1; });
     var supOpts = Object.keys(sups).sort(function (a, b) { return sups[b] - sups[a]; }).map(function (x) {
