@@ -122,31 +122,56 @@
   }
 
   /* 出库合并：同型号器材跨机位合并，人员不计入出库 */
-  function outbound(project) {
+  function outbound(project, catalog) {
     var map = new Map();
     var crewQty = 0;
     var groups = [];
+    var catMap = new Map();
+    (catalog || []).forEach(function (e) { catMap.set(normalizeName(e.name), e); });
+    var projectParts = {};
+    (project.groups || []).forEach(function (g) {
+      (g.items || []).forEach(function (it) {
+        if (it.isPart && it.parentId) {
+          (projectParts[it.parentId] = projectParts[it.parentId] || []).push(it);
+        }
+      });
+    });
     (project.groups || []).forEach(function (g) {
       var gLines = [];
       (g.items || []).forEach(function (it) {
         if (it.type === 'crew') { crewQty += num(it.qty); return; }
-        var key = normalizeName(it.name);
+        if (it.isPart) return;
+        var cat = it.cat || '其他';
+        var key = normalizeName(cat) + '|' + normalizeName(it.name);
         var o = map.get(key);
         if (!o) {
-          o = { key: key, name: it.name, unit: it.unit || '个', cat: it.cat || '其他', qty: 0, groups: [] };
+          o = { key: key, name: it.name, unit: it.unit || '个', cat: cat, qty: 0, groups: [], parts: [] };
           map.set(key, o);
         }
         o.qty += num(it.qty);
         var hit = o.groups.filter(function (x) { return x.name === g.name; })[0];
         if (hit) hit.qty += num(it.qty);
         else o.groups.push({ name: g.name, qty: num(it.qty) });
+
+        var ce = catMap.get(normalizeName(it.name));
+        var ownParts = projectParts[it.id] || [];
+        var source = (ce && Array.isArray(ce.parts) && ce.parts.length) ? ce.parts : ownParts;
+        source.forEach(function (p) {
+          var pname = String(p.name || '').replace(/^配件\s*·\s*/, '').trim();
+          if (!pname) return;
+          var pq = num(p.qty) || 1;
+          if (ce && Array.isArray(ce.parts) && ce.parts.length) pq = pq * Math.max(1, num(it.qty) || 1);
+          var exist = o.parts.filter(function (x) { return normalizeName(x.name) === normalizeName(pname); })[0];
+          if (exist) exist.qty += pq;
+          else o.parts.push({ name: pname, qty: pq });
+        });
         gLines.push({ name: it.name, unit: it.unit || '个', qty: num(it.qty), note: it.note || '' });
       });
       groups.push({ name: g.name, items: gLines });
     });
     var lines = Array.from(map.values()).sort(function (a, b) {
       var c = String(a.cat).localeCompare(String(b.cat), 'zh');
-      return c !== 0 ? c : b.qty - a.qty;
+      return c !== 0 ? c : String(a.name).localeCompare(String(b.name), 'zh');
     });
     return {
       lines: lines, groups: groups,
@@ -155,7 +180,6 @@
     };
   }
 
-  /* 库存校验：仅当器材库里的 stock 有值时才提示 */
   function stockIssues(project, catalog) {
     var byName = new Map();
     (catalog || []).forEach(function (e) { byName.set(normalizeName(e.name), e); });

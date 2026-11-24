@@ -268,73 +268,37 @@
   }
 
   /* ---------- 出库单 ---------- */
-  function buildOutboundWorkbook(ExcelJS, project, settings) {
+  function buildOutboundWorkbook(ExcelJS, project, settings, catalog) {
     settings = settings || {};
     var wb = newWorkbook(ExcelJS, settings);
-    var ob = M.outbound(project);
-
-    var ws = wb.addWorksheet('出库汇总', { properties: { defaultRowHeight: 22 } });
-    title(ws, '器材出库汇总清单', 9);
-    infoRow(ws, 2, '项目名称', project.name || '', 9);
-    infoRow(ws, 3, '拍摄地点', project.location || '', 9);
-    infoRow(ws, 4, '拍摄日期', dateStr(project.shootDate) + '（' + M.lineDays(project) + ' 天）', 9);
-    merge(ws, 5, 1, 5, 9, '说明：数量按报价单口径汇总，同名器材跨机位合并；实发数量由仓管填写，差异 = 实发 - 应发。', { font: font(9, false, 'FF6B7280'), left: true, border: false });
-    ws.getRow(5).height = 18;
-    headerRow(ws, 6, ['序号', '分类', '器材名称', '单位', '数量', '分属机位及数量', '实发数量', '差异', '备注'],
-      [6, 14, 44, 8, 8, 34, 10, 9, 26]);
-    var r = 7, totalQty = 0, totalOut = 0, hasOut = false;
+    var ob = M.outbound(project, catalog);
+    var ws = wb.addWorksheet('出库清单', { properties: { defaultRowHeight: 24 } });
+    title(ws, '器材出库清单', 5);
+    infoRow(ws, 2, '项目名称', project.name || '', 5);
+    infoRow(ws, 3, '拍摄日期', dateStr(project.shootDate) + '（' + M.lineDays(project) + ' 天）', 5);
+    merge(ws, 4, 1, 4, 5, '说明：同分类、同名器材已合并；只列出单位、配件和数量，便于出库对照。', { font: font(9, false, 'FF6B7280'), left: true, border: false });
+    ws.getRow(4).height = 18;
+    headerRow(ws, 5, ['序号', '器材名称', '单位', '配件', '数量'], [6, 46, 9, 44, 10]);
+    var r = 6, totalQty = 0;
+    function partsText(parts) { return (parts || []).map(function (p) { return p.name + (p.qty > 1 ? ' ×' + p.qty : ''); }).join('、'); }
     ob.lines.forEach(function (l, i) {
       totalQty += l.qty;
-      var dist = l.groups.map(function (g) { return g.name + ' ' + g.qty; }).join('；');
-      var out = project.outbound && project.outbound[l.key] !== undefined && project.outbound[l.key] !== '' ? M.num(project.outbound[l.key]) : null;
-      if (out !== null) { totalOut += out; hasOut = true; }
       cell(ws, r, 1, i + 1, { font: font(10) });
-      cell(ws, r, 2, l.cat, { font: font(9.5), left: true });
-      cell(ws, r, 3, l.name, { font: font(10.5), left: true });
-      cell(ws, r, 4, l.unit, { font: font(10) });
+      cell(ws, r, 2, l.name, { font: font(10.5), left: true });
+      cell(ws, r, 3, l.unit, { font: font(10) });
+      cell(ws, r, 4, partsText(l.parts) || '', { font: font(9.5), left: true });
       cell(ws, r, 5, l.qty, { font: font(10.5, true), numFmt: '#,##0' });
-      cell(ws, r, 6, dist, { font: font(9), left: true });
-      cell(ws, r, 7, out === null ? '' : out, { font: font(10.5), numFmt: '#,##0', fill: BLUEBG });
-      cell(ws, r, 8, out === null ? '' : M.round2(out - l.qty), { font: font(10.5), numFmt: '#,##0', fill: BLUEBG });
-      cell(ws, r, 9, '', { font: font(9), left: true, fill: BLUEBG });
-      ws.getRow(r).height = Math.max(24, rowHeight(l.name, dist, 44, 34));
+      ws.getRow(r).height = Math.max(24, rowHeight(l.name, partsText(l.parts), 46, 44));
       r += 1;
     });
     r += 1;
     merge(ws, r, 1, r, 4, '合计：' + ob.lineCount + ' 项器材', { font: font(11, true), fill: LAMBER, align: { vertical: 'middle', horizontal: 'right' } });
     cell(ws, r, 5, totalQty, { font: font(11, true), fill: LAMBER, numFmt: '#,##0' });
-    cell(ws, r, 6, '', { fill: LAMBER });
-    cell(ws, r, 7, hasOut ? totalOut : '', { font: font(11, true), fill: LAMBER, numFmt: '#,##0' });
-    cell(ws, r, 8, hasOut ? M.round2(totalOut - totalQty) : '', { font: font(11, true), fill: LAMBER, numFmt: '#,##0' });
-    cell(ws, r, 9, '', { fill: LAMBER });
     ws.getRow(r).height = 26; r += 2;
-    merge(ws, r, 1, r, 9, '出库人（签字）：　　　　　　　　　　复核人（签字）：　　　　　　　　　　日期：　　　　年　　月　　日　　（人员 ' + ob.crewQty + ' 人不计入器材出库）', { font: font(10), left: true, border: false });
-    ws.views = [{ state: 'frozen', ySplit: 6 }];
+    merge(ws, r, 1, r, 5, '出库人（签字）：　　　　　　　　　　复核人（签字）：　　　　　　　　　　日期：　　　　年　　月　　日　　（人员 ' + ob.crewQty + ' 人不计入器材出库）', { font: font(10), left: true, border: false });
+    ws.views = [{ state: 'frozen', ySplit: 5 }];
     ws.pageSetup = { orientation: 'landscape', paperSize: 9, fitToPage: true, fitToWidth: 1, fitToHeight: 0, margins: { left: 0.35, right: 0.35, top: 0.45, bottom: 0.45, header: 0.2, footer: 0.25 } };
     ws.headerFooter = { oddFooter: '&C器材出库单　第 &P 页 / 共 &N 页' };
-
-    var ws2 = wb.addWorksheet('分机位明细', { properties: { defaultRowHeight: 22 } });
-    title(ws2, '分机位器材明细（按机位分箱 / 现场点数）', 6);
-    headerRow(ws2, 2, ['序号', '器材名称（含型号）', '单位', '数量', '实发数量', '备注'], [6, 46, 8, 8, 10, 30]);
-    var rr = 3;
-    ob.groups.forEach(function (g) {
-      var qty = g.items.reduce(function (s, i) { return s + i.qty; }, 0);
-      merge(ws2, rr, 1, rr, 6, '　' + g.name + '　｜　' + g.items.length + ' 项 / ' + qty + ' 件', { font: font(11, true, 'FFFFFFFF'), fill: GREEN, left: true });
-      ws2.getRow(rr).height = 24; rr += 1;
-      g.items.forEach(function (it, i) {
-        cell(ws2, rr, 1, i + 1, { font: font(10) });
-        cell(ws2, rr, 2, it.name, { font: font(10.5), left: true });
-        cell(ws2, rr, 3, it.unit, { font: font(10) });
-        cell(ws2, rr, 4, it.qty, { font: font(10.5, true), numFmt: '#,##0' });
-        cell(ws2, rr, 5, '', { fill: BLUEBG });
-        cell(ws2, rr, 6, it.note || '', { font: font(9), left: true });
-        ws2.getRow(rr).height = rowHeight(it.name, it.note || '', 46, 30);
-        rr += 1;
-      });
-    });
-    ws2.views = [{ state: 'frozen', ySplit: 2 }];
-    ws2.pageSetup = { orientation: 'portrait', paperSize: 9, fitToPage: true, fitToWidth: 1, fitToHeight: 0, margins: { left: 0.4, right: 0.4, top: 0.45, bottom: 0.45, header: 0.2, footer: 0.25 } };
-    ws2.headerFooter = { oddFooter: '&C分机位明细　第 &P 页 / 共 &N 页' };
     return wb;
   }
 
@@ -391,20 +355,21 @@
       '</tbody></table><div class="foot"><span>制表人：' + esc(settings.preparer || '') + '</span><span>复核：</span><span>日期：　　年　　月　　日</span></div></body></html>';
   }
 
-  function printOutbound(project) {
-    var ob = M.outbound(project);
+  function printOutbound(project, catalog) {
+    var ob = M.outbound(project, catalog);
+    function partsText(parts) { return (parts || []).map(function (p) { return p.name + (p.qty > 1 ? ' ×' + p.qty : ''); }).join('、'); }
     var rows = ob.lines.map(function (l, i) {
-      var out = project.outbound && project.outbound[l.key] !== undefined && project.outbound[l.key] !== '' ? M.num(project.outbound[l.key]) : '';
-      return '<tr><td class="num">' + (i + 1) + '</td><td>' + esc(l.cat) + '</td><td>' + esc(l.name) + '</td><td class="num">' + esc(l.unit) + '</td>' +
-        '<td class="num">' + l.qty + '</td><td>' + esc(l.groups.map(function (g) { return g.name + ' ' + g.qty; }).join('；')) + '</td><td class="num">' + (out === '' ? '' : out) + '</td><td class="num">' + (out === '' ? '' : (out - l.qty)) + '</td></tr>';
+      return '<tr><td class="num">' + (i + 1) + '</td><td>' + esc(l.name) + '</td><td class="num">' + esc(l.unit) + '</td>' +
+        '<td>' + esc(partsText(l.parts) || '') + '</td><td class="num">' + l.qty + '</td></tr>';
     }).join('');
     return '<!DOCTYPE html><html><head><meta charset="utf-8"><title>出库单 - ' + esc(project.name) + '</title><style>' + PRINT_CSS + '</style></head><body>' +
-      '<h1>器材出库汇总清单</h1>' +
+      '<h1>器材出库清单</h1>' +
       '<table class="meta"><tr><td class="k">项目名称</td><td colspan="3">' + esc(project.name) + '</td><td class="k">拍摄日期</td><td>' + esc(dateStr(project.shootDate)) + '</td></tr>' +
       '<tr><td class="k">拍摄地点</td><td colspan="3">' + esc(project.location) + '</td><td class="k">器材项数</td><td>' + ob.lineCount + ' 项 / ' + ob.totalQty + ' 件</td></tr></table>' +
-      '<table class="q"><thead><tr><th>序号</th><th>分类</th><th>器材名称</th><th>单位</th><th>数量</th><th>分属机位及数量</th><th>实发数量</th><th>差异</th></tr></thead><tbody>' + rows + '</tbody></table>' +
+      '<table class="q"><thead><tr><th>序号</th><th>器材名称</th><th>单位</th><th>配件</th><th>数量</th></tr></thead><tbody>' + rows + '</tbody></table>' +
       '<div class="foot"><span>出库人（签字）：</span><span>复核人（签字）：</span><span>日期：　　年　　月　　日</span></div></body></html>';
   }
+
   function openPrint(html) {
     var w = root.open('', '_blank');
     if (!w) { alert('浏览器阻止了新窗口，请允许弹窗后重试。'); return false; }

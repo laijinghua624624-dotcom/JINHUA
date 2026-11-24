@@ -2042,51 +2042,36 @@
   }
 
   function renderOutbound() {
-    var p = state.project, ob = M.outbound(p);
+    var p = state.project, ob = M.outbound(p, state.catalog);
     if (!ob.lines.length) {
       return '<div class="page"><div class="empty"><div class="big">📦</div><p>当前项目还没有器材，先去「下单报价」添加。</p><button class="btn solid" data-act="go-order">去下单报价</button></div></div>';
     }
+    function partsText(parts) {
+      return (parts || []).map(function (x) { return x.name + (x.qty > 1 ? ' ×' + x.qty : ''); }).join('、');
+    }
     var rows = ob.lines.map(function (l, i) {
-      var out = p.outbound[l.key] !== undefined && p.outbound[l.key] !== '' ? p.outbound[l.key] : '';
-      var diff = out === '' ? '' : M.round2(M.num(out) - l.qty);
-      var low = out !== '' && M.num(out) < l.qty;
-      return '<tr data-obrow="' + l.key + '"><td class="num">' + (i + 1) + '</td>' +
-        '<td><span class="cat-tag">' + esc(l.cat) + '</span></td>' +
-        '<td>' + esc(l.name) + '</td><td class="center">' + esc(l.unit) + '</td>' +
-        '<td class="num money">' + l.qty + '</td>' +
-        '<td class="muted">' + esc(l.groups.map(function (g) { return g.name + ' ' + g.qty; }).join('；')) + '</td>' +
-        '<td><input class="qty" type="number" min="0" step="1" data-obkey="' + esc(l.key) + '" value="' + esc(out) + '" placeholder="待填"></td>' +
-        '<td class="num" data-obdiff="' + esc(l.key) + '" style="' + (low ? 'color:var(--red);font-weight:700' : '') + '">' + (diff === '' ? '' : diff) + '</td>' +
-        '</tr>';
-    }).join('');
-    var detail = ob.groups.map(function (g) {
-      if (!g.items.length) return '';
-      var q = g.items.reduce(function (s, i) { return s + i.qty; }, 0);
-      return '<div class="card" style="margin-bottom:10px"><div class="card-head" style="padding:9px 14px"><h2 style="font-size:14px">' + esc(g.name) + '</h2><span class="sub">' + g.items.length + ' 项 / ' + q + ' 件</span></div>' +
-        '<table class="grid"><thead><tr><th>序号</th><th>器材名称</th><th>单位</th><th class="num">数量</th><th>备注</th></tr></thead><tbody>' +
-        g.items.map(function (it, i) {
-          return '<tr><td class="num">' + (i + 1) + '</td><td>' + esc(it.name) + '</td><td class="center">' + esc(it.unit) + '</td><td class="num money">' + it.qty + '</td><td class="muted">' + esc(it.note || '') + '</td></tr>';
-        }).join('') + '</tbody></table></div>';
+      return '<tr><td class="num">' + (i + 1) + '</td>' +
+        '<td><b>' + esc(l.name) + '</b></td>' +
+        '<td class="center">' + esc(l.unit) + '</td>' +
+        '<td class="muted">' + esc(partsText(l.parts) || '—') + '</td>' +
+        '<td class="num money">' + l.qty + '</td></tr>';
     }).join('');
     return '<div class="page">' +
       '<div class="toolbar">' +
       '<button class="btn light" data-act="export-outbound">导出出库单</button>' +
       '<button class="btn light" data-act="print-outbound">打印 / 存 PDF</button>' +
       '<span class="spacer"></span>' +
-      '<span class="muted small">人员 ' + ob.crewQty + ' 人不计入器材出库；实发数量可直接填，自动算差异</span>' +
+      '<span class="muted small">同分类+同名合并 · 人员 ' + ob.crewQty + ' 人不计入器材出库</span>' +
       '</div>' +
-      '<section class="card"><div class="card-head"><h2>出库汇总</h2><span class="sub">' + ob.lineCount + ' 项器材 / 共 ' + ob.totalQty + ' 件 · 同名器材跨机位合并</span></div>' +
-      '<div class="table-wrap"><table class="grid"><thead><tr><th>序号</th><th>分类</th><th>器材名称</th><th>单位</th><th class="num">应发数量</th><th>分属机位及数量</th><th>实发数量</th><th class="num">差异</th></tr></thead><tbody>' + rows + '</tbody></table></div></section>' +
+      '<section class="card"><div class="card-head"><h2>出库清单</h2><span class="sub">' + ob.lineCount + ' 项 / ' + ob.totalQty + ' 件 · 只保留单位、配件、数量</span></div>' +
+      '<div class="table-wrap"><table class="grid outbound-simple"><thead><tr><th style="width:56px">序号</th><th>器材名称</th><th style="width:80px">单位</th><th>配件</th><th class="num" style="width:90px">数量</th></tr></thead><tbody>' + rows + '</tbody></table></div></section>' +
       '<div class="totals-bar"><div class="t-item"><span class="t-label">应发合计</span><span class="t-val accent">' + ob.totalQty + ' 件</span></div>' +
       '<div class="t-item"><span class="t-label">器材项数</span><span class="t-val">' + ob.lineCount + ' 项</span></div>' +
       '<span class="spacer"></span><span class="t-note">按报价数量生成，含备用器材</span></div>' +
-      '<h3 style="font-size:15px;margin:6px 0 2px">分机位明细（现场按机位分箱点数）</h3>' + detail +
       '</div>';
   }
 
-  /* ---------------- 器材库（内部） ---------------- */
   var catalogCloud = { ready: false, version: 0, syncedFp: '', status: 'local', pushTimer: null, pushing: false, pollTimer: null };
-
   function catalogCloudLabel() {
     return { local: '☁ 本地', syncing: '☁ 同步中…', synced: '☁ 云端已同步', offline: '☁ 离线（本地）', conflict: '☁ 有冲突' }[catalogCloud.status] || '☁ 本地';
   }
@@ -3434,7 +3419,7 @@
     ob[t.dataset.obkey] = t.value;
     var d = $('[data-obdiff="' + t.dataset.obkey + '"]');
     if (d) {
-      var line = M.outbound(state.project).lines.filter(function (l) { return l.key === t.dataset.obkey; })[0];
+      var line = M.outbound(state.project, state.catalog).lines.filter(function (l) { return l.key === t.dataset.obkey; })[0];
       if (line) {
         var diff = t.value === '' ? '' : M.round2(M.num(t.value) - line.qty);
         d.textContent = diff === '' ? '' : diff;
@@ -3520,7 +3505,7 @@
       case 'export-profit': exportProfit(); break;
       case 'print-quote': EX.printQuote(state.project, state.settings); break;
       case 'export-outbound': exportOutbound(); break;
-      case 'print-outbound': EX.printOutbound(state.project); break;
+      case 'print-outbound': EX.printOutbound(state.project, state.catalog); break;
       case 'catalog-add': addCatalog(); break;
       case 'crew-add': openCrewAdd(); break;
       case 'crew-group-add': openCrewGroupAdd(); break;
@@ -4082,7 +4067,7 @@
   function exportOutbound() {
     if (!window.ExcelJS) { toast('Excel 导出组件未加载', 'err'); return; }
     try {
-      var wb = EX.buildOutboundWorkbook(window.ExcelJS, state.project, state.settings);
+      var wb = EX.buildOutboundWorkbook(window.ExcelJS, state.project, state.settings, state.catalog);
       EX.downloadWorkbook(wb, EX.safeName(state.project.name || '项目') + '_出库单_' + today() + '.xlsx')
         .then(function (f) { toast('已导出出库单：' + f, 'ok'); })
         .catch(function (err) { toast('导出失败：' + err.message, 'err'); });
