@@ -279,9 +279,15 @@
     merge(ws, 4, 1, 4, 5, '说明：同分类、同名器材已合并；只列出单位、配件和数量，便于出库对照。', { font: font(9, false, 'FF6B7280'), left: true, border: false });
     ws.getRow(4).height = 18;
     headerRow(ws, 5, ['序号', '器材名称', '单位', '配件', '数量'], [6, 46, 9, 44, 10]);
-    var r = 6, totalQty = 0;
+    var r = 6, totalQty = 0, lastSection = '';
     function partsText(parts) { return (parts || []).map(function (p) { return p.name + (p.qty > 1 ? ' ×' + p.qty : ''); }).join('、'); }
     ob.lines.forEach(function (l, i) {
+      if (l.section && l.section !== lastSection) {
+        lastSection = l.section;
+        merge(ws, r, 1, r, 5, l.section, { font: font(9.5, true, 'FF6B7280'), fill: solid('FFF3F4F6'), left: true });
+        ws.getRow(r).height = 20;
+        r += 1;
+      }
       totalQty += l.qty;
       cell(ws, r, 1, i + 1, { font: font(10) });
       cell(ws, r, 2, l.name, { font: font(10.5), left: true });
@@ -358,10 +364,15 @@
   function printOutbound(project, catalog) {
     var ob = M.outbound(project, catalog);
     function partsText(parts) { return (parts || []).map(function (p) { return p.name + (p.qty > 1 ? ' ×' + p.qty : ''); }).join('、'); }
-    var rows = ob.lines.map(function (l, i) {
-      return '<tr><td class="num">' + (i + 1) + '</td><td>' + esc(l.name) + '</td><td class="num">' + esc(l.unit) + '</td>' +
+    var rows = '', lastSection = '';
+    ob.lines.forEach(function (l, i) {
+      if (l.section && l.section !== lastSection) {
+        lastSection = l.section;
+        rows += '<tr><td colspan="5" style="background:#f3f4f6;color:#6b7280;font-weight:600;text-align:left;padding:6px 8px">' + esc(l.section) + '</td></tr>';
+      }
+      rows += '<tr><td class="num">' + (i + 1) + '</td><td>' + esc(l.name) + '</td><td class="num">' + esc(l.unit) + '</td>' +
         '<td>' + esc(partsText(l.parts) || '') + '</td><td class="num">' + l.qty + '</td></tr>';
-    }).join('');
+    });
     return '<!DOCTYPE html><html><head><meta charset="utf-8"><title>出库单 - ' + esc(project.name) + '</title><style>' + PRINT_CSS + '</style></head><body>' +
       '<h1>器材出库清单</h1>' +
       '<table class="meta"><tr><td class="k">项目名称</td><td colspan="3">' + esc(project.name) + '</td><td class="k">拍摄日期</td><td>' + esc(dateStr(project.shootDate)) + '</td></tr>' +
@@ -664,7 +675,7 @@
     buildOutboundWorkbook: buildOutboundWorkbook,
     downloadWorkbook: downloadWorkbook,
     printQuote: function (project, settings) { return openPrint(printQuote(project, settings)); },
-    printOutbound: function (project) { return openPrint(printOutbound(project)); },
+    printOutbound: function (project, catalog) { return openPrint(printOutbound(project, catalog)); },
     safeName: safeName
   };
 });

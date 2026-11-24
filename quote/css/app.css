@@ -607,3 +607,10 @@ label.field.qk input.qty{width:54px;flex:none}
 .kit-save-bar{position:sticky;bottom:38px;z-index:25;display:flex;align-items:center;gap:10px;justify-content:flex-end;margin-top:12px;padding:10px 14px;background:rgba(255,255,255,.96);border:1px solid #e2e8f0;border-radius:12px;box-shadow:0 8px 24px rgba(15,23,42,.08);backdrop-filter:blur(6px)}
 .kit-save-bar span{font-size:12px;color:#94a3b8;margin-right:auto}
 .parts-head,.part-row{grid-template-columns:1fr 76px 110px 32px!important}
+
+/* 出库单：按器材类别分段 */
+.outbound-simple .ob-section td{
+  background:#f3f4f6; color:#6b7280; font-size:12px; font-weight:600;
+  letter-spacing:.06em; padding:7px 14px; border-top:1px solid #e5e7eb;
+}
+.outbound-simple .ob-section:first-child td{ border-top:0; }

@@ -2049,19 +2049,24 @@
     function partsText(parts) {
       return (parts || []).map(function (x) { return x.name + (x.qty > 1 ? ' ×' + x.qty : ''); }).join('、');
     }
-    var rows = ob.lines.map(function (l, i) {
-      return '<tr><td class="num">' + (i + 1) + '</td>' +
+    var rows = '', lastSection = '';
+    ob.lines.forEach(function (l, i) {
+      if (l.section && l.section !== lastSection) {
+        lastSection = l.section;
+        rows += '<tr class="ob-section"><td colspan="5">' + esc(l.section) + '</td></tr>';
+      }
+      rows += '<tr><td class="num">' + (i + 1) + '</td>' +
         '<td><b>' + esc(l.name) + '</b></td>' +
         '<td class="center">' + esc(l.unit) + '</td>' +
         '<td class="muted">' + esc(partsText(l.parts) || '—') + '</td>' +
         '<td class="num money">' + l.qty + '</td></tr>';
-    }).join('');
+    });
     return '<div class="page">' +
       '<div class="toolbar">' +
       '<button class="btn light" data-act="export-outbound">导出出库单</button>' +
       '<button class="btn light" data-act="print-outbound">打印 / 存 PDF</button>' +
       '<span class="spacer"></span>' +
-      '<span class="muted small">同分类+同名合并 · 人员 ' + ob.crewQty + ' 人不计入器材出库</span>' +
+      '<span class="muted small">按器材类别排序 · 同分类同名合并 · 人员 ' + ob.crewQty + ' 人不计入器材出库</span>' +
       '</div>' +
       '<section class="card"><div class="card-head"><h2>出库清单</h2><span class="sub">' + ob.lineCount + ' 项 / ' + ob.totalQty + ' 件 · 只保留单位、配件、数量</span></div>' +
       '<div class="table-wrap"><table class="grid outbound-simple"><thead><tr><th style="width:56px">序号</th><th>器材名称</th><th style="width:80px">单位</th><th>配件</th><th class="num" style="width:90px">数量</th></tr></thead><tbody>' + rows + '</tbody></table></div></section>' +

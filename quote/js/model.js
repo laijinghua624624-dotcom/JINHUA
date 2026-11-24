@@ -136,11 +136,29 @@
         }
       });
     });
+    function addPart(line, name, qty) {
+      name = String(name || '').replace(/^配件\s*·\s*/, '').trim();
+      if (!name || !line) return;
+      var exist = line.parts.filter(function (x) { return normalizeName(x.name) === normalizeName(name); })[0];
+      if (exist) exist.qty += num(qty) || 1;
+      else line.parts.push({ name: name, qty: num(qty) || 1 });
+    }
     (project.groups || []).forEach(function (g) {
       var gLines = [];
+      var lastParent = null;
+      var itemLine = {};
       (g.items || []).forEach(function (it) {
         if (it.type === 'crew') { crewQty += num(it.qty); return; }
-        if (it.isPart) return;
+        var partLike = it.isPart || /^配件\s*·/.test(String(it.name || ''));
+        if (partLike) {
+          var target = (it.parentId && itemLine[it.parentId]) || lastParent;
+          if (target) {
+            var pname = String(it.name || '').replace(/^配件\s*·\s*/, '').trim();
+            var duplicated = target.parts.some(function (x) { return normalizeName(x.name) === normalizeName(pname); });
+            if (!duplicated) addPart(target, pname, it.qty);
+          }
+          return;
+        }
         var cat = it.cat || '其他';
         var key = normalizeName(cat) + '|' + normalizeName(it.name);
         var o = map.get(key);
@@ -152,27 +170,39 @@
         var hit = o.groups.filter(function (x) { return x.name === g.name; })[0];
         if (hit) hit.qty += num(it.qty);
         else o.groups.push({ name: g.name, qty: num(it.qty) });
+        itemLine[it.id] = o;
+        lastParent = o;
 
         var ce = catMap.get(normalizeName(it.name));
         var ownParts = projectParts[it.id] || [];
         var source = (ce && Array.isArray(ce.parts) && ce.parts.length) ? ce.parts : ownParts;
         source.forEach(function (p) {
-          var pname = String(p.name || '').replace(/^配件\s*·\s*/, '').trim();
-          if (!pname) return;
           var pq = num(p.qty) || 1;
           if (ce && Array.isArray(ce.parts) && ce.parts.length) pq = pq * Math.max(1, num(it.qty) || 1);
-          var exist = o.parts.filter(function (x) { return normalizeName(x.name) === normalizeName(pname); })[0];
-          if (exist) exist.qty += pq;
-          else o.parts.push({ name: pname, qty: pq });
+          addPart(o, p.name, pq);
         });
         gLines.push({ name: it.name, unit: it.unit || '个', qty: num(it.qty), note: it.note || '' });
       });
       groups.push({ name: g.name, items: gLines });
     });
+    function outboundRank(l) {
+      var t = String((l.cat || '') + ' ' + (l.name || '')).toLowerCase();
+      if (/摄影机|机身|电影机|camera/.test(t)) return 10;
+      if (/镜头|lens|广角|长焦|变焦|定焦/.test(t)) return 20;
+      if (/图传|无线|监视器|监视|录机|导播|切换台|transmission/.test(t)) return 30;
+      if (/灯光|led|聚光|柔光|镝灯|灯架|灯控/.test(t)) return 60;
+      if (/电池|存储|内存|卡|支撑|移动|稳定|云台|滤镜|电源|线材|配件/.test(t)) return 40;
+      return 50;
+    }
+    function sectionOf(rank) {
+      return rank === 10 ? '摄影机' : rank === 20 ? '镜头' : rank === 30 ? '图传 / 监视' : rank === 40 ? '配件' : rank === 60 ? '灯光' : '其他';
+    }
     var lines = Array.from(map.values()).sort(function (a, b) {
-      var c = String(a.cat).localeCompare(String(b.cat), 'zh');
-      return c !== 0 ? c : String(a.name).localeCompare(String(b.name), 'zh');
+      var ra = outboundRank(a), rb = outboundRank(b);
+      if (ra !== rb) return ra - rb;
+      return String(a.name).localeCompare(String(b.name), 'zh');
     });
+    lines.forEach(function (l) { l.section = sectionOf(outboundRank(l)); });
     return {
       lines: lines, groups: groups,
       totalQty: lines.reduce(function (s, l) { return s + l.qty; }, 0),
