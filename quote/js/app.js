@@ -3004,6 +3004,33 @@
       '<span class="muted small">电线按 10 米/条 折算数量，生成后可改；价格按当前器材库计算。</span></div></div></section>';
   }
 
+  function kitEquipmentPool() { return (state.catalog || []).filter(function (e) { return e.type !== 'crew'; }); }
+  function kitNameSelect(it, idx) {
+    var pool = kitEquipmentPool();
+    var groups = {};
+    pool.forEach(function (e) { var c = e.cat || '其他'; (groups[c] = groups[c] || []).push(e); });
+    var html = '<option value="">— 选择器材 —</option>';
+    var found = pool.some(function (e) { return e.name === it.name; });
+    if (it.name && !found) html += '<option value="' + esc(it.name) + '" selected>' + esc(it.name) + '（器材库未匹配）</option>';
+    Object.keys(groups).sort(function (a, b) { return a.localeCompare(b, 'zh-CN'); }).forEach(function (cat) {
+      html += '<optgroup label="' + esc(cat) + '">';
+      groups[cat].sort(function (a, b) { return String(a.name).localeCompare(String(b.name), 'zh-CN'); }).forEach(function (e) {
+        html += '<option value="' + esc(e.name) + '"' + (e.name === it.name ? ' selected' : '') + '>' + esc(e.name) + '</option>';
+      });
+      html += '</optgroup>';
+    });
+    return '<select class="kit-select" data-kitemfield="name" data-kidx="' + idx + '">' + html + '</select>';
+  }
+  function kitCatSelect(it, idx) {
+    var cats = {};
+    kitEquipmentPool().forEach(function (e) { if (e.cat) cats[e.cat] = 1; });
+    if (it.cat) cats[it.cat] = 1;
+    var opts = Object.keys(cats).sort(function (a, b) { return a.localeCompare(b, 'zh-CN'); }).map(function (c) {
+      return '<option value="' + esc(c) + '"' + (c === it.cat ? ' selected' : '') + '>' + esc(c) + '</option>';
+    }).join('');
+    return '<select class="kit-select" data-kitemfield="cat" data-kidx="' + idx + '">' + opts + '</select>';
+  }
+
   function renderKitEditor() {
     var kit = kitById(state.ui.editingKit);
     if (!kit) { state.ui.editingKit = null; return renderKits(); }
@@ -3012,11 +3039,11 @@
       return '<tr data-kidx="' + idx + '">' +
         '<td class="num">' + (idx + 1) + '</td>' +
         '<td><span class="cat-tag ' + (it.type === 'crew' ? 'crew' : '') + '">' + (it.type === 'crew' ? '人员' : '器材') + '</span> ' +
-        '<input class="name-edit" data-kitemfield="name" data-kidx="' + idx + '" value="' + esc(it.name) + '">' +
+        kitNameSelect(it, idx) +
         '<div class="muted small">' + esc(it.note || '') + '</div></td>' +
         '<td><input class="input-plain" style="width:46px" data-kitemfield="unit" data-kidx="' + idx + '" value="' + esc(it.unit || '个') + '"></td>' +
         '<td><input class="qty" type="number" min="1" step="1" data-kitemfield="qty" data-kidx="' + idx + '" value="' + esc(it.qty) + '"></td>' +
-        '<td><input class="input-plain" style="width:90px" data-kitemfield="cat" data-kidx="' + idx + '" value="' + esc(it.cat || '') + '"></td>' +
+        '<td>' + kitCatSelect(it, idx) + '</td>' +
         '<td style="text-align:center;white-space:nowrap">' +
         '<button class="btn sm light order-move" data-act="kit-item-up" data-kid="' + kit.id + '" data-kidx="' + idx + '" title="上移">↑</button> ' +
         '<button class="btn sm light order-move" data-act="kit-item-down" data-kid="' + kit.id + '" data-kidx="' + idx + '" title="下移">↓</button> ' +
@@ -3192,6 +3219,27 @@
     var k = kitById(kid); if (!k) return;
     k.items.splice(idx, 1); commit(); render();
   }
+  function onKitItemField(t) {
+    var kit = kitById(state.ui.editingKit); if (!kit) return;
+    var idx = +t.dataset.kidx;
+    if (!kit.items[idx]) return;
+    var f = t.dataset.kitemfield;
+    if (f === 'qty') kit.items[idx].qty = Math.max(1, M.int(t.value, 1));
+    else {
+      kit.items[idx][f] = t.value;
+      if (f === 'name') {
+        var ce = catalogByName(t.value);
+        if (ce) {
+          kit.items[idx].cat = ce.cat || kit.items[idx].cat;
+          kit.items[idx].unit = ce.unit || kit.items[idx].unit;
+          kit.items[idx].type = 'equipment';
+        }
+      }
+    }
+    commit();
+    if (f === 'name') render();
+  }
+
   /* ---------------- 事件 ---------------- */
   view.addEventListener('click', function (e) {
     var t = e.target.closest('[data-act]');
@@ -3219,13 +3267,7 @@
       }
       return;
     }
-    if (t.dataset.kitemfield) {
-      var kit2 = kitById(state.ui.editingKit); if (!kit2) return;
-      var idx = +t.dataset.kidx;
-      if (!kit2.items[idx]) return;
-      kit2.items[idx][t.dataset.kitemfield] = t.dataset.kitemfield === 'qty' ? Math.max(1, M.int(t.value, 1)) : t.value;
-      commit(); return;
-    }
+    if (t.dataset.kitemfield) { onKitItemField(t); return; }
     if (t.dataset.otfield) { onOtField(t); return; }
     if (t.dataset.exfield) { onExField(t); return; }
     if (t.dataset.gpfield) {
@@ -3244,6 +3286,7 @@
   });
   view.addEventListener('change', function (e) {
     var t = e.target;
+    if (t.dataset.kitemfield) { onKitItemField(t); return; }
     if (t.dataset.catFilter !== undefined || t.dataset.typeFilter !== undefined || t.dataset.supFilter !== undefined || t.dataset.groupFilter !== undefined || t.dataset.majorFilter !== undefined) { applyCatalogFilter(); }
     if (t.dataset.kitCheck) { var card = t.closest('.kit-card'); if (card) card.classList.toggle('selected', t.checked); }
     if (t.dataset.kitcat) { var kk = kitById(t.dataset.kitcat); if (kk) { kk.cat = t.value; commit(); render(); } }
