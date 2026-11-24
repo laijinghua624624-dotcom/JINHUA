@@ -653,29 +653,37 @@
       '<div class="modal-foot"><span class="spacer"></span><button class="btn light" data-act="modal-close">取消</button>' +
       '<button class="btn primary" data-act="crew-add-save">保存并新增</button></div></div>');
   }
-  function cgMemberRowHtml() {
+  function cgMemberRowHtml(m) {
+    var nm = m && m.name ? esc(m.name) : '';
+    var qty = m && m.qty ? m.qty : 1;
     return '<div class="cg-member-row" data-member style="display:grid;grid-template-columns:1fr 88px 34px;gap:8px;margin:6px 0">' +
-      '<input data-cm-name placeholder="岗位，例如 摄影师" style="padding:9px 10px;border:1px solid var(--line-2);border-radius:9px">' +
-      '<input data-cm-qty type="number" min="1" step="1" value="1" title="人数" style="padding:9px 10px;border:1px solid var(--line-2);border-radius:9px">' +
+      '<input data-cm-name value="' + nm + '" placeholder="岗位，例如 摄影师" style="padding:9px 10px;border:1px solid var(--line-2);border-radius:9px">' +
+      '<input data-cm-qty type="number" min="1" step="1" value="' + esc(qty) + '" title="人数" style="padding:9px 10px;border:1px solid var(--line-2);border-radius:9px">' +
       '<button class="btn sm danger" type="button" data-act="cg-del-member" title="删除">✕</button></div>';
   }
-  function openCrewGroupAdd() {
-    openModal('<div class="modal" style="width:min(820px,100%)"><div class="modal-head"><h3>按组新增岗位</h3><button class="x-btn" data-act="modal-close">✕</button></div>' +
+  function openCrewGroupAdd(editId) {
+    var e = editId ? state.catalog.filter(function (x) { return x.id === editId; })[0] : null;
+    if (editId && !e) return;
+    state.ui.crewGroupEditId = e ? e.id : null;
+    var members = e && (e.crewMembers || []).length ? e.crewMembers.map(cgMemberRowHtml).join('') : cgMemberRowHtml();
+    var title = e ? '人员组资料卡 · ' + esc(e.name) : '按组新增岗位';
+    openModal('<div class="modal" style="width:min(820px,100%)"><div class="modal-head"><h3>' + title + '</h3><button class="x-btn" data-act="modal-close">✕</button></div>' +
       '<div class="modal-body">' +
-      '<label class="field">组名<input id="cg-name" placeholder="例如：45尺电动摇臂组"></label>' +
+      '<label class="field">组名<input id="cg-name" value="' + (e ? esc(e.name) : '') + '" placeholder="例如：45尺电动摇臂组"></label>' +
       '<div style="margin-top:12px"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px"><b style="font-size:13px">人员组成</b><span class="muted small">岗位 + 人数，可增删</span></div>' +
-      '<div id="cg-members">' + cgMemberRowHtml() + '</div>' +
+      '<div id="cg-members">' + members + '</div>' +
       '<button class="btn sm light" type="button" data-act="cg-add-member">＋ 添加人员</button></div>' +
       '<div class="form-grid" style="grid-template-columns:repeat(3,1fr);margin-top:12px">' +
-      '<label class="field">整组报价（元/天）<input id="cg-quote" type="number" min="0" step="0.01" placeholder="0"></label>' +
-      '<label class="field">整组底价（元/天）<input id="cg-bottom" type="number" min="0" step="0.01" placeholder="0"></label>' +
-      '<label class="field">整组核价（元/天）<input id="cg-approved" type="number" min="0" step="0.01" placeholder="0"></label>' +
-      '<label class="field">加班起算（小时）<input id="cg-start" type="number" min="0" step="0.5" placeholder="例如 14"></label>' +
-      '<label class="field">加班费（元/小时）<input id="cg-rate" type="number" min="0" step="0.01" placeholder="例如 2000"></label>' +
+      '<label class="field">整组报价（元/天）<input id="cg-quote" type="number" min="0" step="0.01" value="' + (e ? esc(e.quote) : '') + '" placeholder="0"></label>' +
+      '<label class="field">整组底价（元/天）<input id="cg-bottom" type="number" min="0" step="0.01" value="' + (e ? esc(e.bottom) : '') + '" placeholder="0"></label>' +
+      '<label class="field">整组核价（元/天）<input id="cg-approved" type="number" min="0" step="0.01" value="' + (e ? esc(e.approved) : '') + '" placeholder="0"></label>' +
+      '<label class="field">加班起算（小时）<input id="cg-start" type="number" min="0" step="0.5" value="' + (e && e.otStart !== null && e.otStart !== undefined ? esc(e.otStart) : '') + '" placeholder="例如 14"></label>' +
+      '<label class="field">加班费（元/小时）<input id="cg-rate" type="number" min="0" step="0.01" value="' + (e && e.otRate !== null && e.otRate !== undefined ? esc(e.otRate) : '') + '" placeholder="例如 2000"></label>' +
       '</div>' +
       '<p id="cg-preview" class="muted small" style="margin:10px 0 0">填好人员组成后会显示整组说明。</p>' +
       '</div><div class="modal-foot"><span class="spacer"></span><button class="btn light" data-act="modal-close">取消</button>' +
-      '<button class="btn primary" data-act="cg-save">按组添加</button></div></div>');
+      '<button class="btn primary" data-act="cg-save">' + (e ? '保存资料卡' : '按组添加') + '</button></div></div>');
+    setTimeout(function () { cgUpdatePreview(); }, 30);
   }
   function cgCollectMembers() {
     return $$('#cg-members [data-member]').map(function (row) {
@@ -716,9 +724,24 @@
     var start = (($('#cg-start') || {}).value === '' || ($('#cg-start') || {}).value === undefined) ? null : M.num(($('#cg-start') || {}).value);
     var rate = (($('#cg-rate') || {}).value === '' || ($('#cg-rate') || {}).value === undefined) ? null : M.num(($('#cg-rate') || {}).value);
     var key = M.normalizeName(name);
-    if (state.catalog.some(function (e) { return M.normalizeName(e.name) === key; })) { toast('已有同名组或岗位「' + name + '」', 'warn'); return; }
+    var editId = state.ui.crewGroupEditId;
+    var duplicate = state.catalog.some(function (e) { return e.id !== editId && M.normalizeName(e.name) === key; });
+    if (duplicate) { toast('已有同名组或岗位「' + name + '」', 'warn'); return; }
     var membersText = members.map(function (m) { return m.name + (m.qty > 1 ? m.qty + '人' : '1人'); }).join('、');
     var note = '含 ' + membersText + ((start !== null || rate !== null) ? '；' + overtimeText(start, rate, '小时') : '');
+    if (editId) {
+      var old = state.catalog.filter(function (x) { return x.id === editId; })[0];
+      if (old) {
+        old.name = name; old.key = key; old.crewMembers = members;
+        old.bottom = bottom; old.quote = quote; old.approved = approved;
+        old.note = note; old.otStart = start; old.otRate = rate; old.otUnit = '小时';
+        old.lock = false;
+      }
+      state.ui.crewGroupEditId = null;
+      commit(); closeModal(); render();
+      toast('已保存人员组资料卡：' + name, 'ok');
+      return;
+    }
     state.catalog.push({
       id: uid('eq'), key: key, name: name, cat: '人员', unit: '组', type: 'crew',
       crewGroup: true, crewMembers: members,
@@ -2262,6 +2285,7 @@
       '<td class="num"><input class="price" type="number" min="0" step="0.01" data-efield="approved" value="' + esc(e.approved) + '"' + (isLock(e) ? ' disabled' : '') + '></td>' +
       '<td><input class="note" data-efield="note" value="' + esc(e.note || '') + '" placeholder="加班费标准"></td>' +
       '<td style="text-align:center;white-space:nowrap">' +
+      '<button class="btn sm light" data-act="crew-group-card" data-eid="' + e.id + '" title="组资料卡">📇</button> ' +
       '<button class="btn sm light" data-act="crew-group-copy" data-eid="' + e.id + '" title="复制此组">复制</button> ' +
       '<button class="btn sm ' + (isLock(e) ? 'solid' : 'light') + '" data-act="catalog-lock" data-eid="' + e.id + '" title="锁定/解锁价格">' + (isLock(e) ? '🔒' : '🔓') + '</button> ' +
       '<button class="del" data-act="catalog-del" data-eid="' + e.id + '">✕</button></td></tr>';
@@ -2332,7 +2356,8 @@
     var idx = state.catalog.indexOf(src);
     state.catalog.splice(idx >= 0 ? idx + 1 : state.catalog.length, 0, copy);
     commit(); render();
-    toast('已复制「' + (src.name || '人员组') + '」为「' + name + '」，改价格和说明即可', 'ok');
+    toast('已复制「' + (src.name || '人员组') + '」为「' + name + '」', 'ok');
+    openCrewGroupAdd(copy.id);
   }
 
   function catRowHtml(e) {
@@ -3387,6 +3412,7 @@
       case 'crew-card': openCrewCard(el.dataset.eid); break;
       case 'catalog-lock': toggleCatalogLock(el.dataset.eid); break;
       case 'crew-group-copy': copyCrewGroup(el.dataset.eid); break;
+      case 'crew-group-card': openCrewGroupAdd(el.dataset.eid); break;
       case 'crew-star-filter': state.ui.starOnly = !state.ui.starOnly; commit(); render(); break;
       case 'catalog-del': delCatalog(el.dataset.eid); break;
       case 'catalog-batch-delete': openCatalogBatchDelete(); break;
