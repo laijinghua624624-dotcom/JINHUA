@@ -2262,6 +2262,7 @@
       '<td class="num"><input class="price" type="number" min="0" step="0.01" data-efield="approved" value="' + esc(e.approved) + '"' + (isLock(e) ? ' disabled' : '') + '></td>' +
       '<td><input class="note" data-efield="note" value="' + esc(e.note || '') + '" placeholder="加班费标准"></td>' +
       '<td style="text-align:center;white-space:nowrap">' +
+      '<button class="btn sm light" data-act="crew-group-copy" data-eid="' + e.id + '" title="复制此组">复制</button> ' +
       '<button class="btn sm ' + (isLock(e) ? 'solid' : 'light') + '" data-act="catalog-lock" data-eid="' + e.id + '" title="锁定/解锁价格">' + (isLock(e) ? '🔒' : '🔓') + '</button> ' +
       '<button class="del" data-act="catalog-del" data-eid="' + e.id + '">✕</button></td></tr>';
   }
@@ -2311,6 +2312,26 @@
     e.parts = parts;
     state.ui.partsEid = null;
     commit(); closeModal(); render(); toast('已保存配件明细', 'ok');
+  }
+
+  function copyCrewGroup(eid) {
+    var src = state.catalog.filter(function (x) { return x.id === eid; })[0];
+    if (!src || !src.crewGroup) return;
+    var base = (src.name || '人员组') + '（副本）';
+    var name = base, n = 2;
+    function exists(nm) { return state.catalog.some(function (x) { return M.normalizeName(x.name) === M.normalizeName(nm); }); }
+    while (exists(name)) { name = (src.name || '人员组') + '（副本' + n + '）'; n++; }
+    var copy = clone(src);
+    copy.id = uid('eq');
+    copy.name = name;
+    copy.key = M.normalizeName(name);
+    copy.crewMembers = clone(src.crewMembers || []);
+    copy.stock = null;
+    copy.parts = clone(src.parts || []);
+    var idx = state.catalog.indexOf(src);
+    state.catalog.splice(idx >= 0 ? idx + 1 : state.catalog.length, 0, copy);
+    commit(); render();
+    toast('已复制「' + (src.name || '人员组') + '」为「' + name + '」，改价格和说明即可', 'ok');
   }
 
   function catRowHtml(e) {
@@ -3364,6 +3385,7 @@
       case 'profit-star': toggleCatalogStar(el.dataset.eid); render(); break;
       case 'crew-card': openCrewCard(el.dataset.eid); break;
       case 'catalog-lock': toggleCatalogLock(el.dataset.eid); break;
+      case 'crew-group-copy': copyCrewGroup(el.dataset.eid); break;
       case 'crew-star-filter': state.ui.starOnly = !state.ui.starOnly; commit(); render(); break;
       case 'catalog-del': delCatalog(el.dataset.eid); break;
       case 'catalog-batch-delete': openCatalogBatchDelete(); break;
