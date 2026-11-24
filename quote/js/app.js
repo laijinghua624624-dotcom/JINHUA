@@ -3868,8 +3868,10 @@
     return { bottom: bottom, quote: q, approved: a };
   }
   function applyCatalogFormula(e, mode) {
-    if (!e || e.type === 'crew' || e.lock) return false;
+    if (!e || e.type === 'crew') return false;
     if (e.quoteManual) return false;
+    // 锁定的器材：只补空价；已有价格/自动价不再随比例改动，避免误改锁定数据
+    if (e.lock && (M.num(e.quote) > 0 || mode === 'rates')) return false;
     var f = catalogFormulaPrice(e);
     if (!f) return false;
     if (mode === 'init' && !(M.num(e.quote) <= 0 || e.quoteAuto)) return false;
