@@ -3029,6 +3029,7 @@
       '<div class="toolbar">' +
       '<button class="btn light" data-act="kits-back">← 返回组合列表</button>' +
       '<button class="btn light" data-act="kit-add-item" data-kid="' + kit.id + '">＋ 手动添加器材</button>' +
+      '<button class="btn light" data-act="kit-fix-names" data-kid="' + kit.id + '">按器材库校正名称</button>' +
       '<span class="spacer"></span>' +
       '<button class="btn solid" data-act="kit-add" data-kid="' + kit.id + '">整个组合加入项目</button>' +
       '</div>' +
@@ -3426,6 +3427,7 @@
       case 'kit-add': addKitsToProject([el.dataset.kid]); break;
       case 'kits-add-selected': addKitsToProject($$('#view input[data-kit-check]').filter(function (c) { return c.checked; }).map(function (c) { return c.dataset.kitCheck; })); break;
       case 'kit-add-item': openPicker({ kitId: el.dataset.kid }); break;
+      case 'kit-fix-names': normalizeKitItemNames(false); break;
       case 'kit-quick-build': kitQuickBuild(el.dataset.kid); break;
       case 'kit-del-item': kitDelItem(el.dataset.kid, +el.dataset.kidx); break;
       case 'kit-item-up': kitMoveItem(el.dataset.kid, +el.dataset.kidx, -1); break;
@@ -3982,6 +3984,65 @@
   function looksLikePartsNote(note) {
     return /(卡|电池|读卡器|转接环|兔笼|内存|SSD|CFast|CFexpress|SXS|套件|跟焦|提手|肩托|导轨|滤镜|遮光斗|麦克风|PL口|EF口)/i.test(String(note || ''));
   }
+  var KIT_ITEM_ALIASES = {
+    'Sony FX6 Camera摄影机机身': 'SONY ILME-FX6',
+    'Sony FX3 Camera摄影机机身': 'SONY ILME-FX3',
+    'Sony Gmaster 35mmlens 定焦镜头': 'SONY FE 35mm F1.4 GM',
+    'Sony Gmaster 24mmlens 定焦镜头': 'SONY FE 24mm F1.4 GM',
+    'vaxis威固·暴风无线图传2000+(发射)': 'VAXIS 威固无线图传 2000+',
+    'vaxis威固·暴风无线图传2000+(接收)': 'VAXIS 威固无线图传 2000+',
+    'DJI RS4 PRO(大师版)': 'DJI RS 4 Pro',
+    'Tilta FLOAT 斯坦尼康+背心': '铁头 Tilta FLOAT 小斯坦尼康',
+    'Small HD 702 监视器': 'Small HD Small HD 702 监视器',
+    'Small HD 13寸 监视器': 'Small HD Small HD 13 寸 监视器',
+    '9号平衡车': '小米 9号平衡车plus',
+    'Sony FE PZ 28-135mm f/4': 'SONY FE PZ 28-135mm F4 G OSS',
+    'Sony FE PZ 28-135mm f/4 OSS(SELP28135G)变焦镜头': 'SONY FE PZ 28-135mm F4 G OSS',
+    '安琴EZ 22-60mm': 'Angenieux 22-60mm T3.0 EZ-2 FF',
+    'Sony FX6 远程 控制器': 'Sony FX6 AODELAN ZC-4 远程控制器',
+    'Scorpio 45尺 伸缩炮': '电动伸缩炮 Scorpio伸缩瑶臂45尺',
+    'DJI Ronin 2稳定器/遥控云台': 'DJI RONIN 2 三轴电影专业级稳定云台',
+    'ARRI WCU-4 双马达电机': 'ARRI WCU-4无线跟焦器',
+    'Sony Gmaster 24-70mm 定焦镜头 二代': 'SONY FE 24-70mm F2.8 GM II',
+    'Sony FE PZ 16-35mm f/4 OSS(SELP1635G)': 'SONY FE PZ 16-35mm F4 G',
+    'FM12 III PRO 飞猫': '青牛 FM12 III PRO 2D飞猫',
+    '8路导播台': '洋铭SE-2800 导播 切换台 8路',
+    '导播大电视机': '55 寸导播大电视',
+    '导演大监视器': 'SONY LMD-A240 24寸 导演监视器',
+    'DJI Transmission 无线监视器': 'DJI Transmission 监视器',
+    '三方通话系统 20个': 'HOLLYLAND 猛玛 立声PRO 无线导播通话系统 *20',
+    'G大师定焦组': 'SONY FE GM 定焦镜头组',
+    'G大师大三元': 'SONY GM II 大三元镜头组',
+    '12头LED+罩子': 'lightstar 莱斯达RGB 12头灯',
+    '神牛MG6K': 'Godox 诺力双色温LED影视灯 MG6K',
+    '爱图仕600X(配罩)': 'Aputure 爱图仕600X pro 双色温',
+    '爱图仕600X（配罩）': 'Aputure 爱图仕600X pro 双色温',
+    '爱图仕600X': 'Aputure 爱图仕600X pro 双色温',
+    '神牛600R': 'Godox P600R Hard',
+    '神牛1200': 'Godox MG1200Bi诺力双色温',
+    '神牛6K': 'Godox 诺力双色温LED影视灯 MG6K',
+    '神牛2400': 'Godox MG2400Bi诺力双色温',
+    '4节摇': '4节大炮脚'
+  };
+  function normalizeKitItemNames(silent) {
+    var map = {};
+    (state.catalog || []).forEach(function (e) { if (e.type !== 'crew') map[M.normalizeName(e.name)] = e.name; });
+    var changed = 0, unmatched = {};
+    (state.kits || []).forEach(function (k) {
+      (k.items || []).forEach(function (it) {
+        var target = map[M.normalizeName(it.name)] || KIT_ITEM_ALIASES[it.name];
+        if (target && target !== it.name) { it.name = target; changed++; }
+        if (!map[M.normalizeName(it.name)]) unmatched[it.name] = 1;
+      });
+    });
+    if (changed) commit();
+    if (!silent) {
+      render();
+      toast('已按器材库校正 ' + changed + ' 项名称；' + Object.keys(unmatched).length + ' 项器材库暂无对应名称，未修改', changed ? 'ok' : 'warn');
+    }
+    return { changed: changed, unmatched: Object.keys(unmatched) };
+  }
+
   function init() {
     // 迁移：人员标准已清空，旧本地缓存里的人员一并移除（只做一次）
     if (state.settings.catVersion !== 4) {
@@ -4039,6 +4100,12 @@
       });
       state.settings.kitCrewCleaned = true;
       if (kitChanged) commit();
+    }
+    // 迁移：组合清单名称按器材库校正
+    if (state.settings.kitNamesAligned !== true) {
+      normalizeKitItemNames(true);
+      state.settings.kitNamesAligned = true;
+      commit();
     }
     // 迁移：清空本地数据，只保留历史项目
     if (state.settings.localResetExceptProjects !== true) {
