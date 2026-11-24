@@ -857,7 +857,7 @@
       field('备注 / 说明（打印在报价单顶部）', 'remark', p.remark, 'span-4') +
       '</div></div></section>' +
       '<div class="toolbar">' +
-      '<button class="btn light" data-act="open-kits">从组合添加机位</button>' +
+      '<button class="btn primary" data-act="open-kits">① 选择组合（器材 / 人员）</button>' +
       '<button class="btn light" data-act="go-kits">管理组合</button>' +
       '<button class="btn light" data-act="add-group">＋ 新增机位组</button>' +
       '<button class="btn light" data-act="sync-prices">按器材库刷新价格</button>' +
@@ -2169,7 +2169,8 @@
 
   function renderCatalog() {
     var crewMode = state.ui.catalogMode === 'crew';
-    var cats = {}; state.catalog.forEach(function (e) { cats[e.cat || '其他'] = 1; });
+    var pool = state.catalog.filter(function (e) { return e.type !== 'crew'; });
+    var cats = {}; pool.forEach(function (e) { cats[e.cat || '其他'] = 1; });
     var catOpts = Object.keys(cats).sort().map(function (c) { return '<option value="' + esc(c) + '">' + esc(c) + '</option>'; }).join('');
     var sups = {}; state.catalog.forEach(function (e) { var x = supOf(e); sups[x] = (sups[x] || 0) + 1; });
     var supOpts = Object.keys(sups).sort(function (a, b) { return sups[b] - sups[a]; }).map(function (x) {
@@ -2337,6 +2338,27 @@
     state.ui.partsEid = null;
     commit(); closeModal(); render(); toast('已保存配件明细', 'ok');
   }
+
+  function addCrewGroupsToProject(ids, silent) {
+    var added = 0;
+    (ids || []).forEach(function (eid) {
+      var e = state.catalog.filter(function (x) { return x.id === eid; })[0];
+      if (!e || !e.crewGroup) return;
+      var name = e.name || '人员组';
+      var base = name, n = 2;
+      while ((state.project.groups || []).some(function (g) { return g.name === name; })) { name = base + '（人员组' + n + '）'; n++; }
+      state.project.groups = state.project.groups || [];
+      state.project.groups.push({
+        id: uid('g'), name: name, items: [],
+        pkg: true, pkgQuote: M.num(e.quote), pkgBottom: M.num(e.bottom), pkgApproved: M.num(e.approved), pkgQty: 1,
+        crewGroupId: e.id, note: e.note || ''
+      });
+      added++;
+    });
+    if (!silent) { commit(); setTab('order'); render(); toast('已加入 ' + added + ' 个人员组', 'ok'); }
+    return added;
+  }
+  function addCrewGroupToProject(eid) { addCrewGroupsToProject([eid]); }
 
   function copyCrewGroup(eid) {
     var src = state.catalog.filter(function (x) { return x.id === eid; })[0];
@@ -2738,7 +2760,7 @@
     var chips = ['<button class="chip active" data-pcat="">全部</button>'].concat(Object.keys(cats).sort().map(function (c) {
       return '<button class="chip" data-pcat="' + esc(c) + '">' + esc(c) + '</button>';
     })).join('');
-    var rows = state.catalog.map(function (e) {
+    var rows = pool.map(function (e) {
       var stock = (e.stock === null || e.stock === undefined || e.stock === '') ? '—' : e.stock;
       return '<tr class="pick-row" data-pick-eqid="' + e.id + '" data-cat="' + esc(e.cat || '') + '" data-name="' + esc(e.name) + '">' +
         '<td class="center"><input type="checkbox" data-pick-check></td>' +
@@ -2782,18 +2804,28 @@
     return kit.items.slice(0, 6).map(function (i) { return esc(i.name) + ' ×' + M.num(i.qty); }).join('、') + (kit.items.length > 6 ? ' 等' : '');
   }
   function openKitsPicker() {
-    var html = (state.kits || []).map(function (k) {
+    var kitHtml = (state.kits || []).map(function (k) {
       return '<div class="tpl-block"><div class="tpl-head"><label style="display:flex;align-items:center;gap:8px;cursor:pointer"><input type="checkbox" data-kit-pick="' + k.id + '"> <span class="tpl-title">' + esc(k.name) + '</span></label>' +
         '<span class="tag">' + k.items.length + ' 项 / ' + kitQty(k) + ' 件</span></div>' +
         '<div class="tpl-groups" style="padding:6px 12px;color:#6b7280;font-size:12px">' + kitPreview(k) + '</div></div>';
-    }).join('') || '<div class="empty">还没有组合，先去「器材组合」建一个</div>';
-    openModal('<div class="modal"><div class="modal-head"><h3>从组合添加机位组</h3><button class="x-btn" data-act="modal-close">✕</button></div>' +
-      '<div class="modal-body"><p class="muted small" style="margin-top:0">勾选需要的组合，会按当前器材库价格加成机位组；同名机位组会自动合并。组合可以随时在「器材组合」里改。</p>' + html + '</div>' +
+    }).join('') || '<div class="empty" style="padding:12px 0">还没有器材组合，先去「器材组合」建一个</div>';
+    var crews = (state.catalog || []).filter(function (e) { return e.crewGroup; });
+    var crewHtml = crews.map(function (e) {
+      var members = (e.crewMembers || []).map(function (m) { return m.name + (m.qty > 1 ? '×' + m.qty : '×1'); }).join('、');
+      return '<div class="tpl-block"><div class="tpl-head"><label style="display:flex;align-items:center;gap:8px;cursor:pointer"><input type="checkbox" data-crew-pick="' + e.id + '"> <span class="tpl-title">' + esc(e.name) + '</span></label>' +
+        '<span class="tag">' + money(e.quote) + ' / 组</span></div>' +
+        '<div class="tpl-groups" style="padding:6px 12px;color:#6b7280;font-size:12px">' + esc(members || e.note || '') + '</div></div>';
+    }).join('') || '<div class="empty" style="padding:12px 0">还没有人员组，先去「器材库 → 人员标准」建组</div>';
+    openModal('<div class="modal" style="width:min(720px,100%)"><div class="modal-head"><h3>选择组合</h3><button class="x-btn" data-act="modal-close">✕</button></div>' +
+      '<div class="modal-body"><p class="muted small" style="margin-top:0">器材组合只含器材，人员组只含人员。可同时勾选，加入后自动合计。</p>' +
+      '<div class="combo-section-title">器材组合</div>' + kitHtml +
+      '<div class="combo-section-title" style="margin-top:14px">人员组</div>' + crewHtml + '</div>' +
       '<div class="modal-foot"><span class="muted">已选 <b data-kit-count>0</b> 组</span><span class="spacer"></span>' +
-      '<button class="btn light" data-act="modal-close">取消</button><button class="btn primary" data-act="kits-add">添加所选组合</button></div></div>');
+      '<button class="btn light" data-act="modal-close">取消</button><button class="btn primary" data-act="kits-add">加入报价单</button></div></div>');
   }
+
   function updateKitPickCount() {
-    var n = $$('#modal-root input[data-kit-pick]').filter(function (c) { return c.checked; }).length;
+    var n = $$('#modal-root input[data-kit-pick], #modal-root input[data-crew-pick]').filter(function (c) { return c.checked; }).length;
     var e = $('#modal-root [data-kit-count]'); if (e) e.textContent = n;
   }
   function kitToProject(kit) {
@@ -2863,7 +2895,7 @@
         '</div></div>';
     }).join('');
     return '<div class="page">' +
-      '<div class="hint">把常用的<b>机位 / 灯光器材组合</b>存成「组合」，下单时勾几组就能拼出一套报价。组合只记名称和数量，价格永远按当前器材库算。</div>' +
+      '<div class="hint">器材组合只放<b>器材</b>，不放人员；人员请到「器材库 → 人员标准」建组。下单时器材组合和人员组分别加入项目，金额自动汇总。</div>' +
       '<div class="toolbar">' +
       '<button class="btn solid" data-act="kit-new" data-cat="摄影器材">＋ 摄影组合</button>' +
       '<button class="btn solid" data-act="kit-new" data-cat="灯光器材">＋ 灯光组合</button>' +
@@ -3210,7 +3242,7 @@
   });
   $('#modal-root').addEventListener('change', function (e) {
     var t = e.target;
-    if (t.dataset.kitPick) updateKitPickCount();
+    if (t.dataset.kitPick || t.dataset.crewPick) updateKitPickCount();
     if (t.id === 'smart-file' && t.files && t.files[0]) { smartReadFile(t.files[0]); t.value = ''; }
     if (t.id === 'archive-file' && t.files && t.files.length) { uploadArchiveFiles(t.files); t.value = ''; }
     if (t.id === 'archive-folder' && t.files && t.files.length) { uploadArchiveFiles(t.files); t.value = ''; }
@@ -3413,6 +3445,7 @@
       case 'catalog-lock': toggleCatalogLock(el.dataset.eid); break;
       case 'crew-group-copy': copyCrewGroup(el.dataset.eid); break;
       case 'crew-group-card': openCrewGroupAdd(el.dataset.eid); break;
+      case 'crew-group-to-project': addCrewGroupToProject(el.dataset.eid); break;
       case 'crew-star-filter': state.ui.starOnly = !state.ui.starOnly; commit(); render(); break;
       case 'catalog-del': delCatalog(el.dataset.eid); break;
       case 'catalog-batch-delete': openCatalogBatchDelete(); break;
@@ -3590,7 +3623,7 @@
       if (!kit) { closeModal(); return; }
       picked.forEach(function (tr) {
         var ce = state.catalog.filter(function (x) { return x.id === tr.dataset.pickEqid; })[0];
-        if (!ce) return;
+        if (!ce || ce.type === 'crew') return;
         kit.items.push({ name: ce.name, unit: ce.unit || '个', type: ce.type || 'equipment', cat: ce.cat || '其他', qty: 1 });
       });
       closeModal(); commit(); render(); toast('已添加 ' + picked.length + ' 项到组合', 'ok');
@@ -3599,7 +3632,7 @@
     var g = groupById(target.gid); if (!g) { closeModal(); return; }
     picked.forEach(function (tr) {
       var ce = state.catalog.filter(function (x) { return x.id === tr.dataset.pickEqid; })[0];
-      if (!ce) return;
+      if (!ce || ce.type === 'crew') return;
       g.items.push({
         id: uid('l'), eqId: ce.id, name: ce.name, unit: ce.unit || '个', type: ce.type || 'equipment',
         cat: ce.cat || '其他', qty: 1, bottom: ce.bottom, quote: ce.quote, approved: ce.approved,
@@ -3640,9 +3673,13 @@
   }
   function kitsAddFromModal() {
     var ids = $$('#modal-root input[data-kit-pick]').filter(function (c) { return c.checked; }).map(function (c) { return c.dataset.kitPick; });
-    if (!ids.length) { toast('还没有勾选组合', 'warn'); return; }
+    var crewIds = $$('#modal-root input[data-crew-pick]').filter(function (c) { return c.checked; }).map(function (c) { return c.dataset.crewPick; });
+    if (!ids.length && !crewIds.length) { toast('还没有勾选组合', 'warn'); return; }
     closeModal();
-    addKitsToProject(ids);
+    addKitsToProject(ids, true);
+    addCrewGroupsToProject(crewIds, true);
+    commit(); setTab('order'); render();
+    toast('已加入 ' + (ids.length + crewIds.length) + ' 组：器材组合 ' + ids.length + ' 组 · 人员组 ' + crewIds.length + ' 组', 'ok');
   }
   /* ---------------- 导入导出 ---------------- */
   function importFile(cb) {
@@ -3888,6 +3925,17 @@
       state.settings.partsMovedFromNote = true;
       commit();
       if (movedParts) console.log('配件明细已从备注迁移：' + movedParts + ' 项');
+    }
+    // 迁移：器材组合只保留器材，移除历史误加的人员
+    if (state.settings.kitCrewCleaned !== true) {
+      var kitChanged = 0;
+      state.kits.forEach(function (k) {
+        var before = (k.items || []).length;
+        k.items = (k.items || []).filter(function (i) { return i.type !== 'crew'; });
+        kitChanged += before - k.items.length;
+      });
+      state.settings.kitCrewCleaned = true;
+      if (kitChanged) commit();
     }
     // 迁移：清空本地数据，只保留历史项目
     if (state.settings.localResetExceptProjects !== true) {
