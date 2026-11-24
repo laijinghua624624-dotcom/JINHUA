@@ -2093,6 +2093,7 @@
     catalogCloud.syncedFp = JSON.stringify(data.items);
     state.catalog = data.items;
     if (data.updatedAt) state.meta.catalogUpdatedAt = data.updatedAt;
+    addMissingCatalogEntries();
     commit();
     setCloudStatus('synced');
     if (state.ui.tab === 'catalog') render(); else updateCloudBadgeDom();
@@ -4154,6 +4155,39 @@
     return { changed: changed, unmatched: Object.keys(unmatched) };
   }
 
+  function addMissingCatalogEntries() {
+    var existing = {};
+    (state.catalog || []).forEach(function (e) { existing[M.normalizeName(e.name)] = 1; });
+    var additions = [];
+    function consider(name, cat, unit) {
+      name = String(name || '').trim();
+      if (!name || name.indexOf('配件 ·') === 0) return;
+      var key = M.normalizeName(name);
+      if (!key || existing[key]) return;
+      existing[key] = 1;
+      additions.push({
+        id: uid('eq'), key: key, name: name, cat: cat || '其他', unit: unit || '个', type: 'equipment',
+        supplierQuote: '', bottom: 0, quote: 0, approved: 0, costEstimate: '', stock: null,
+        note: '从器材组合补入，价格待维护', supplier: '组合补入', group: '组合补入', src: '组合补入'
+      });
+    }
+    (state.kits || []).forEach(function (k) {
+      (k.items || []).forEach(function (it) {
+        if (it.type !== 'crew' && !it.isPart) consider(it.name, it.cat, it.unit);
+      });
+    });
+    (state.project.groups || []).forEach(function (g) {
+      (g.items || []).forEach(function (it) {
+        if (it.type !== 'crew' && !it.isPart) consider(it.name, it.cat, it.unit);
+      });
+    });
+    if (additions.length) {
+      state.catalog = state.catalog.concat(additions);
+      commit();
+    }
+    return additions.length;
+  }
+
   function init() {
     // 迁移：人员标准已清空，旧本地缓存里的人员一并移除（只做一次）
     if (state.settings.catVersion !== 4) {
@@ -4267,6 +4301,7 @@
     render();
     initCatalogCloud();
     loadArchiveProjectsFromServer();
+    setTimeout(function () { if (addMissingCatalogEntries()) render(); }, 400);
   }
   window.addEventListener('hashchange', function () {
     var t = location.hash.replace('#', '');
