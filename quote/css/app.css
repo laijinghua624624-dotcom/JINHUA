@@ -604,3 +604,5 @@ label.field.qk input.qty{width:54px;flex:none}
 .picker-quick button{border:1px solid #e2e8f0;background:#fff;border-radius:99px;padding:5px 10px;font-size:12px;cursor:pointer;color:#334155}
 .picker-quick button:hover{border-color:#94a3b8;background:#fff}
 .kit-select{width:100%;min-width:160px;padding:7px 9px;border:1px solid #e2e8f0;border-radius:7px;background:#fff;font-size:12.5px;color:#0f172a}
+.kit-save-bar{position:sticky;bottom:38px;z-index:25;display:flex;align-items:center;gap:10px;justify-content:flex-end;margin-top:12px;padding:10px 14px;background:rgba(255,255,255,.96);border:1px solid #e2e8f0;border-radius:12px;box-shadow:0 8px 24px rgba(15,23,42,.08);backdrop-filter:blur(6px)}
+.kit-save-bar span{font-size:12px;color:#94a3b8;margin-right:auto}

@@ -3058,6 +3058,7 @@
       '<button class="btn light" data-act="kit-add-item" data-kid="' + kit.id + '">＋ 手动添加器材</button>' +
       '<button class="btn light" data-act="kit-fix-names" data-kid="' + kit.id + '">按器材库校正名称</button>' +
       '<span class="spacer"></span>' +
+      '<button class="btn primary" data-act="kit-save" data-kid="' + kit.id + '">保存组合</button>' +
       '<button class="btn solid" data-act="kit-add" data-kid="' + kit.id + '">整个组合加入项目</button>' +
       '</div>' +
       '<section class="card"><div class="card-head"><h2>组合信息</h2><span class="sub">分类决定用哪套快速配置；只存名称和数量，价格按器材库算</span></div>' +
@@ -3074,7 +3075,11 @@
       '<span class="spacer"></span><button class="btn sm light" data-act="kit-add-item" data-kid="' + kit.id + '">＋ 添加器材</button>' +
       '<button class="btn sm light" data-act="kit-add-blank" data-kid="' + kit.id + '">＋ 空白行</button></div>' +
       '<div class="table-wrap"><table class="grid"><thead><tr><th>序号</th><th style="min-width:260px">器材 / 人员</th><th>单位</th><th>数量</th><th>分类</th><th></th></tr></thead><tbody>' + rows + '</tbody></table></div>' +
-      '</section></div>';
+      '</section>' +
+      '<div class="kit-save-bar"><span>组合修改会自动保存，也可以点右侧确认</span>' +
+      '<button class="btn primary" data-act="kit-save" data-kid="' + kit.id + '">保存组合</button>' +
+      '<button class="btn light" data-act="kits-back">返回组合列表</button></div>' +
+      '</div>';
   }
   function lightingQuickBuild(kid) {
     var kit = kitById(kid); if (!kit) return;
@@ -3214,6 +3219,11 @@
     var kit = kitById(kid); if (!kit) return;
     kit.items.push({ name: '新器材 / 配件', unit: '个', type: 'equipment', cat: '其他配件', qty: 1, note: '' });
     commit(); render();
+  }
+  function kitSaveNow(kid) {
+    var kit = kitById(kid); if (!kit) return;
+    commit();
+    toast('组合「' + kit.name + '」已保存', 'ok');
   }
   function kitDelItem(kid, idx) {
     var k = kitById(kid); if (!k) return;
@@ -3476,6 +3486,7 @@
       case 'kit-item-up': kitMoveItem(el.dataset.kid, +el.dataset.kidx, -1); break;
       case 'kit-item-down': kitMoveItem(el.dataset.kid, +el.dataset.kidx, 1); break;
       case 'kit-add-blank': kitAddBlank(el.dataset.kid); break;
+      case 'kit-save': kitSaveNow(el.dataset.kid); break;
       case 'recalc': recalc(); break;
       case 'sync-prices': syncPrices(); break;
       case 'save': saveProject(); break;
