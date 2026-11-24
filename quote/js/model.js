@@ -174,7 +174,11 @@
           }
           return;
         }
-        var cat = it.cat || '其他';
+        var ce = catMap.get(normalizeName(it.name));
+        var cat = String(it.cat || '').trim();
+        if (!cat || cat === '其他' || cat === '其他配件' || cat === '摄影器材') {
+          cat = (ce && ce.cat) || classifyName(it.name) || '其他';
+        }
         var key = normalizeName(cat) + '|' + normalizeName(it.name);
         var o = map.get(key);
         if (!o) {
@@ -188,7 +192,6 @@
         itemLine[it.id] = o;
         lastParent = o;
 
-        var ce = catMap.get(normalizeName(it.name));
         var ownParts = projectParts[it.id] || [];
         var source = (ce && Array.isArray(ce.parts) && ce.parts.length) ? ce.parts : ownParts;
         source.forEach(function (p) {
