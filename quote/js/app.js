@@ -2871,10 +2871,11 @@
     kit.items.forEach(function (ki) {
       var ce = catalogByName(ki.name);
       var lineId = uid('l');
+      var kf = projectFeeOf(ce);
       g.items.push({
         id: lineId, eqId: ce ? ce.id : '', name: ki.name, unit: ki.unit || '个',
         type: ki.type || 'equipment', cat: (ce && ce.cat) || ki.cat || '其他', qty: M.num(ki.qty) || 1,
-        bottom: ce ? ce.bottom : 0, quote: ce ? ce.quote : 0, approved: ce ? ce.approved : 0,
+        bottom: ce ? ce.bottom : 0, quote: kf.quote, approved: kf.approved,
         approvedManual: false, note: (ki.note || (ce && ce.note) || ((ki.type === 'crew') ? ruleForCrew(ki.name) : ''))
       });
       if (ce) addCatalogPartsToGroup(g, ce, M.num(ki.qty) || 1, lineId);
@@ -3721,7 +3722,8 @@
         var differs = M.num(ce.bottom) !== M.num(it.bottom) || M.num(ce.quote) !== M.num(it.quote) || M.num(ce.approved) !== M.num(it.approved);
         if (!differs) return;
         if (ce.lock) { skipped += 1; return; }
-        it.bottom = ce.bottom; it.quote = ce.quote; it.approved = ce.approved;
+        var pf = projectFeeOf(ce);
+        it.bottom = ce.bottom; it.quote = pf.quote; it.approved = pf.approved;
         it.eqId = ce.id; it.approvedManual = false; n += 1;
       });
     });
@@ -3785,10 +3787,11 @@
     kit.items.forEach(function (ki) {
       var ce = catalogByName(ki.name);
       var lineId = uid('l');
+      var qf = projectFeeOf(ce);
       g.items.push({
         id: lineId, eqId: ce ? ce.id : '', name: ki.name, unit: ki.unit || '个',
         type: 'equipment', cat: (ce && ce.cat) || ki.cat || '器材', qty: M.num(ki.qty) || 1,
-        bottom: ce ? ce.bottom : 0, quote: ce ? ce.quote : 0, approved: ce ? ce.approved : 0,
+        bottom: ce ? ce.bottom : 0, quote: qf.quote, approved: qf.approved,
         approvedManual: false, note: (ki.note || (ce && ce.note) || '')
       });
       if (ce) addCatalogPartsToGroup(g, ce, M.num(ki.qty) || 1, lineId);
@@ -3796,6 +3799,15 @@
     });
     closeModal(); commit(); render();
     toast('已加入器材组「' + kit.name + '」：' + added + ' 项器材', 'ok');
+  }
+
+  function projectFeeOf(ce) {
+    if (!ce) return { quote: 0, approved: 0 };
+    var q = M.num(ce.quote);
+    if (!(q > 0)) q = M.num(ce.supplierQuote);
+    var a = M.num(ce.approved);
+    if (!(a > 0)) a = q;
+    return { quote: q, approved: a };
   }
 
   function addCatalogPartsToGroup(g, ce, parentQty, parentId) {
@@ -3861,9 +3873,10 @@
         });
       } else {
         var lineId = uid('l');
+        var pf = projectFeeOf(ce);
         g.items.push({
           id: lineId, eqId: ce.id, name: ce.name, unit: ce.unit || '个', type: ce.type || 'equipment',
-          cat: ce.cat || '其他', qty: 1, bottom: ce.bottom, quote: ce.quote, approved: ce.approved,
+          cat: ce.cat || '其他', qty: 1, bottom: ce.bottom, quote: pf.quote, approved: pf.approved,
           approvedManual: false, note: ce.note || ((ce.type === 'crew') ? ruleForCrew(ce.name) : '')
         });
         addCatalogPartsToGroup(g, ce, 1, lineId);
@@ -4231,6 +4244,22 @@
       normalizeKitItemNames(true);
       state.settings.kitNamesAligned = true;
       commit();
+    }
+    // 迁移：当前项目里价格为 0 的器材，按器材库报价补齐
+    if (state.settings.projectFeesFilled !== true) {
+      var filled = 0;
+      (state.project.groups || []).forEach(function (g) {
+        (g.items || []).forEach(function (it) {
+          if (it.type === 'crew' || it.isPart) return;
+          if (M.num(it.quote) > 0) return;
+          var ce = catalogByName(it.name); if (!ce) return;
+          var pf = projectFeeOf(ce);
+          if (!(pf.quote > 0)) return;
+          it.quote = pf.quote; it.approved = pf.approved; it.bottom = M.num(ce.bottom); filled++;
+        });
+      });
+      state.settings.projectFeesFilled = true;
+      if (filled) commit();
     }
     // 迁移：清空本地数据，只保留历史项目
     if (state.settings.localResetExceptProjects !== true) {
