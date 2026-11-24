@@ -2776,6 +2776,9 @@
     openModal('<div class="modal"><div class="modal-head"><h3>' + title + '</h3><button class="x-btn" data-act="modal-close">✕</button></div>' +
       '<div class="modal-body"><div class="picker-search"><input type="search" data-search="picker" placeholder="搜索名称 / 型号，例如 FX3、图传、灯光助理…">' +
       '<div class="chips" data-picker-cats>' + chips + '</div></div>' +
+      (!isKit && (state.kits || []).length ? '<div class="picker-quick"><b>器材组快速添加</b>' + state.kits.map(function (k) {
+        return '<button type="button" data-act="picker-quick-kit" data-kid="' + k.id + '">' + esc(k.name) + ' · ' + k.items.length + ' 项</button>';
+      }).join('') + '</div>' : '') +
       (crewGroups.length ? '<div class="picker-quick"><b>人员组快速添加</b>' + crewGroups.map(function (e) {
         return '<button type="button" data-act="picker-quick-crew" data-eid="' + e.id + '">' + esc(e.name) + ' · ' + money(e.quote) + '</button>';
       }).join('') + '</div>' : '') +
@@ -3499,6 +3502,7 @@
       case 'modal-close': closeModal(); break;
       case 'picker-add': pickerAdd(); break;
       case 'picker-quick-crew': pickerQuickCrew(el.dataset.eid); break;
+      case 'picker-quick-kit': pickerQuickKit(el.dataset.kid); break;
       case 'picker-custom': pickerCustom(); break;
       case 'kits-add': kitsAddFromModal(); break;
       case 'crew-add-save': saveCrewAdd(); break;
@@ -3649,6 +3653,27 @@
 
 
   /* ---------------- 弹窗操作 ---------------- */
+  function pickerQuickKit(kid) {
+    var target = state.ui.pickerTarget || {};
+    if (target.kitId) { toast('请在组合页里编辑器材组', 'warn'); return; }
+    var g = groupById(target.gid); if (!g) return;
+    var kit = (state.kits || []).filter(function (x) { return x.id === kid; })[0]; if (!kit) return;
+    if (!(kit.items || []).length) { toast('这个器材组还没有器材', 'warn'); return; }
+    var added = 0;
+    kit.items.forEach(function (ki) {
+      var ce = catalogByName(ki.name);
+      g.items.push({
+        id: uid('l'), eqId: ce ? ce.id : '', name: ki.name, unit: ki.unit || '个',
+        type: 'equipment', cat: (ce && ce.cat) || ki.cat || '器材', qty: M.num(ki.qty) || 1,
+        bottom: ce ? ce.bottom : 0, quote: ce ? ce.quote : 0, approved: ce ? ce.approved : 0,
+        approvedManual: false, note: (ki.note || (ce && ce.note) || '')
+      });
+      added++;
+    });
+    closeModal(); commit(); render();
+    toast('已加入器材组「' + kit.name + '」：' + added + ' 项器材', 'ok');
+  }
+
   function pickerQuickCrew(eid) {
     var target = state.ui.pickerTarget || {};
     if (target.kitId) { toast('器材组合不能放人员组', 'warn'); return; }
