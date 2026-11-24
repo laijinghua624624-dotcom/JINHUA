@@ -877,6 +877,7 @@
       '<button class="btn primary" data-act="add-group" data-kind="light">＋ 灯光组</button>' +
       '<button class="btn light" data-act="open-kits">从组合添加</button>' +
       '<button class="btn light" data-act="go-kits">管理组合</button>' +
+      '<button class="btn light" data-act="sync-parts">同步配件费用</button>' +
       '<button class="btn light" data-act="sync-prices">按器材库刷新价格</button>' +
       '<span class="spacer"></span>' +
       '<button class="btn light" data-act="share-links">🔗 分享链接</button>' +
@@ -2312,11 +2313,11 @@
   function openCatalogParts(eid) {
     var e = state.catalog.filter(function (x) { return x.id === eid; })[0]; if (!e) return;
     state.ui.partsEid = eid;
-    var parts = (e.parts || []).map(function (p, i) { return { id: p.id || ('pt_' + i), name: p.name || '', qty: p.qty === undefined || p.qty === null ? 1 : p.qty }; });
+    var parts = (e.parts || []).map(function (p, i) { return { id: p.id || ('pt_' + i), name: p.name || '', qty: p.qty === undefined || p.qty === null ? 1 : p.qty, price: p.price === undefined || p.price === null ? 0 : p.price }; });
     var rows = parts.map(partsRowHtml).join('');
     openModal('<div class="modal" style="width:min(640px,100%)"><div class="modal-head"><h3>配件明细 · ' + esc(e.name || '器材') + '</h3><button class="x-btn" data-act="modal-close">✕</button></div>' +
       '<div class="modal-body"><p class="muted small" style="margin:0 0 10px">供应商：' + esc(supOf(e)) + (grpOf(e) ? ' · 分组：' + esc(grpOf(e)) : '') + '</p>' +
-      '<div class="parts-head"><span>配件名称</span><span>数量</span><span></span></div>' +
+      '<div class="parts-head"><span>配件名称</span><span>数量</span><span>配件费用（元）</span><span></span></div>' +
       '<div id="parts-list">' + (rows || '<div class="muted small" style="padding:12px 0">还没有配件，点下面添加。</div>') + '</div>' +
       '<div class="toolbar" style="margin-top:10px"><button class="btn light sm" data-act="catalog-parts-add">＋ 添加配件</button></div>' +
       '</div><div class="modal-foot"><span class="spacer"></span><button class="btn light" data-act="modal-close">取消</button>' +
@@ -2326,6 +2327,7 @@
     return '<div class="part-row" data-part-id="' + esc(p.id || '') + '">' +
       '<input data-part-name value="' + esc(p.name || '') + '" placeholder="例如：Cfast卡 256G">' +
       '<input data-part-qty type="number" min="0" step="1" value="' + esc(p.qty === undefined || p.qty === null ? 1 : p.qty) + '">' +
+      '<input data-part-price type="number" min="0" step="0.01" value="' + esc(p.price === undefined || p.price === null ? '' : p.price) + '" placeholder="0">' +
       '<button class="del" data-act="catalog-parts-del" title="删除这条">✕</button></div>';
   }
   function addCatalogPartRow() {
@@ -2349,7 +2351,8 @@
         var name = (row.querySelector('[data-part-name]').value || '').trim();
         if (!name) return;
         var qty = M.num(row.querySelector('[data-part-qty]').value);
-        parts.push({ id: row.dataset.partId || uid('pt'), name: name, qty: qty > 0 ? qty : 1 });
+        var price = M.num(row.querySelector('[data-part-price]').value);
+        parts.push({ id: row.dataset.partId || uid('pt'), name: name, qty: qty > 0 ? qty : 1, price: price > 0 ? price : 0 });
       });
     }
     e.parts = parts;
@@ -2867,12 +2870,14 @@
     }
     kit.items.forEach(function (ki) {
       var ce = catalogByName(ki.name);
+      var lineId = uid('l');
       g.items.push({
-        id: uid('l'), eqId: ce ? ce.id : '', name: ki.name, unit: ki.unit || '个',
+        id: lineId, eqId: ce ? ce.id : '', name: ki.name, unit: ki.unit || '个',
         type: ki.type || 'equipment', cat: (ce && ce.cat) || ki.cat || '其他', qty: M.num(ki.qty) || 1,
         bottom: ce ? ce.bottom : 0, quote: ce ? ce.quote : 0, approved: ce ? ce.approved : 0,
         approvedManual: false, note: (ki.note || (ce && ce.note) || ((ki.type === 'crew') ? ruleForCrew(ki.name) : ''))
       });
+      if (ce) addCatalogPartsToGroup(g, ce, M.num(ki.qty) || 1, lineId);
     });
     return g;
   }
@@ -3505,6 +3510,7 @@
       case 'kit-save': kitSaveNow(el.dataset.kid); break;
       case 'recalc': recalc(); break;
       case 'sync-prices': syncPrices(); break;
+      case 'sync-parts': syncProjectParts(); break;
       case 'save': saveProject(); break;
       case 'new': newProject(); break;
       case 'export-quote': exportQuote(); break;
@@ -3642,6 +3648,28 @@
   }
 
   /* ---------------- 项目操作 ---------------- */
+  function syncProjectParts() {
+    var added = 0;
+    (state.project.groups || []).forEach(function (g) {
+      (g.items || []).slice().forEach(function (it) {
+        if (it.isPart || it.type === 'crew') return;
+        var ce = catalogByName(it.name);
+        if (!ce || !Array.isArray(ce.parts) || !ce.parts.length) return;
+        ce.parts.forEach(function (p) {
+          if (!p || !String(p.name || '').trim()) return;
+          var pname = '配件 · ' + p.name;
+          if ((g.items || []).some(function (x) { return x.isPart && x.parentId === it.id && x.name === pname; })) return;
+          var pq = Math.max(1, M.num(p.qty) || 1) * Math.max(1, M.num(it.qty) || 1);
+          var fee = M.num(p.price) || 0;
+          g.items.push({ id: uid('l'), eqId: '', parentId: it.id, isPart: true, name: pname, unit: '个', type: 'equipment', cat: '配件', qty: pq, bottom: 0, quote: fee, approved: fee, approvedManual: true, note: '配件费用' });
+          added++;
+        });
+      });
+    });
+    commit(); render();
+    toast(added ? '已同步 ' + added + ' 条配件费用到项目' : '没有需要同步的配件', added ? 'ok' : 'warn');
+  }
+
   function addGroup(kind) {
     var base = kind === 'light' ? '灯光组' : (kind === 'photo' ? '摄影机位组' : '机位组');
     var name = base, n = 2;
@@ -3756,16 +3784,37 @@
     var added = 0;
     kit.items.forEach(function (ki) {
       var ce = catalogByName(ki.name);
+      var lineId = uid('l');
       g.items.push({
-        id: uid('l'), eqId: ce ? ce.id : '', name: ki.name, unit: ki.unit || '个',
+        id: lineId, eqId: ce ? ce.id : '', name: ki.name, unit: ki.unit || '个',
         type: 'equipment', cat: (ce && ce.cat) || ki.cat || '器材', qty: M.num(ki.qty) || 1,
         bottom: ce ? ce.bottom : 0, quote: ce ? ce.quote : 0, approved: ce ? ce.approved : 0,
         approvedManual: false, note: (ki.note || (ce && ce.note) || '')
       });
+      if (ce) addCatalogPartsToGroup(g, ce, M.num(ki.qty) || 1, lineId);
       added++;
     });
     closeModal(); commit(); render();
     toast('已加入器材组「' + kit.name + '」：' + added + ' 项器材', 'ok');
+  }
+
+  function addCatalogPartsToGroup(g, ce, parentQty, parentId) {
+    if (!g || !ce || !Array.isArray(ce.parts) || !ce.parts.length) return 0;
+    var added = 0;
+    var q = Math.max(1, M.num(parentQty) || 1);
+    ce.parts.forEach(function (p) {
+      if (!p || !String(p.name || '').trim()) return;
+      var pq = Math.max(1, M.num(p.qty) || 1) * q;
+      var fee = M.num(p.price) || 0;
+      g.items.push({
+        id: uid('l'), eqId: '', parentId: parentId || '', isPart: true,
+        name: '配件 · ' + p.name, unit: '个', type: 'equipment', cat: '配件',
+        qty: pq, bottom: 0, quote: fee, approved: fee,
+        approvedManual: true, note: '配件费用'
+      });
+      added++;
+    });
+    return added;
   }
 
   function pickerQuickCrew(eid) {
@@ -3803,16 +3852,22 @@
     picked.forEach(function (tr) {
       var ce = state.catalog.filter(function (x) { return x.id === tr.dataset.pickEqid; })[0];
       if (!ce) return;
-      g.items.push(ce.crewGroup ? {
-        id: uid('l'), eqId: ce.id, name: ce.name, unit: '组', type: 'crew',
-        cat: '人员', qty: 1, bottom: ce.bottom, quote: ce.quote, approved: ce.approved,
-        approvedManual: true, crewGroup: true, crewMembers: ce.crewMembers || [],
-        note: ce.note || ((ce.crewMembers || []).map(function (m) { return m.name + (m.qty > 1 ? '×' + m.qty : '×1'); }).join('、'))
-      } : {
-        id: uid('l'), eqId: ce.id, name: ce.name, unit: ce.unit || '个', type: ce.type || 'equipment',
-        cat: ce.cat || '其他', qty: 1, bottom: ce.bottom, quote: ce.quote, approved: ce.approved,
-        approvedManual: false, note: ce.note || ((ce.type === 'crew') ? ruleForCrew(ce.name) : '')
-      });
+      if (ce.crewGroup) {
+        g.items.push({
+          id: uid('l'), eqId: ce.id, name: ce.name, unit: '组', type: 'crew',
+          cat: '人员', qty: 1, bottom: ce.bottom, quote: ce.quote, approved: ce.approved,
+          approvedManual: true, crewGroup: true, crewMembers: ce.crewMembers || [],
+          note: ce.note || ((ce.crewMembers || []).map(function (m) { return m.name + (m.qty > 1 ? '×' + m.qty : '×1'); }).join('、'))
+        });
+      } else {
+        var lineId = uid('l');
+        g.items.push({
+          id: lineId, eqId: ce.id, name: ce.name, unit: ce.unit || '个', type: ce.type || 'equipment',
+          cat: ce.cat || '其他', qty: 1, bottom: ce.bottom, quote: ce.quote, approved: ce.approved,
+          approvedManual: false, note: ce.note || ((ce.type === 'crew') ? ruleForCrew(ce.name) : '')
+        });
+        addCatalogPartsToGroup(g, ce, 1, lineId);
+      }
     });
     closeModal(); commit(); render(); toast('已添加 ' + picked.length + ' 项', 'ok');
   }
